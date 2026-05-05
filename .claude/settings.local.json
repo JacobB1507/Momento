@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\jbatt\\\\my-app\\\\Momento\" | Where-Object { $_.Name -ne \"node_modules\" } | Select-Object Name, PSIsContainer | Sort-Object Name)",
+      "PowerShell(ls \"C:\\\\Users\\\\jbatt\\\\my-app\\\\Momento\" | Where-Object { $_.Name -ne \"node_modules\" })"
+    ]
+  }
+}
