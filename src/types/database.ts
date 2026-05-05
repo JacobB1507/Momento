@@ -1,0 +1,24 @@
+export interface Gallery {
+  id: string;
+  title: string;
+  cover_photo_url: string | null;
+  created_at: string;
+  created_by: string;
+  role?: 'owner' | 'member';
+}
+
+export interface GalleryMember {
+  gallery_id: string;
+  user_id: string;
+  role: string;
+  invited_at: string;
+}
+
+export interface Photo {
+  id: string;
+  gallery_id: string;
+  storage_path: string;
+  url: string;
+  uploaded_by: string;
+  created_at: string;
+}

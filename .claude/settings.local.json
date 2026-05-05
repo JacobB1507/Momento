@@ -2,7 +2,18 @@
   "permissions": {
     "allow": [
       "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\jbatt\\\\my-app\\\\Momento\" | Where-Object { $_.Name -ne \"node_modules\" } | Select-Object Name, PSIsContainer | Sort-Object Name)",
-      "PowerShell(ls \"C:\\\\Users\\\\jbatt\\\\my-app\\\\Momento\" | Where-Object { $_.Name -ne \"node_modules\" })"
+      "PowerShell(ls \"C:\\\\Users\\\\jbatt\\\\my-app\\\\Momento\" | Where-Object { $_.Name -ne \"node_modules\" })",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\jbatt\\\\my-app\\\\Momento\" -Force)",
+      "Bash(Select-Object Name)",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(Get-ChildItem *)",
+      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\(JSON.stringify\\({deps: p.dependencies, devDeps: p.devDependencies}, null, 2\\)\\)\")",
+      "Bash(npx expo *)",
+      "Bash(node -e \"console.log\\(require\\('@supabase/supabase-js/package.json'\\).version\\)\")",
+      "Bash(node -e \"const {StorageClient} = require\\('@supabase/storage-js'\\); console.log\\(Object.getOwnPropertyNames\\(StorageClient.prototype\\)\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(node *)"
     ]
   }
 }
