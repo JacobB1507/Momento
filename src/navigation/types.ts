@@ -9,6 +9,10 @@ export type RootStackParamList = {
   ChangeUsername: undefined;
   Friends: undefined;
   AddFriend: undefined;
+  Notifications: undefined;
+  ChangeEmail: undefined;
+  ChangePassword: undefined;
+  GalleryInvite: { galleryId: string; notificationId: string };
 };
 
 export type MainTabParamList = {

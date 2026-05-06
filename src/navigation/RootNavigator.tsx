@@ -12,6 +12,10 @@ import SettingsScreen from '../screens/SettingsScreen';
 import ChangeUsernameScreen from '../screens/ChangeUsernameScreen';
 import FriendsScreen from '../screens/FriendsScreen';
 import AddFriendScreen from '../screens/AddFriendScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
+import ChangeEmailScreen from '../screens/ChangeEmailScreen';
+import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import GalleryInviteScreen from '../screens/GalleryInviteScreen';
 import { resolveInviteCode } from '../lib/friends';
 import type { RootStackParamList } from './types';
 
@@ -89,6 +93,26 @@ export default function RootNavigator() {
             <Stack.Screen
               name="AddFriend"
               component={AddFriendScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="Notifications"
+              component={NotificationsScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="ChangeEmail"
+              component={ChangeEmailScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="ChangePassword"
+              component={ChangePasswordScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="GalleryInvite"
+              component={GalleryInviteScreen}
               options={{ animation: 'slide_from_right' }}
             />
           </>

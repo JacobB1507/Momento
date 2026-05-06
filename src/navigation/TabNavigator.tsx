@@ -32,12 +32,15 @@ export default function TabNavigator() {
         headerShown: false,
         tabBarStyle: styles.tabBar,
         tabBarShowLabel: false,
+        tabBarLabelStyle: { fontSize: 10 },
+        tabBarItemStyle: { paddingBottom: 2 },
       }}
     >
       <Tab.Screen
         name="Home"
         component={HomeScreen}
         options={{
+          tabBarAllowFontScaling: false,
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} icon="🏠" label="Home" />
           ),
@@ -47,6 +50,7 @@ export default function TabNavigator() {
         name="Create"
         component={CreateScreen}
         options={{
+          tabBarAllowFontScaling: false,
           tabBarIcon: ({ focused }) => <CreateTabIcon focused={focused} />,
         }}
       />
@@ -54,6 +58,7 @@ export default function TabNavigator() {
         name="Profile"
         component={ProfileScreen}
         options={{
+          tabBarAllowFontScaling: false,
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} icon="👤" label="Profile" />
           ),
@@ -78,7 +83,7 @@ const styles = StyleSheet.create({
   tabItem: { alignItems: 'center', gap: 3 },
   tabIcon: { fontSize: 22, opacity: 0.45 },
   tabIconActive: { opacity: 1 },
-  tabLabel: { fontSize: 10, color: '#9CA3AF', fontWeight: '500' },
+  tabLabel: { fontSize: 9, color: '#9CA3AF', fontWeight: '500' },
   tabLabelActive: { color: '#FF6B6B', fontWeight: '700' },
 
   createButton: {

@@ -26,6 +26,7 @@ type FriendItem = { friendshipId: string; profile: Profile };
 type PendingItem = { friendshipId: string; profile: Profile };
 
 const AVATAR = 40;
+const COLLAPSED_COUNT = 2;
 
 export default function FriendsScreen() {
   const navigation = useNavigation();
@@ -36,6 +37,7 @@ export default function FriendsScreen() {
   const [pending, setPending] = useState<PendingItem[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [requestsExpanded, setRequestsExpanded] = useState(false);
 
   const loadData = async () => {
     if (!userId) return;
@@ -100,11 +102,20 @@ export default function FriendsScreen() {
     else Alert.alert('Error', 'Could not update request. Please try again.');
   };
 
+  const visibleRequests =
+    requestsExpanded ? pending : pending.slice(0, COLLAPSED_COUNT);
+  const hasMore = pending.length > COLLAPSED_COUNT;
+
   if (initialLoading) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Friends</Text>
+          <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Text style={styles.backText}>‹ Back</Text>
+          </Pressable>
+          <View style={styles.headerRow}>
+            <Text style={styles.headerTitle}>Friends</Text>
+          </View>
         </View>
         <View style={styles.centered}>
           <ActivityIndicator color="#FF6B6B" />
@@ -116,52 +127,38 @@ export default function FriendsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Friends</Text>
-        <Pressable
-          onPress={() => navigation.navigate('AddFriend' as never)}
-          style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.7 }]}
-        >
-          <Text style={styles.addButtonText}>+ Add</Text>
+        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Text style={styles.backText}>‹ Back</Text>
         </Pressable>
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>Friends</Text>
+          <Pressable
+            onPress={() => navigation.navigate('AddFriend' as never)}
+            style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.addButtonText}>+ Add</Text>
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
-        <Text style={styles.sectionLabel}>Friends</Text>
+        {/* Section 1 — Friend Requests */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionLabel}>Friend Requests</Text>
+          <Text style={styles.sectionCount}>({pending.length})</Text>
+        </View>
 
-        {friends.length === 0 ? (
+        {pending.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No friends yet. Tap + Add to get started.</Text>
+            <Text style={styles.emptyText}>No pending requests</Text>
           </View>
         ) : (
-          <View style={styles.card}>
-            {friends.map(({ friendshipId, profile }, index) => (
-              <View key={friendshipId}>
-                {index > 0 && <View style={styles.separator} />}
-                <View style={styles.row}>
-                  <AvatarThumb profile={profile} />
-                  <Text style={styles.rowUsername} numberOfLines={1}>
-                    @{profile.username ?? 'unknown'}
-                  </Text>
-                  <Pressable
-                    onPress={() => handleRemove(friendshipId, profile.username)}
-                    style={({ pressed }) => [styles.removeButton, pressed && { opacity: 0.7 }]}
-                  >
-                    <Text style={styles.removeText}>Remove</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {pending.length > 0 && (
           <>
-            <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>Pending Requests</Text>
             <View style={styles.card}>
-              {pending.map(({ friendshipId, profile }, index) => (
+              {visibleRequests.map(({ friendshipId, profile }, index) => (
                 <View key={friendshipId}>
                   {index > 0 && <View style={styles.separator} />}
                   <View style={styles.row}>
@@ -185,7 +182,49 @@ export default function FriendsScreen() {
                 </View>
               ))}
             </View>
+
+            {hasMore && (
+              <Pressable
+                onPress={() => setRequestsExpanded((v) => !v)}
+                style={({ pressed }) => [styles.expandLink, pressed && { opacity: 0.6 }]}
+              >
+                <Text style={styles.expandLinkText}>
+                  {requestsExpanded
+                    ? 'Show less'
+                    : `See all ${pending.length} requests`}
+                </Text>
+              </Pressable>
+            )}
           </>
+        )}
+
+        {/* Section 2 — Friends list */}
+        <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>Friends</Text>
+
+        {friends.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>No friends yet. Tap + Add to get started.</Text>
+          </View>
+        ) : (
+          <View style={styles.card}>
+            {friends.map(({ friendshipId, profile }, index) => (
+              <View key={friendshipId}>
+                {index > 0 && <View style={styles.separator} />}
+                <View style={styles.row}>
+                  <AvatarThumb profile={profile} />
+                  <Text style={[styles.rowUsername, styles.rowUsernameFlex]} numberOfLines={1}>
+                    @{profile.username ?? 'unknown'}
+                  </Text>
+                  <Pressable
+                    onPress={() => handleRemove(friendshipId, profile.username)}
+                    style={({ pressed }) => [styles.removeButton, pressed && { opacity: 0.7 }]}
+                  >
+                    <Text style={styles.removeText}>Remove</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -208,10 +247,10 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F9FAFB' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 16,
+  header: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
+  backButton: { alignSelf: 'flex-start', paddingVertical: 6, marginBottom: 4 },
+  backText: { fontSize: 16, color: '#FF6B6B', fontWeight: '500' },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -227,15 +266,28 @@ const styles = StyleSheet.create({
 
   content: { paddingHorizontal: 16, paddingBottom: 32 },
 
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
   sectionLabel: {
     fontSize: 13,
     fontWeight: '600',
     color: '#6B7280',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 8,
   },
-  sectionLabelSpaced: { marginTop: 28 },
+  sectionCount: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#9CA3AF',
+  },
+  sectionLabelSpaced: { marginTop: 28, marginBottom: 8 },
+
+  expandLink: { marginTop: 8, alignSelf: 'flex-start' },
+  expandLinkText: { fontSize: 14, color: '#3B82F6', fontWeight: '500' },
 
   card: {
     backgroundColor: '#fff',
@@ -286,7 +338,6 @@ const styles = StyleSheet.create({
   rowUsernameFlex: { flex: 1 },
 
   removeButton: {
-    marginLeft: 'auto',
     borderWidth: 1,
     borderColor: '#E5E7EB',
     borderRadius: 8,
@@ -296,7 +347,7 @@ const styles = StyleSheet.create({
   removeText: { color: '#6B7280', fontSize: 13, fontWeight: '500' },
 
   acceptButton: {
-    backgroundColor: '#FF6B6B',
+    backgroundColor: '#34C759',
     borderRadius: 8,
     paddingVertical: 5,
     paddingHorizontal: 10,
@@ -304,11 +355,10 @@ const styles = StyleSheet.create({
   acceptText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 
   declineButton: {
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    backgroundColor: '#FF3B30',
     borderRadius: 8,
     paddingVertical: 5,
     paddingHorizontal: 10,
   },
-  declineText: { color: '#6B7280', fontSize: 13, fontWeight: '500' },
+  declineText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 });

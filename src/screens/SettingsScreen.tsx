@@ -24,6 +24,22 @@ export default function SettingsScreen() {
             <Text style={styles.rowLabel}>Change Username</Text>
             <Text style={styles.chevron}>›</Text>
           </Pressable>
+          <View style={styles.separator} />
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => navigation.navigate('ChangeEmail' as never)}
+          >
+            <Text style={styles.rowLabel}>Change Email</Text>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+          <View style={styles.separator} />
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => navigation.navigate('ChangePassword' as never)}
+          >
+            <Text style={styles.rowLabel}>Change Password</Text>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
         </View>
       </View>
     </SafeAreaView>
@@ -60,4 +76,5 @@ const styles = StyleSheet.create({
   rowPressed: { backgroundColor: '#F3F4F6' },
   rowLabel: { fontSize: 16, color: '#111827' },
   chevron: { fontSize: 20, color: '#C7C7CC', lineHeight: 24 },
+  separator: { height: 1, backgroundColor: '#F3F4F6', marginLeft: 16 },
 });

@@ -12,8 +12,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { getUnreadCount } from '../lib/notifications';
 import type { RootStackParamList } from '../navigation/types';
 import { fetchUserGalleries } from '../lib/galleries';
 import type { Gallery, GalleryPrivacy } from '../types/database';
@@ -30,6 +32,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionGallery, setActionGallery] = useState<Gallery | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const load = useCallback(async () => {
     if (!session?.user.id) return;
@@ -46,6 +49,13 @@ export default function HomeScreen() {
     useCallback(() => {
       load().finally(() => setLoading(false));
     }, [load])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!session?.user.id) return;
+      getUnreadCount(session.user.id).then(setUnreadCount);
+    }, [session?.user.id])
   );
 
   const handleRefresh = useCallback(async () => {
@@ -93,6 +103,16 @@ export default function HomeScreen() {
             <Text style={styles.countText}>{galleries.length}</Text>
           </View>
         )}
+        <Pressable
+          onPress={() => rootNav?.navigate('Notifications')}
+          style={({ pressed }) => [styles.bellButton, pressed && { opacity: 0.7 }]}
+        >
+          <MaterialCommunityIcons
+            name={unreadCount > 0 ? 'bell-badge' : 'bell'}
+            size={26}
+            color={unreadCount > 0 ? '#FF3B30' : '#333'}
+          />
+        </Pressable>
       </View>
 
       {loading ? (
@@ -157,6 +177,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 28, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
   countBadge: { marginLeft: 10, backgroundColor: '#FF6B6B', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 },
   countText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  bellButton: { marginLeft: 'auto', padding: 4 },
   list: { paddingHorizontal: SCREEN_PADDING, paddingBottom: 24 },
   row: { gap: CARD_GAP, marginBottom: CARD_GAP },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
