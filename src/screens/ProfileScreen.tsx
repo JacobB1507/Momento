@@ -1,172 +1,163 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
+  RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { supabase } from '../lib/supabase';
+import * as ImagePicker from 'expo-image-picker';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
-
-function AvatarCircle({ label }: { label: string }) {
-  return (
-    <View style={styles.avatar}>
-      <Text style={styles.avatarText}>{label.charAt(0).toUpperCase()}</Text>
-    </View>
-  );
-}
+import type { RootStackParamList } from '../navigation/types';
+import { supabase } from '../lib/supabase';
+import { getProfile, uploadAvatar } from '../lib/galleries';
 
 export default function ProfileScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { session } = useAuth();
+  const userId = session?.user.id ?? '';
   const email = session?.user.email ?? '';
-  const userId = session?.user.id;
 
   const [username, setUsername] = useState('');
-  const [editing, setEditing] = useState(false);
-  const [draftUsername, setDraftUsername] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  const loadProfile = async () => {
     if (!userId) return;
-    supabase
+    const profile = await getProfile(userId);
+    if (profile) {
+      if (profile.username) setUsername(profile.username);
+      if (profile.avatar_url) setAvatarUrl(profile.avatar_url);
+      return;
+    }
+    const { data } = await supabase
       .from('profiles')
-      .select('username')
+      .select('id, username, email, avatar_url')
       .eq('id', userId)
-      .single()
-      .then(({ data }) => {
-        if (data?.username) setUsername(data.username);
-      })
-      .finally(() => setLoadingProfile(false));
-  }, [userId]);
-
-  const handleEdit = () => {
-    setDraftUsername(username);
-    setEditing(true);
+      .maybeSingle();
+    if (data?.username) setUsername(data.username);
+    if (data?.avatar_url) setAvatarUrl(data.avatar_url);
   };
 
-  const handleCancel = () => {
-    setEditing(false);
-    setDraftUsername('');
-  };
+  useFocusEffect(useCallback(() => { loadProfile(); }, []));
 
-  const handleSave = async () => {
-    const trimmed = draftUsername.trim();
-    if (!userId) return;
-    setSaving(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update({ username: trimmed })
-      .eq('id', userId);
-    setSaving(false);
-    if (error) { Alert.alert('Error', error.message); return; }
-    setUsername(trimmed);
-    setEditing(false);
+  const handleAvatarPress = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Allow photo library access to change your avatar.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (result.canceled) return;
+
+    const uri = result.assets[0].uri;
+    setUploading(true);
+    const url = await uploadAvatar(userId, uri);
+    setUploading(false);
+
+    if (url) {
+      setAvatarUrl(url);
+    } else {
+      Alert.alert('Upload failed', 'Could not update your avatar. Please try again.');
+    }
   };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
   };
 
-  const avatarLabel = username || email;
+  const placeholderLetter = (username || email).charAt(0).toUpperCase();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
-      </View>
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, alignItems: 'center', paddingTop: 60, paddingBottom: 40 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await loadProfile();
+              setRefreshing(false);
+            }}
+          />
+        }
+      >
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Profile</Text>
+        </View>
 
-      <View style={styles.card}>
-        <AvatarCircle label={avatarLabel} />
-
-        <Text style={styles.fieldLabel}>Email</Text>
-        <Text style={styles.fieldValue}>{email}</Text>
-
-        <View style={styles.divider} />
-
-        <Text style={styles.fieldLabel}>Display name</Text>
-
-        {loadingProfile ? (
-          <ActivityIndicator color="#FF6B6B" style={{ marginTop: 6 }} />
-        ) : editing ? (
-          <View style={styles.editRow}>
-            <TextInput
-              style={styles.input}
-              value={draftUsername}
-              onChangeText={setDraftUsername}
-              autoFocus
-              autoCapitalize="none"
-              returnKeyType="done"
-              onSubmitEditing={handleSave}
-              maxLength={30}
-              placeholder="Enter display name"
-              placeholderTextColor="#9CA3AF"
-            />
-            <View style={styles.editButtons}>
-              <Pressable
-                style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.7 }]}
-                onPress={handleCancel}
-              >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.saveBtn,
-                  (!draftUsername.trim() || saving) && { opacity: 0.45 },
-                  pressed && { opacity: 0.8 },
-                ]}
-                onPress={handleSave}
-                disabled={!draftUsername.trim() || saving}
-              >
-                {saving
-                  ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={styles.saveBtnText}>Save</Text>}
-              </Pressable>
+        <View style={styles.card}>
+          <Pressable onPress={handleAvatarPress} style={styles.avatarWrapper}>
+            {uploading ? (
+              <View style={styles.avatarPlaceholder}>
+                <ActivityIndicator color="#fff" size="large" />
+              </View>
+            ) : avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarText}>{placeholderLetter}</Text>
+              </View>
+            )}
+            <View style={styles.editBadge}>
+              <Text style={styles.editBadgeIcon}>✎</Text>
             </View>
-          </View>
-        ) : (
-          <View style={styles.usernameRow}>
-            <Text style={[styles.fieldValue, !username && styles.fieldValueEmpty]}>
-              {username || 'Not set'}
-            </Text>
-            <Pressable
-              style={({ pressed }) => [styles.editBtn, pressed && { opacity: 0.7 }]}
-              onPress={handleEdit}
-              hitSlop={8}
-            >
-              <Text style={styles.editBtnText}>Edit</Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
+          </Pressable>
 
-      <View style={styles.section}>
-        <Pressable
-          style={({ pressed }) => [styles.signOutButton, pressed && { opacity: 0.65 }]}
-          onPress={handleSignOut}
-        >
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </Pressable>
-      </View>
+          <Text style={styles.username}>@{username || 'unknown'}</Text>
+          <Text style={styles.email}>{email}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Pressable
+            style={({ pressed }) => [styles.settingsButton, pressed && { opacity: 0.75 }]}
+            onPress={() => navigation.navigate('Settings')}
+          >
+            <Text style={styles.settingsText}>Settings</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.signOutButton, pressed && { opacity: 0.65 }]}
+            onPress={handleSignOut}
+          >
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
+const AVATAR_SIZE = 96;
+const BADGE_SIZE = 28;
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F9FAFB' },
 
-  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 },
+  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16, alignSelf: 'stretch' },
   headerTitle: { fontSize: 28, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
 
   card: {
+    alignSelf: 'stretch',
     marginHorizontal: 16,
     backgroundColor: '#fff',
     borderRadius: 20,
-    padding: 24,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -175,68 +166,57 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
 
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  avatarWrapper: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    marginBottom: 20,
+  },
+  avatarImage: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+  },
+  avatarPlaceholder: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
     backgroundColor: '#FF6B6B',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
     shadowColor: '#FF6B6B',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
     elevation: 6,
   },
-  avatarText: { fontSize: 32, fontWeight: '800', color: '#fff' },
+  avatarText: { fontSize: 36, fontWeight: '800', color: '#fff' },
 
-  fieldLabel: { fontSize: 12, fontWeight: '600', color: '#9CA3AF', letterSpacing: 0.3, marginBottom: 4 },
-  fieldValue: { fontSize: 16, fontWeight: '600', color: '#111827' },
-  fieldValueEmpty: { color: '#D1D5DB', fontWeight: '400' },
-
-  divider: { width: '100%', height: StyleSheet.hairlineWidth, backgroundColor: '#F3F4F6', marginVertical: 16 },
-
-  usernameRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  editBtn: { borderWidth: 1.5, borderColor: '#FF6B6B', borderRadius: 8, paddingVertical: 3, paddingHorizontal: 10 },
-  editBtnText: { color: '#FF6B6B', fontSize: 13, fontWeight: '600' },
-
-  editRow: { width: '100%', marginTop: 4 },
-  input: {
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    fontSize: 15,
-    color: '#111827',
-    marginBottom: 12,
-  },
-  editButtons: { flexDirection: 'row', gap: 10 },
-  cancelBtn: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  cancelBtnText: { color: '#6B7280', fontWeight: '600', fontSize: 14 },
-  saveBtn: {
-    flex: 1,
+  editBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: BADGE_SIZE,
+    height: BADGE_SIZE,
+    borderRadius: BADGE_SIZE / 2,
     backgroundColor: '#FF6B6B',
-    borderRadius: 12,
-    paddingVertical: 12,
     alignItems: 'center',
-    shadowColor: '#FF6B6B',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 3,
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
   },
-  saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  editBadgeIcon: { color: '#fff', fontSize: 13, lineHeight: 16 },
 
-  section: { paddingHorizontal: 16, marginTop: 24 },
+  username: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 4 },
+  email: { fontSize: 14, color: '#6B7280' },
+
+  section: { alignSelf: 'stretch', paddingHorizontal: 16, marginTop: 24, gap: 12 },
+  settingsButton: {
+    backgroundColor: '#111827',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  settingsText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   signOutButton: {
     borderWidth: 1.5,
     borderColor: '#FF6B6B',

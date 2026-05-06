@@ -7,6 +7,8 @@ import LoginScreen from '../screens/auth/LoginScreen';
 import SignUpScreen from '../screens/auth/SignUpScreen';
 import TabNavigator from './TabNavigator';
 import GalleryDetailScreen from '../screens/GalleryDetailScreen';
+import SettingsScreen from '../screens/SettingsScreen';
+import ChangeUsernameScreen from '../screens/ChangeUsernameScreen';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -31,6 +33,16 @@ export default function RootNavigator() {
             <Stack.Screen
               name="GalleryDetail"
               component={GalleryDetailScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="ChangeUsername"
+              component={ChangeUsernameScreen}
               options={{ animation: 'slide_from_right' }}
             />
           </>

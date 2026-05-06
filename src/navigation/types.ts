@@ -5,6 +5,8 @@ export type RootStackParamList = {
   SignUp: undefined;
   MainTabs: undefined;
   GalleryDetail: { galleryId: string; galleryTitle: string };
+  Settings: undefined;
+  ChangeUsername: undefined;
 };
 
 export type MainTabParamList = {

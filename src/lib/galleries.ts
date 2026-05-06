@@ -128,3 +128,46 @@ export async function inviteUserToGallery(galleryId: string, email: string): Pro
 
   return 'ok';
 }
+
+export async function uploadAvatar(userId: string, uri: string): Promise<string | null> {
+  try {
+    const rawExt = uri.split('?')[0].split('.').pop()?.toLowerCase() ?? 'jpg';
+    const ext = rawExt || 'jpg';
+    const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+    const storagePath = `${userId}/avatar.${ext}`;
+
+    const formData = new FormData();
+    formData.append('file', { uri, name: `avatar.${ext}`, type: mimeType } as unknown as Blob);
+
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(storagePath, formData, { contentType: mimeType, upsert: true });
+
+    if (uploadError) return null;
+
+    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(storagePath);
+    const publicUrl = urlData.publicUrl;
+
+    const { error: dbError } = await supabase
+      .from('profiles')
+      .update({ avatar_url: publicUrl })
+      .eq('id', userId);
+
+    if (dbError) return null;
+
+    return `${publicUrl}?t=${Date.now()}`;
+  } catch {
+    return null;
+  }
+}
+
+export async function getProfile(userId: string) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, username, email, avatar_url')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) return null;
+  return data;
+}
