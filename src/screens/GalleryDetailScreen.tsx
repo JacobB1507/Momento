@@ -44,7 +44,7 @@ type RouteProps = RouteProp<RootStackParamList, 'GalleryDetail'>;
 export default function GalleryDetailScreen() {
   const navigation = useNavigation<NavProp>();
   const route = useRoute<RouteProps>();
-  const { galleryId, galleryTitle } = route.params;
+  const { galleryId } = route.params;
   const { session } = useAuth();
 
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -55,7 +55,7 @@ export default function GalleryDetailScreen() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
   const [noAccountVisible, setNoAccountVisible] = useState(false);
-  const [galleryMeta, setGalleryMeta] = useState<{ created_by: string; privacy: GalleryPrivacy } | null>(null);
+  const [galleryMeta, setGalleryMeta] = useState<{ title: string; created_by: string; privacy: GalleryPrivacy } | null>(null);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [draftPrivacy, setDraftPrivacy] = useState<GalleryPrivacy>('friends');
   const [savingPrivacy, setSavingPrivacy] = useState(false);
@@ -65,7 +65,7 @@ export default function GalleryDetailScreen() {
   const loadGalleryMeta = useCallback(async () => {
     const { data } = await supabase
       .from('galleries')
-      .select('created_by, privacy')
+      .select('title, created_by, privacy')
       .eq('id', galleryId)
       .single();
     if (data) setGalleryMeta(data);
@@ -241,7 +241,7 @@ export default function GalleryDetailScreen() {
         <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={12}>
           <Text style={styles.backIcon}>‹</Text>
         </Pressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>{galleryTitle}</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>{galleryMeta?.title ?? ''}</Text>
         <View style={styles.headerActions}>
           {isOwner && (
             <Pressable
