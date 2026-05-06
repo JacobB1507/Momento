@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import type { RootStackParamList } from '../navigation/types';
 import { supabase } from '../lib/supabase';
 import { getProfile, uploadAvatar } from '../lib/galleries';
+import { getFriends } from '../lib/friends';
 
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -29,10 +30,15 @@ export default function ProfileScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [friendCount, setFriendCount] = useState(0);
 
   const loadProfile = async () => {
     if (!userId) return;
-    const profile = await getProfile(userId);
+    const [profile, friends] = await Promise.all([
+      getProfile(userId),
+      getFriends(userId),
+    ]);
+    setFriendCount((friends as unknown[]).length);
     if (profile) {
       if (profile.username) setUsername(profile.username);
       if (profile.avatar_url) setAvatarUrl(profile.avatar_url);
@@ -121,9 +127,16 @@ export default function ProfileScreen() {
 
           <Text style={styles.username}>@{username || 'unknown'}</Text>
           <Text style={styles.email}>{email}</Text>
+          <Text style={styles.friendCount}>{friendCount} Friends</Text>
         </View>
 
         <View style={styles.section}>
+          <Pressable
+            style={({ pressed }) => [styles.friendsButton, pressed && { opacity: 0.75 }]}
+            onPress={() => navigation.navigate('Friends')}
+          >
+            <Text style={styles.friendsText}>Friends</Text>
+          </Pressable>
           <Pressable
             style={({ pressed }) => [styles.settingsButton, pressed && { opacity: 0.75 }]}
             onPress={() => navigation.navigate('Settings')}
@@ -208,8 +221,16 @@ const styles = StyleSheet.create({
 
   username: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 4 },
   email: { fontSize: 14, color: '#6B7280' },
+  friendCount: { fontSize: 13, color: '#9CA3AF', marginTop: 6 },
 
   section: { alignSelf: 'stretch', paddingHorizontal: 16, marginTop: 24, gap: 12 },
+  friendsButton: {
+    backgroundColor: '#111827',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  friendsText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   settingsButton: {
     backgroundColor: '#111827',
     borderRadius: 14,

@@ -7,6 +7,8 @@ export type RootStackParamList = {
   GalleryDetail: { galleryId: string; galleryTitle: string };
   Settings: undefined;
   ChangeUsername: undefined;
+  Friends: undefined;
+  AddFriend: undefined;
 };
 
 export type MainTabParamList = {
