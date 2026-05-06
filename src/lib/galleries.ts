@@ -106,3 +106,25 @@ export async function uploadGalleryPhoto({
 
   if (dbError) throw dbError;
 }
+
+export async function inviteUserToGallery(galleryId: string, email: string): Promise<'ok' | 'no_account'> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('email', email.toLowerCase().trim())
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return 'no_account';
+
+  const { error: insertError } = await supabase
+    .from('gallery_members')
+    .insert({ gallery_id: galleryId, user_id: data.id, role: 'member' });
+
+  if (insertError) {
+    if (insertError.code === '23505') throw new Error('That person is already a member of this gallery.');
+    throw insertError;
+  }
+
+  return 'ok';
+}

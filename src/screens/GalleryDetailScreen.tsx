@@ -5,10 +5,14 @@ import {
   Dimensions,
   FlatList,
   Image,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,7 +21,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
-import { fetchGalleryPhotos, uploadGalleryPhoto } from '../lib/galleries';
+import { fetchGalleryPhotos, inviteUserToGallery, uploadGalleryPhoto } from '../lib/galleries';
 import type { RootStackParamList } from '../navigation/types';
 import type { Photo } from '../types/database';
 
@@ -39,6 +43,10 @@ export default function GalleryDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inviteVisible, setInviteVisible] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviting, setInviting] = useState(false);
+  const [noAccountVisible, setNoAccountVisible] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -54,6 +62,44 @@ export default function GalleryDetailScreen() {
   useEffect(() => {
     load().finally(() => setLoading(false));
   }, [load]);
+
+  const handleInvite = async () => {
+    const email = inviteEmail.trim();
+    if (!email) return;
+    setInviting(true);
+    try {
+      const result = await inviteUserToGallery(galleryId, email);
+      if (result === 'no_account') {
+        setInviteVisible(false);
+        setNoAccountVisible(true);
+        return;
+      }
+      setInviteVisible(false);
+      setInviteEmail('');
+      Alert.alert('Invited', `${email} has been added to this gallery.`);
+    } catch (e: any) {
+      Alert.alert('Could not invite', e?.message ?? 'Something went wrong.');
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleTextInvite = () => {
+    const msg = `Hey! I've been using Momento to share photos privately with friends and family. Download the app and I'll add you to my gallery!`;
+    Linking.openURL(`sms:?body=${encodeURIComponent(msg)}`);
+    setNoAccountVisible(false);
+    setInviteEmail('');
+  };
+
+  const handleEmailInvite = () => {
+    const subject = encodeURIComponent('Join me on Momento');
+    const body = encodeURIComponent(
+      `Hey!\n\nI've been using Momento to share photos privately with friends and family. Download the app and I'll add you to my gallery!\n\nSee you there!`
+    );
+    Linking.openURL(`mailto:${inviteEmail.trim()}?subject=${subject}&body=${body}`);
+    setNoAccountVisible(false);
+    setInviteEmail('');
+  };
 
   const handleUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -116,13 +162,20 @@ export default function GalleryDetailScreen() {
           <Text style={styles.backIcon}>‹</Text>
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>{galleryTitle}</Text>
-        {photos.length > 0 && !loading ? (
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>{photos.length}</Text>
-          </View>
-        ) : (
-          <View style={styles.headerRight} />
-        )}
+        <View style={styles.headerActions}>
+          <Pressable
+            style={({ pressed }) => [styles.inviteButton, pressed && { opacity: 0.7 }]}
+            onPress={() => setInviteVisible(true)}
+            hitSlop={8}
+          >
+            <Text style={styles.inviteButtonText}>Invite</Text>
+          </Pressable>
+          {photos.length > 0 && !loading && (
+            <View style={styles.countBadge}>
+              <Text style={styles.countText}>{photos.length}</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       {loading ? (
@@ -164,6 +217,93 @@ export default function GalleryDetailScreen() {
           ItemSeparatorComponent={() => <View style={{ height: GAP }} />}
         />
       )}
+
+      <Modal
+        visible={inviteVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setInviteVisible(false); setInviteEmail(''); }}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Invite by email</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="friend@example.com"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoFocus
+              value={inviteEmail}
+              onChangeText={setInviteEmail}
+              onSubmitEditing={handleInvite}
+              returnKeyType="send"
+            />
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={({ pressed }) => [styles.modalCancel, pressed && { opacity: 0.7 }]}
+                onPress={() => { setInviteVisible(false); setInviteEmail(''); }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalSend,
+                  (!inviteEmail.trim() || inviting) && styles.modalSendDisabled,
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={handleInvite}
+                disabled={!inviteEmail.trim() || inviting}
+              >
+                {inviting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.modalSendText}>Send</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={noAccountVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setNoAccountVisible(false); setInviteEmail(''); }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.noAccountIcon}>👋</Text>
+            <Text style={styles.modalTitle}>This person isn't on Momento yet!</Text>
+            <Text style={styles.noAccountSubtitle}>
+              Invite {inviteEmail} to join and you'll be able to add them to your gallery.
+            </Text>
+            <Pressable
+              style={({ pressed }) => [styles.noAccountButton, pressed && { opacity: 0.8 }]}
+              onPress={handleTextInvite}
+            >
+              <Text style={styles.noAccountButtonText}>Send Text Invite</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.noAccountButtonOutline, pressed && { opacity: 0.8 }]}
+              onPress={handleEmailInvite}
+            >
+              <Text style={styles.noAccountButtonOutlineText}>Send Email Invite</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.noAccountDismiss, pressed && { opacity: 0.6 }]}
+              onPress={() => { setNoAccountVisible(false); setInviteEmail(''); }}
+            >
+              <Text style={styles.noAccountDismissText}>Maybe Later</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       {/* FAB — only shown when photos exist */}
       {photos.length > 0 && !loading && (
@@ -214,6 +354,15 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   headerRight: { width: 36 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  inviteButton: {
+    borderWidth: 1.5,
+    borderColor: '#FF6B6B',
+    borderRadius: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  inviteButtonText: { color: '#FF6B6B', fontSize: 13, fontWeight: '600' },
   countBadge: {
     backgroundColor: '#FF6B6B',
     borderRadius: 12,
@@ -271,6 +420,91 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
   },
   retryText: { color: '#FF6B6B', fontWeight: '600' },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 16 },
+  modalInput: {
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    color: '#111827',
+    marginBottom: 20,
+  },
+  modalButtons: { flexDirection: 'row', gap: 12 },
+  modalCancel: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  modalCancelText: { color: '#6B7280', fontWeight: '600', fontSize: 15 },
+  modalSend: {
+    flex: 1,
+    backgroundColor: '#FF6B6B',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  modalSendDisabled: { opacity: 0.45, shadowOpacity: 0 },
+  modalSendText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+
+  noAccountIcon: { fontSize: 36, textAlign: 'center', marginBottom: 12 },
+  noAccountSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  noAccountButton: {
+    backgroundColor: '#FF6B6B',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginBottom: 10,
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  noAccountButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  noAccountButtonOutline: {
+    borderWidth: 1.5,
+    borderColor: '#FF6B6B',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  noAccountButtonOutlineText: { color: '#FF6B6B', fontWeight: '600', fontSize: 15 },
+  noAccountDismiss: { alignItems: 'center', paddingVertical: 4 },
+  noAccountDismissText: { color: '#9CA3AF', fontSize: 14, fontWeight: '500' },
 
   fab: {
     position: 'absolute',
