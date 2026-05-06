@@ -55,7 +55,12 @@ export function GalleryCard({
         )}
       </View>
       <View style={styles.cardInfo}>
-        <Text style={styles.cardTitle} numberOfLines={1}>{gallery.title}</Text>
+        <View style={styles.cardTitleRow}>
+          <Text style={styles.cardTitle} numberOfLines={1}>{gallery.title}</Text>
+          <Text style={styles.cardPrivacy}>
+            {gallery.privacy === 'private' ? 'Private' : gallery.privacy === 'friends' ? 'Friends' : 'Public'}
+          </Text>
+        </View>
         <Text style={styles.cardDate}>{formatDate(gallery.created_at)}</Text>
       </View>
     </Pressable>
@@ -89,6 +94,8 @@ const styles = StyleSheet.create({
   },
   memberBadgeText: { color: '#fff', fontSize: 10, fontWeight: '600' },
   cardInfo: { padding: 10 },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 2 },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
+  cardTitle: { fontSize: 14, fontWeight: '700', color: '#111827', flexShrink: 1, marginRight: 6 },
+  cardPrivacy: { fontSize: 11, fontWeight: '500', color: '#9CA3AF', flexShrink: 0 },
   cardDate: { fontSize: 12, color: '#9CA3AF' },
 });
