@@ -21,11 +21,19 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import { fetchGalleryPhotos, inviteUserToGallery, uploadGalleryPhoto } from '../lib/galleries';
 import type { RootStackParamList } from '../navigation/types';
-import type { Photo } from '../types/database';
+import type { GalleryPrivacy, Photo } from '../types/database';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const PRIVACY_OPTIONS: { value: GalleryPrivacy; label: string; description: string }[] = [
+  { value: 'private', label: 'Private', description: 'Only members' },
+  { value: 'friends', label: 'Friends', description: 'Your friends only' },
+  { value: 'public', label: 'Public', description: 'Anyone on Momento' },
+];
+
 const GAP = 2;
 const COLUMNS = 3;
 const PHOTO_SIZE = Math.floor((SCREEN_WIDTH - GAP * (COLUMNS - 1)) / COLUMNS);
@@ -47,6 +55,21 @@ export default function GalleryDetailScreen() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
   const [noAccountVisible, setNoAccountVisible] = useState(false);
+  const [galleryMeta, setGalleryMeta] = useState<{ created_by: string; privacy: GalleryPrivacy } | null>(null);
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [draftPrivacy, setDraftPrivacy] = useState<GalleryPrivacy>('friends');
+  const [savingPrivacy, setSavingPrivacy] = useState(false);
+
+  const isOwner = !!session?.user.id && session.user.id === galleryMeta?.created_by;
+
+  const loadGalleryMeta = useCallback(async () => {
+    const { data } = await supabase
+      .from('galleries')
+      .select('created_by, privacy')
+      .eq('id', galleryId)
+      .single();
+    if (data) setGalleryMeta(data);
+  }, [galleryId]);
 
   const load = useCallback(async () => {
     try {
@@ -60,8 +83,8 @@ export default function GalleryDetailScreen() {
   }, [galleryId]);
 
   useEffect(() => {
-    load().finally(() => setLoading(false));
-  }, [load]);
+    Promise.all([load(), loadGalleryMeta()]).finally(() => setLoading(false));
+  }, [load, loadGalleryMeta]);
 
   const handleInvite = async () => {
     const email = inviteEmail.trim();
@@ -99,6 +122,60 @@ export default function GalleryDetailScreen() {
     Linking.openURL(`mailto:${inviteEmail.trim()}?subject=${subject}&body=${body}`);
     setNoAccountVisible(false);
     setInviteEmail('');
+  };
+
+  const handleSavePrivacy = async () => {
+    setSavingPrivacy(true);
+    const { error } = await supabase
+      .from('galleries')
+      .update({ privacy: draftPrivacy })
+      .eq('id', galleryId);
+    setSavingPrivacy(false);
+    if (error) {
+      Alert.alert('Error', error.message);
+    } else {
+      setGalleryMeta(prev => prev ? { ...prev, privacy: draftPrivacy } : prev);
+      setSettingsVisible(false);
+    }
+  };
+
+  const handleDeletePhoto = (photo: Photo) => {
+    Alert.alert('Delete photo?', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          const { error: dbError } = await supabase
+            .from('gallery_photos')
+            .delete()
+            .eq('id', photo.id);
+          if (dbError) { Alert.alert('Error', dbError.message); return; }
+          await supabase.storage.from('gallery-photos').remove([photo.storage_path]);
+          setPhotos(prev => prev.filter(p => p.id !== photo.id));
+        },
+      },
+    ]);
+  };
+
+  const handleDeleteGallery = () => {
+    Alert.alert(
+      'Delete gallery?',
+      'All photos and members will be removed. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setSettingsVisible(false);
+            const { error } = await supabase.from('galleries').delete().eq('id', galleryId);
+            if (error) { Alert.alert('Error', error.message); return; }
+            navigation.goBack();
+          },
+        },
+      ]
+    );
   };
 
   const handleUpload = async () => {
@@ -142,6 +219,7 @@ export default function GalleryDetailScreen() {
 
   const renderPhoto = ({ item, index }: { item: Photo; index: number }) => {
     const isLastInRow = (index + 1) % COLUMNS === 0;
+    const canDelete = isOwner || session?.user.id === item.uploaded_by;
     return (
       <Pressable
         style={({ pressed }) => [
@@ -149,6 +227,8 @@ export default function GalleryDetailScreen() {
           !isLastInRow && { marginRight: GAP },
           pressed && styles.photoCellPressed,
         ]}
+        onLongPress={canDelete ? () => handleDeletePhoto(item) : undefined}
+        delayLongPress={400}
       >
         <Image source={{ uri: item.url }} style={styles.photo} resizeMode="cover" />
       </Pressable>
@@ -163,6 +243,15 @@ export default function GalleryDetailScreen() {
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>{galleryTitle}</Text>
         <View style={styles.headerActions}>
+          {isOwner && (
+            <Pressable
+              style={({ pressed }) => [styles.settingsButton, pressed && { opacity: 0.7 }]}
+              onPress={() => { setDraftPrivacy(galleryMeta?.privacy ?? 'friends'); setSettingsVisible(true); }}
+              hitSlop={8}
+            >
+              <Text style={styles.settingsIcon}>⚙</Text>
+            </Pressable>
+          )}
           <Pressable
             style={({ pressed }) => [styles.inviteButton, pressed && { opacity: 0.7 }]}
             onPress={() => setInviteVisible(true)}
@@ -305,6 +394,72 @@ export default function GalleryDetailScreen() {
         </View>
       </Modal>
 
+      <Modal
+        visible={settingsVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSettingsVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setSettingsVisible(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Gallery Settings</Text>
+            <Text style={styles.settingsSection}>Privacy</Text>
+            <View style={styles.privacyRow}>
+              {PRIVACY_OPTIONS.map((opt) => {
+                const selected = draftPrivacy === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    style={({ pressed }) => [
+                      styles.privacyOption,
+                      selected && styles.privacyOptionSelected,
+                      pressed && !selected && { opacity: 0.7 },
+                    ]}
+                    onPress={() => setDraftPrivacy(opt.value)}
+                  >
+                    <Text style={[styles.privacyOptionLabel, selected && styles.privacyOptionLabelSelected]}>
+                      {opt.label}
+                    </Text>
+                    <Text style={[styles.privacyOptionDesc, selected && styles.privacyOptionDescSelected]}>
+                      {opt.description}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={({ pressed }) => [styles.modalCancel, pressed && { opacity: 0.7 }]}
+                onPress={() => setSettingsVisible(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalSend,
+                  savingPrivacy && styles.modalSendDisabled,
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={handleSavePrivacy}
+                disabled={savingPrivacy}
+              >
+                {savingPrivacy ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.modalSendText}>Save</Text>
+                )}
+              </Pressable>
+            </View>
+            <Pressable
+              style={({ pressed }) => [styles.deleteGalleryButton, pressed && { opacity: 0.7 }]}
+              onPress={handleDeleteGallery}
+            >
+              <Text style={styles.deleteGalleryText}>Delete Gallery</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* FAB — only shown when photos exist */}
       {photos.length > 0 && !loading && (
         <Pressable
@@ -355,6 +510,14 @@ const styles = StyleSheet.create({
   },
   headerRight: { width: 36 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  settingsButton: {
+    borderWidth: 1.5,
+    borderColor: '#9CA3AF',
+    borderRadius: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  settingsIcon: { color: '#6B7280', fontSize: 15 },
   inviteButton: {
     borderWidth: 1.5,
     borderColor: '#FF6B6B',
@@ -506,6 +669,42 @@ const styles = StyleSheet.create({
   noAccountDismiss: { alignItems: 'center', paddingVertical: 4 },
   noAccountDismissText: { color: '#9CA3AF', fontSize: 14, fontWeight: '500' },
 
+  settingsSection: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    letterSpacing: 0.2,
+    marginBottom: 10,
+  },
+  privacyRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  privacyOption: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  privacyOptionSelected: {
+    borderColor: '#FF6B6B',
+    backgroundColor: '#FFF5F5',
+  },
+  privacyOptionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 2,
+  },
+  privacyOptionLabelSelected: { color: '#FF6B6B' },
+  privacyOptionDesc: { fontSize: 10, color: '#9CA3AF' },
+  privacyOptionDescSelected: { color: '#FF6B6B' },
+  deleteGalleryButton: { alignItems: 'center', paddingVertical: 4, marginTop: 4 },
+  deleteGalleryText: { color: '#EF4444', fontSize: 14, fontWeight: '600' },
   fab: {
     position: 'absolute',
     bottom: 24,

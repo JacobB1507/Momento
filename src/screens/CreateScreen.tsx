@@ -16,11 +16,19 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { MainTabParamList } from '../navigation/types';
+import type { GalleryPrivacy } from '../types/database';
+
+const PRIVACY_OPTIONS: { value: GalleryPrivacy; label: string; description: string }[] = [
+  { value: 'private', label: 'Private', description: 'Only members' },
+  { value: 'friends', label: 'Friends', description: 'Your friends only' },
+  { value: 'public', label: 'Public', description: 'Anyone on Momento' },
+];
 
 export default function CreateScreen() {
   const { session } = useAuth();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const [title, setTitle] = useState('');
+  const [privacy, setPrivacy] = useState<GalleryPrivacy>('friends');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +42,7 @@ export default function CreateScreen() {
 
     const { error: dbError } = await supabase.from('galleries').insert({
       title: trimmed,
+      privacy,
       created_by: session?.user.id,
     });
 
@@ -73,6 +82,31 @@ export default function CreateScreen() {
           onSubmitEditing={handleCreate}
           maxLength={60}
         />
+
+        <Text style={styles.privacyLabel}>Who can see this gallery?</Text>
+        <View style={styles.privacyRow}>
+          {PRIVACY_OPTIONS.map((opt) => {
+            const selected = privacy === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                style={({ pressed }) => [
+                  styles.privacyOption,
+                  selected && styles.privacyOptionSelected,
+                  pressed && !selected && styles.privacyOptionPressed,
+                ]}
+                onPress={() => setPrivacy(opt.value)}
+              >
+                <Text style={[styles.privacyOptionLabel, selected && styles.privacyOptionLabelSelected]}>
+                  {opt.label}
+                </Text>
+                <Text style={[styles.privacyOptionDesc, selected && styles.privacyOptionDescSelected]}>
+                  {opt.description}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
         {error && <Text style={styles.errorText}>{error}</Text>}
 
@@ -147,6 +181,44 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     marginBottom: 16,
   },
+
+  privacyLabel: {
+    alignSelf: 'flex-start',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 10,
+    letterSpacing: 0.2,
+  },
+  privacyRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 8,
+    marginBottom: 20,
+  },
+  privacyOption: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  privacyOptionSelected: {
+    borderColor: '#FF6B6B',
+    backgroundColor: '#FFF5F5',
+  },
+  privacyOptionPressed: { opacity: 0.7 },
+  privacyOptionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 2,
+  },
+  privacyOptionLabelSelected: { color: '#FF6B6B' },
+  privacyOptionDesc: { fontSize: 11, color: '#9CA3AF' },
+  privacyOptionDescSelected: { color: '#FF6B6B' },
 
   errorText: { color: '#EF4444', fontSize: 14, marginBottom: 12, textAlign: 'center' },
 

@@ -1,6 +1,9 @@
+export type GalleryPrivacy = 'private' | 'friends' | 'public';
+
 export interface Gallery {
   id: string;
   title: string;
+  privacy: GalleryPrivacy;
   cover_photo_url: string | null;
   created_at: string;
   created_by: string;
