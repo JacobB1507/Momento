@@ -19,6 +19,7 @@ import { fetchGalleryPhotos, uploadGalleryPhoto } from '../lib/galleries';
 import { requestPhotoRemoval, getRemovalRequests } from '../lib/photoRemoval';
 import type { RootStackParamList } from '../navigation/types';
 import type { GalleryPrivacy, Photo } from '../types/database';
+import CommentsSheet from '../components/CommentsSheet';
 import { ContributorsModal } from '../components/ContributorsModal';
 import { RemovalRequestsModal } from '../components/RemovalRequestsModal';
 import { SettingsModal } from '../components/SettingsModal';
@@ -43,7 +44,8 @@ export default function GalleryDetailScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [showRemovalRequests, setShowRemovalRequests] = useState(false);
   const [removalRequestCount, setRemovalRequestCount] = useState(0);
-  const [galleryMeta, setGalleryMeta] = useState<{ title: string; created_by: string; privacy: GalleryPrivacy } | null>(null);
+  const [galleryMeta, setGalleryMeta] = useState<{ title: string; created_by: string; privacy: GalleryPrivacy; comment_count?: number } | null>(null);
+  const [showComments, setShowComments] = useState(false);
 
   const isOwner = !!session?.user.id && session.user.id === galleryMeta?.created_by;
   const [isMember, setIsMember] = useState(false);
@@ -51,7 +53,7 @@ export default function GalleryDetailScreen() {
   const loadGalleryMeta = useCallback(async () => {
     const { data } = await supabase
       .from('galleries')
-      .select('title, created_by, privacy')
+      .select('title, created_by, privacy, comment_count')
       .eq('id', galleryId)
       .single();
     if (data) setGalleryMeta(data);
@@ -223,6 +225,15 @@ export default function GalleryDetailScreen() {
           }
         />
       )}
+
+      <Pressable onPress={() => setShowComments(true)} style={styles.commentBtn}>
+        <Ionicons name="chatbubble-outline" size={18} color="#FF6B6B" />
+        <Text style={styles.commentBtnText}>
+          {(galleryMeta?.comment_count ?? 0) > 0 ? `${galleryMeta!.comment_count} Comments` : 'Add a comment'}
+        </Text>
+      </Pressable>
+
+      <CommentsSheet galleryId={galleryId} visible={showComments} onClose={() => setShowComments(false)} />
 
       <RemovalRequestsModal
         visible={showRemovalRequests}

@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Dimensions, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { Ionicons } from '@expo/vector-icons';
+import CommentsSheet from './CommentsSheet';
 import { useFocusEffect } from '@react-navigation/native';
 import type { Gallery } from '../types/database';
 import { supabase } from '../lib/supabase';
@@ -42,6 +44,7 @@ export function GalleryCard({
   gallery,
   onPress,
   onLongPress,
+  onCommentPress,
   currentUserId,
   friendIds = [],
   refreshKey,
@@ -49,12 +52,14 @@ export function GalleryCard({
   gallery: Gallery;
   onPress: () => void;
   onLongPress?: () => void;
+  onCommentPress?: () => void;
   currentUserId?: string;
   friendIds?: string[];
   refreshKey?: number;
 }) {
   const [contributors, setContributors] = useState<Contributor[]>([]);
   const [showContributors, setShowContributors] = useState(false);
+  const [showComments, setShowComments] = useState(false);
 
   const load = useCallback(async () => {
     const { data: memberRows } = await supabase
@@ -96,6 +101,7 @@ export function GalleryCard({
   const overflow = contributors.length - MAX_VISIBLE;
 
   return (
+    <>
     <Pressable
       style={({ pressed }) => [
         styles.card,
@@ -198,8 +204,20 @@ export function GalleryCard({
             )}
           </>
         )}
+        {(gallery as any).comment_count > 0 && (
+          <Pressable
+            style={styles.commentRow}
+            onPress={() => { setShowComments(true); onCommentPress?.(); }}
+            hitSlop={4}
+          >
+            <Ionicons name="chatbubble-outline" size={14} color="#6b7280" />
+            <Text style={styles.commentCount}>{(gallery as any).comment_count}</Text>
+          </Pressable>
+        )}
       </View>
     </Pressable>
+    <CommentsSheet galleryId={gallery.id} visible={showComments} onClose={() => setShowComments(false)} />
+  </>
   );
 }
 
@@ -319,4 +337,6 @@ const styles = StyleSheet.create({
   },
   dropdownAvatarInitial: { fontSize: 11, fontWeight: '700', color: '#fff' },
   dropdownUsername: { fontSize: 12, fontWeight: '500', color: '#374151', flex: 1 },
+  commentRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  commentCount: { fontSize: 12, color: '#6b7280' },
 });

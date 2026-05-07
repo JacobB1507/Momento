@@ -65,4 +65,6 @@ export default StyleSheet.create({
     elevation: 8,
   },
   fabIcon: { fontSize: 28, color: '#fff', fontWeight: '300', lineHeight: Platform.OS === 'ios' ? 32 : 30 },
+  commentBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingVertical: 18, borderTopWidth: 1, borderTopColor: '#f0f0f0', marginBottom: 16 },
+  commentBtnText: { fontSize: 16, color: '#FF6B6B', fontWeight: '600' },
 });

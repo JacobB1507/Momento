@@ -91,6 +91,10 @@ export default function NotificationsScreen() {
       navigation.navigate('GalleryInvite', { galleryId: related_id, notificationId: id });
     } else if (type === 'gallery_photo_added' && related_id) {
       navigation.navigate('GalleryDetail', { galleryId: related_id, galleryTitle: '' });
+    } else if (type === 'comment' && related_id) {
+      navigation.navigate('GalleryDetail', { galleryId: related_id, galleryTitle: '' });
+    } else if (type === 'message') {
+      navigation.navigate('Messages' as any);
     }
   };
 
