@@ -33,6 +33,7 @@ export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState<Tab>('friends');
   const [friendGalleries, setFriendGalleries] = useState<FeedGallery[]>([]);
   const [discoverGalleries, setDiscoverGalleries] = useState<Gallery[]>([]);
+  const [friendIds, setFriendIds] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadFriendGalleries = useCallback(async () => {
@@ -43,6 +44,17 @@ export default function HomeScreen() {
     ]);
     setFriendGalleries(feedGalleries);
     setUnreadCount(count);
+
+    const { data: friendRows } = await supabase
+      .from('friends')
+      .select('sender_id, receiver_id')
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .eq('status', 'accepted');
+    setFriendIds(
+      (friendRows ?? []).map((r: any) =>
+        r.sender_id === userId ? r.receiver_id : r.sender_id
+      )
+    );
   }, [userId]);
 
   const loadDiscover = useCallback(async () => {
@@ -125,6 +137,8 @@ export default function HomeScreen() {
             <GalleryCard
               gallery={item as unknown as Gallery}
               onPress={() => navigateToGallery(item.id, item.title)}
+              currentUserId={userId}
+              friendIds={friendIds}
             />
           )}
         />
@@ -144,6 +158,8 @@ export default function HomeScreen() {
             <GalleryCard
               gallery={item}
               onPress={() => navigateToGallery(item.id, item.title)}
+              currentUserId={userId}
+              friendIds={friendIds}
             />
           )}
         />

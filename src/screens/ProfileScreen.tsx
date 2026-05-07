@@ -40,6 +40,7 @@ export default function ProfileScreen() {
   const [uploading, setUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [friendCount, setFriendCount] = useState(0);
+  const [friendIds, setFriendIds] = useState<string[]>([]);
   const [photoCount, setPhotoCount] = useState(0);
   const [bio, setBio] = useState<string | null>(null);
   const [galleries, setGalleries] = useState<Gallery[]>([]);
@@ -52,6 +53,18 @@ export default function ProfileScreen() {
       getFriends(userId),
     ]);
     setFriendCount((friends as unknown[]).length);
+    if (user?.id) {
+      const { data: friendRows } = await supabase
+        .from('friends')
+        .select('sender_id, receiver_id')
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+        .eq('status', 'accepted');
+      setFriendIds(
+        (friendRows ?? []).map((r: any) =>
+          r.sender_id === user.id ? r.receiver_id : r.sender_id
+        )
+      );
+    }
     if (profile) {
       if (profile.username) setUsername(profile.username);
       if (profile.avatar_url) setAvatarUrl(profile.avatar_url);
@@ -311,6 +324,8 @@ export default function ProfileScreen() {
                 gallery={item}
                 onPress={() => navigation.navigate('GalleryDetail', { galleryId: item.id, galleryTitle: item.title })}
                 onLongPress={() => handleGalleryLongPress(item)}
+                currentUserId={user?.id}
+                friendIds={friendIds}
               />
             )}
           />

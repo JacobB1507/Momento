@@ -41,10 +41,14 @@ export function GalleryCard({
   gallery,
   onPress,
   onLongPress,
+  currentUserId,
+  friendIds = [],
 }: {
   gallery: Gallery;
   onPress: () => void;
   onLongPress?: () => void;
+  currentUserId?: string;
+  friendIds?: string[];
 }) {
   const [contributors, setContributors] = useState<Contributor[]>([]);
 
@@ -73,6 +77,9 @@ export function GalleryCard({
     };
     load();
   }, [gallery.id]);
+
+  const knownIds = new Set([...(friendIds ?? []), ...(currentUserId ? [currentUserId] : [])]);
+  const showBubbles = contributors.some(c => knownIds.has(c.user_id));
 
   const visible = contributors.slice(0, MAX_VISIBLE);
   const overflow = contributors.length - MAX_VISIBLE;
@@ -116,7 +123,7 @@ export function GalleryCard({
           </Text>
         </View>
         <Text style={styles.cardDate}>{formatDate(gallery.created_at)}</Text>
-        {contributors.length > 0 && (
+        {showBubbles && contributors.length > 0 && (
           <Pressable
             style={styles.bubblesRow}
             onPress={handleBubblesPress}
