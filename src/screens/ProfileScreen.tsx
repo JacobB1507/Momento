@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
   Pressable,
   RefreshControl,
@@ -16,9 +17,11 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import type { RootStackParamList } from '../navigation/types';
+import type { Gallery } from '../types/database';
 import { supabase } from '../lib/supabase';
 import { getProfile, uploadAvatar } from '../lib/galleries';
 import { getFriends } from '../lib/friends';
+import { GalleryCard, CARD_GAP } from '../components/GalleryCard';
 
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -31,6 +34,7 @@ export default function ProfileScreen() {
   const [uploading, setUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [friendCount, setFriendCount] = useState(0);
+  const [galleries, setGalleries] = useState<Gallery[]>([]);
 
   const loadProfile = async () => {
     if (!userId) return;
@@ -53,7 +57,20 @@ export default function ProfileScreen() {
     if (data?.avatar_url) setAvatarUrl(data.avatar_url);
   };
 
-  useFocusEffect(useCallback(() => { loadProfile(); }, []));
+  const loadGalleries = async () => {
+    if (!userId) return;
+    const { data } = await supabase
+      .from('galleries')
+      .select('*')
+      .eq('created_by', userId)
+      .order('created_at', { ascending: false });
+    setGalleries(data ?? []);
+  };
+
+  useFocusEffect(useCallback(() => {
+    loadProfile();
+    loadGalleries();
+  }, []));
 
   const handleAvatarPress = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -91,13 +108,13 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, alignItems: 'center', paddingTop: 60, paddingBottom: 40 }}
+        contentContainerStyle={{ flexGrow: 1, alignItems: 'center', paddingTop: 16, paddingBottom: 40 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              await loadProfile();
+              await Promise.all([loadProfile(), loadGalleries()]);
               setRefreshing(false);
             }}
           />
@@ -149,6 +166,27 @@ export default function ProfileScreen() {
           >
             <Text style={styles.signOutText}>Sign Out</Text>
           </Pressable>
+        </View>
+
+        <View style={styles.galleriesSection}>
+          <Text style={styles.galleriesSectionTitle}>My Galleries</Text>
+          <FlatList
+            data={galleries}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            scrollEnabled={false}
+            columnWrapperStyle={styles.galleryRow}
+            contentContainerStyle={styles.galleryGrid}
+            ListEmptyComponent={
+              <Text style={styles.galleryEmpty}>No galleries yet.</Text>
+            }
+            renderItem={({ item }) => (
+              <GalleryCard
+                gallery={item}
+                onPress={() => navigation.navigate('GalleryDetail', { galleryId: item.id, galleryTitle: item.title })}
+              />
+            )}
+          />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -246,4 +284,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   signOutText: { color: '#FF6B6B', fontSize: 16, fontWeight: '600' },
+
+  galleriesSection: { alignSelf: 'stretch', paddingHorizontal: 16, marginTop: 32 },
+  galleriesSectionTitle: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 12 },
+  galleryGrid: { gap: CARD_GAP },
+  galleryRow: { gap: CARD_GAP },
+  galleryEmpty: { color: '#9CA3AF', fontSize: 14, textAlign: 'center', paddingVertical: 16 },
 });

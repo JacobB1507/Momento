@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Dimensions, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Dimensions, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Photo } from '../types/database';
 import { supabase } from '../lib/supabase';
+import { deleteOwnPhoto } from '../lib/photoRemoval';
 
 type UploaderProfile = { id: string; username: string | null; avatar_url: string | null };
 
@@ -15,11 +16,12 @@ const PHOTO_SIZE = Math.floor((SCREEN_WIDTH - GAP * (COLUMNS - 1)) / COLUMNS);
 type Props = {
   photos: Photo[];
   isOwner: boolean;
-  currentUserId: string | undefined;
+  currentUserId?: string;
   onDeletePhoto: (photo: Photo) => void;
+  onRemovalRequest?: (photoId: string) => void;
 };
 
-export function PhotoGrid({ photos, isOwner, currentUserId, onDeletePhoto }: Props) {
+export function PhotoGrid({ photos, isOwner, currentUserId, onDeletePhoto, onRemovalRequest }: Props) {
   const [uploaderProfiles, setUploaderProfiles] = useState<Record<string, UploaderProfile>>({});
 
   useEffect(() => {
@@ -37,6 +39,29 @@ export function PhotoGrid({ photos, isOwner, currentUserId, onDeletePhoto }: Pro
       });
   }, [photos]);
 
+  const handleLongPress = (item: Photo) => {
+    const isOwn = !!currentUserId && currentUserId === item.uploaded_by;
+    if (isOwn) {
+      Alert.alert('Delete Photo', 'Remove this photo? This cannot be undone.', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Photo',
+          style: 'destructive',
+          onPress: async () => {
+            const ok = await deleteOwnPhoto(item.id);
+            if (ok) onDeletePhoto(item);
+            else Alert.alert('Error', 'Could not delete photo. Please try again.');
+          },
+        },
+      ]);
+    } else if (onRemovalRequest) {
+      Alert.alert('Request Removal', 'Ask the gallery to review this photo for removal?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Request Removal', onPress: () => onRemovalRequest(item.id) },
+      ]);
+    }
+  };
+
   return (
     <FlatList
       data={photos}
@@ -44,7 +69,7 @@ export function PhotoGrid({ photos, isOwner, currentUserId, onDeletePhoto }: Pro
       numColumns={COLUMNS}
       renderItem={({ item, index }) => {
         const isLastInRow = (index + 1) % COLUMNS === 0;
-        const canDelete = isOwner || currentUserId === item.uploaded_by;
+        const canInteract = currentUserId === item.uploaded_by || !!onRemovalRequest;
         const uploader = uploaderProfiles[item.uploaded_by];
         return (
           <Pressable
@@ -53,7 +78,7 @@ export function PhotoGrid({ photos, isOwner, currentUserId, onDeletePhoto }: Pro
               !isLastInRow && { marginRight: GAP },
               pressed && styles.cellPressed,
             ]}
-            onLongPress={canDelete ? () => onDeletePhoto(item) : undefined}
+            onLongPress={canInteract ? () => handleLongPress(item) : undefined}
             delayLongPress={400}
           >
             <Image source={{ uri: item.url }} style={styles.photo} resizeMode="cover" />

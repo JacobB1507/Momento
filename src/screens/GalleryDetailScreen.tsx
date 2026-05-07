@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -16,6 +18,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { fetchGalleryPhotos, uploadGalleryPhoto } from '../lib/galleries';
+import { requestPhotoRemoval, getRemovalRequests, voteOnRemoval } from '../lib/photoRemoval';
 import type { RootStackParamList } from '../navigation/types';
 import type { GalleryPrivacy, Photo } from '../types/database';
 import { InviteModal } from '../components/InviteModal';
@@ -24,6 +27,16 @@ import { PhotoGrid } from '../components/PhotoGrid';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'GalleryDetail'>;
 type RouteProps = RouteProp<RootStackParamList, 'GalleryDetail'>;
+
+type RemovalRequest = {
+  id: string;
+  photo_id: string;
+  reason: string;
+  requested_by_username: string | null;
+  yes_votes: number;
+  no_votes: number;
+  created_at: string;
+};
 
 export default function GalleryDetailScreen() {
   const navigation = useNavigation<NavProp>();
@@ -37,7 +50,9 @@ export default function GalleryDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [inviteVisible, setInviteVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [removalRequestsVisible, setRemovalRequestsVisible] = useState(false);
   const [galleryMeta, setGalleryMeta] = useState<{ title: string; created_by: string; privacy: GalleryPrivacy } | null>(null);
+  const [removalRequests, setRemovalRequests] = useState<RemovalRequest[]>([]);
 
   const isOwner = !!session?.user.id && session.user.id === galleryMeta?.created_by;
 
@@ -59,24 +74,60 @@ export default function GalleryDetailScreen() {
     }
   }, [galleryId]);
 
+  const loadRemovalRequests = useCallback(async () => {
+    const data = await getRemovalRequests(galleryId);
+    setRemovalRequests(data as RemovalRequest[]);
+  }, [galleryId]);
+
   useEffect(() => {
-    Promise.all([load(), loadGalleryMeta()]).finally(() => setLoading(false));
-  }, [load, loadGalleryMeta]);
+    Promise.all([load(), loadGalleryMeta(), loadRemovalRequests()]).finally(() => setLoading(false));
+  }, [load, loadGalleryMeta, loadRemovalRequests]);
 
   const handleDeletePhoto = (photo: Photo) => {
-    Alert.alert('Delete photo?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          const { error: dbError } = await supabase.from('gallery_photos').delete().eq('id', photo.id);
-          if (dbError) { Alert.alert('Error', dbError.message); return; }
-          await supabase.storage.from('gallery-photos').remove([photo.storage_path]);
-          setPhotos(prev => prev.filter(p => p.id !== photo.id));
-        },
-      },
-    ]);
+    setPhotos(prev => prev.filter(p => p.id !== photo.id));
+  };
+
+  const handleRemovalRequest = (photoId: string) => {
+    const userId = session?.user.id;
+    if (!userId) return;
+
+    const submit = async (reason: string) => {
+      const result = await requestPhotoRemoval(photoId, galleryId, userId, reason);
+      if (result === 'ok') {
+        Alert.alert('Submitted', 'Removal request submitted — the photo owner and gallery members will be notified.');
+        loadRemovalRequests();
+      } else if (result === 'already_requested') {
+        Alert.alert('Already requested', "You've already submitted a removal request for this photo.");
+      } else {
+        Alert.alert('Error', 'Could not submit removal request. Please try again.');
+      }
+    };
+
+    if (Platform.OS === 'ios') {
+      Alert.prompt(
+        'Request Removal',
+        'Why should this photo be removed?',
+        (reason) => { if (reason?.trim()) submit(reason.trim()); },
+        'plain-text',
+      );
+    } else {
+      Alert.alert(
+        'Request Removal',
+        'Submit a request to remove this photo?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Request', onPress: () => submit('') },
+        ],
+      );
+    }
+  };
+
+  const handleVote = async (requestId: string, vote: boolean) => {
+    const userId = session?.user.id;
+    if (!userId) return;
+    const ok = await voteOnRemoval(requestId, userId, vote);
+    if (ok) await loadRemovalRequests();
+    else Alert.alert('Error', 'Could not submit vote. Please try again.');
   };
 
   const handleUpload = async () => {
@@ -122,6 +173,15 @@ export default function GalleryDetailScreen() {
               <Text style={styles.settingsIcon}>⚙</Text>
             </Pressable>
           )}
+          {removalRequests.length > 0 && (
+            <Pressable
+              style={({ pressed }) => [styles.removalButton, pressed && { opacity: 0.7 }]}
+              onPress={() => setRemovalRequestsVisible(true)}
+              hitSlop={8}
+            >
+              <Text style={styles.removalButtonText}>Requests ({removalRequests.length})</Text>
+            </Pressable>
+          )}
           <Pressable
             style={({ pressed }) => [styles.inviteButton, pressed && { opacity: 0.7 }]}
             onPress={() => setInviteVisible(true)}
@@ -163,6 +223,7 @@ export default function GalleryDetailScreen() {
           isOwner={isOwner}
           currentUserId={session?.user.id}
           onDeletePhoto={handleDeletePhoto}
+          onRemovalRequest={handleRemovalRequest}
         />
       )}
 
@@ -180,6 +241,55 @@ export default function GalleryDetailScreen() {
         onPrivacySaved={(privacy) => setGalleryMeta(prev => prev ? { ...prev, privacy } : prev)}
         onGalleryDeleted={() => navigation.goBack()}
       />
+
+      <Modal
+        visible={removalRequestsVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setRemovalRequestsVisible(false)}
+      >
+        <SafeAreaView style={styles.modalSafe} edges={['top']}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Removal Requests</Text>
+            <Pressable
+              onPress={() => setRemovalRequestsVisible(false)}
+              style={({ pressed }) => [styles.modalClose, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.modalCloseText}>Done</Text>
+            </Pressable>
+          </View>
+          <FlatList
+            data={removalRequests}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.modalContent}
+            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+            ListEmptyComponent={
+              <Text style={styles.modalEmpty}>No removal requests</Text>
+            }
+            renderItem={({ item }) => (
+              <View style={styles.requestRow}>
+                <Text style={styles.requestUser}>@{item.requested_by_username ?? 'unknown'}</Text>
+                <Text style={styles.requestReason}>{item.reason || 'No reason provided'}</Text>
+                <Text style={styles.requestVotes}>👍 {item.yes_votes}  👎 {item.no_votes}</Text>
+                <View style={styles.requestActions}>
+                  <Pressable
+                    style={({ pressed }) => [styles.agreeButton, pressed && { opacity: 0.7 }]}
+                    onPress={() => handleVote(item.id, true)}
+                  >
+                    <Text style={styles.agreeText}>Agree</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [styles.disagreeButton, pressed && { opacity: 0.7 }]}
+                    onPress={() => handleVote(item.id, false)}
+                  >
+                    <Text style={styles.disagreeText}>Disagree</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+          />
+        </SafeAreaView>
+      </Modal>
 
       {photos.length > 0 && !loading && (
         <Pressable
@@ -205,6 +315,8 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   settingsButton: { borderWidth: 1.5, borderColor: '#9CA3AF', borderRadius: 10, paddingVertical: 4, paddingHorizontal: 8 },
   settingsIcon: { color: '#6B7280', fontSize: 15 },
+  removalButton: { borderWidth: 1.5, borderColor: '#F59E0B', borderRadius: 10, paddingVertical: 4, paddingHorizontal: 8 },
+  removalButtonText: { color: '#F59E0B', fontSize: 13, fontWeight: '600' },
   inviteButton: { borderWidth: 1.5, borderColor: '#FF6B6B', borderRadius: 10, paddingVertical: 4, paddingHorizontal: 10 },
   inviteButtonText: { color: '#FF6B6B', fontSize: 13, fontWeight: '600' },
   countBadge: { backgroundColor: '#FF6B6B', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3, minWidth: 36, alignItems: 'center' },
@@ -245,4 +357,52 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   fabIcon: { fontSize: 28, color: '#fff', fontWeight: '300', lineHeight: Platform.OS === 'ios' ? 32 : 30 },
+
+  modalSafe: { flex: 1, backgroundColor: '#F9FAFB' },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  modalClose: { paddingVertical: 4, paddingHorizontal: 4 },
+  modalCloseText: { fontSize: 16, color: '#FF6B6B', fontWeight: '600' },
+  modalContent: { padding: 16 },
+  modalEmpty: { textAlign: 'center', color: '#9CA3AF', fontSize: 14, marginTop: 32 },
+
+  requestRow: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  requestUser: { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 4 },
+  requestReason: { fontSize: 14, color: '#6B7280', marginBottom: 10 },
+  requestVotes: { fontSize: 13, color: '#6B7280', marginBottom: 12 },
+  requestActions: { flexDirection: 'row', gap: 8 },
+  agreeButton: {
+    flex: 1,
+    backgroundColor: '#34C759',
+    borderRadius: 10,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  agreeText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  disagreeButton: {
+    flex: 1,
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  disagreeText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });

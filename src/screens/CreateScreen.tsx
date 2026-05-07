@@ -52,7 +52,7 @@ export default function CreateScreen() {
       setError(dbError.message);
     } else {
       setTitle('');
-      navigation.navigate('Home');
+      navigation.navigate('Profile');
     }
   };
 
