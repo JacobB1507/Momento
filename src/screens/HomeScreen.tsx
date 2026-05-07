@@ -1,6 +1,8 @@
 import React, { useCallback, useState } from 'react';
 import {
+  FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -11,25 +13,67 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAuth } from '../context/AuthContext';
 import { getUnreadCount } from '../lib/notifications';
+import { getFeedGalleries } from '../lib/feed';
+import type { FeedGallery } from '../lib/feed';
+import { GalleryCard, CARD_GAP } from '../components/GalleryCard';
+import { supabase } from '../lib/supabase';
 import type { RootStackParamList } from '../navigation/types';
+import type { Gallery } from '../types/database';
+
+type NavProp = NativeStackNavigationProp<RootStackParamList>;
+type Tab = 'friends' | 'discover';
 
 export default function HomeScreen() {
   const { session } = useAuth();
   const navigation = useNavigation();
-  const rootNav = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
-  const [unreadCount, setUnreadCount] = useState(0);
+  const rootNav = navigation.getParent<NavProp>();
+  const userId = session?.user.id ?? '';
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!session?.user.id) return;
-      getUnreadCount(session.user.id).then(setUnreadCount);
-    }, [session?.user.id])
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [activeTab, setActiveTab] = useState<Tab>('friends');
+  const [friendGalleries, setFriendGalleries] = useState<FeedGallery[]>([]);
+  const [discoverGalleries, setDiscoverGalleries] = useState<Gallery[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadAll = useCallback(async () => {
+    if (!userId) return;
+    const [feedGalleries, count] = await Promise.all([
+      getFeedGalleries(userId),
+      getUnreadCount(userId),
+    ]);
+    setFriendGalleries(feedGalleries);
+    setUnreadCount(count);
+
+    const { data } = await supabase
+      .from('galleries')
+      .select('*')
+      .eq('privacy', 'public')
+      .neq('created_by', userId)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    setDiscoverGalleries((data as Gallery[]) ?? []);
+  }, [userId]);
+
+  useFocusEffect(useCallback(() => { loadAll(); }, [loadAll]));
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadAll();
+    setRefreshing(false);
+  };
+
+  const refreshControl = (
+    <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FF6B6B" />
   );
+
+  const navigateToGallery = (galleryId: string, galleryTitle: string) => {
+    rootNav?.navigate('GalleryDetail', { galleryId, galleryTitle });
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Home</Text>
+        <Text style={styles.headerTitle}>Momento</Text>
         <Pressable
           onPress={() => rootNav?.navigate('Notifications')}
           style={({ pressed }) => [styles.bellButton, pressed && { opacity: 0.7 }]}
@@ -41,7 +85,62 @@ export default function HomeScreen() {
           />
         </Pressable>
       </View>
-      <View style={styles.body} />
+
+      <View style={styles.tabs}>
+        {(['friends', 'discover'] as Tab[]).map(tab => (
+          <Pressable
+            key={tab}
+            style={[styles.tab, activeTab === tab && styles.tabActive]}
+            onPress={() => setActiveTab(tab)}
+          >
+            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+              {tab === 'friends' ? 'Friends' : 'Discover'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {activeTab === 'friends' ? (
+        <FlatList
+          key="friends_list"
+          data={friendGalleries}
+          keyExtractor={item => item.id}
+          numColumns={2}
+          refreshControl={refreshControl}
+          columnWrapperStyle={styles.galleryRow}
+          contentContainerStyle={styles.galleryGrid}
+          ListEmptyComponent={
+            <Text style={styles.empty}>
+              No friends yet — add some friends to see their galleries!
+            </Text>
+          }
+          renderItem={({ item }) => (
+            <GalleryCard
+              gallery={item as unknown as Gallery}
+              onPress={() => navigateToGallery(item.id, item.title)}
+            />
+          )}
+        />
+      ) : (
+        <FlatList
+          key="discover_list"
+          data={discoverGalleries}
+          keyExtractor={item => item.id}
+          numColumns={2}
+          refreshControl={refreshControl}
+          columnWrapperStyle={styles.galleryRow}
+          contentContainerStyle={styles.galleryGrid}
+          ListEmptyComponent={
+            <Text style={styles.empty}>No public galleries yet</Text>
+          }
+          renderItem={({ item }) => (
+            <GalleryCard
+              gallery={item}
+              onPress={() => navigateToGallery(item.id, item.title)}
+            />
+          )}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -53,9 +152,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
-  bellButton: { marginLeft: 'auto', padding: 4 },
-  body: { flex: 1 },
+  headerTitle: { flex: 1, fontSize: 28, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
+  bellButton: { padding: 4 },
+  tabs: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  tab: {
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+  },
+  tabActive: { backgroundColor: '#FF6B6B' },
+  tabText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
+  tabTextActive: { color: '#fff' },
+  empty: {
+    textAlign: 'center',
+    color: '#9CA3AF',
+    fontSize: 14,
+    paddingTop: 48,
+    paddingHorizontal: 32,
+    lineHeight: 22,
+  },
+  galleryGrid: { paddingHorizontal: 16, paddingBottom: 24, gap: CARD_GAP },
+  galleryRow: { gap: CARD_GAP },
 });
