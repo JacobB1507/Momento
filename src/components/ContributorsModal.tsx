@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { InviteViaSection } from './InviteViaSection';
 
 type Props = {
   visible: boolean;
@@ -204,6 +205,7 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
                 </View>
               )}
               {!!addSuccess && <Text style={styles.addSuccessText}>{addSuccess}</Text>}
+              <InviteViaSection senderId={session?.user.id ?? ''} visible={visible} />
             </>
           )}
           <Text style={[styles.sectionLabel, { marginTop: isOwner ? 24 : 0 }]}>Members</Text>

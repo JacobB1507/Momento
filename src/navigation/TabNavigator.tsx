@@ -2,6 +2,7 @@ import React from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import HomeScreen from '../screens/HomeScreen';
+import SearchScreen from '../screens/SearchScreen';
 import CreateScreen from '../screens/CreateScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import type { MainTabParamList } from './types';
@@ -32,17 +33,28 @@ export default function TabNavigator() {
         headerShown: false,
         tabBarStyle: styles.tabBar,
         tabBarShowLabel: false,
-        tabBarLabelStyle: { fontSize: 10 },
-        tabBarItemStyle: { paddingBottom: 2 },
+        tabBarLabelStyle: { fontSize: 9, includeFontPadding: false },
+        tabBarAllowFontScaling: false,
+        tabBarItemStyle: { paddingVertical: 2 },
       }}
     >
       <Tab.Screen
         name="Home"
         component={HomeScreen}
         options={{
-          tabBarAllowFontScaling: false,
+          tabBarLabel: 'Home',
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} icon="🏠" label="Home" />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Search"
+        component={SearchScreen}
+        options={{
+          tabBarLabel: 'Search',
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} icon="🔍" label="Search" />
           ),
         }}
       />
@@ -50,7 +62,7 @@ export default function TabNavigator() {
         name="Create"
         component={CreateScreen}
         options={{
-          tabBarAllowFontScaling: false,
+          tabBarLabel: 'Create',
           tabBarIcon: ({ focused }) => <CreateTabIcon focused={focused} />,
         }}
       />
@@ -58,7 +70,7 @@ export default function TabNavigator() {
         name="Profile"
         component={ProfileScreen}
         options={{
-          tabBarAllowFontScaling: false,
+          tabBarLabel: 'Profile',
           tabBarIcon: ({ focused }) => (
             <TabIcon focused={focused} icon="👤" label="Profile" />
           ),

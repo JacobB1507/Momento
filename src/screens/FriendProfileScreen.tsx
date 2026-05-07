@@ -13,6 +13,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 import { GalleryCard, CARD_GAP } from '../components/GalleryCard';
 import type { RootStackParamList } from '../navigation/types';
 import type { Gallery } from '../types/database';
@@ -30,9 +31,11 @@ export default function FriendProfileScreen() {
   const navigation = useNavigation<NavProp>();
   const route = useRoute<RouteProps>();
   const { userId, username } = route.params;
+  const { session } = useAuth();
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [galleries, setGalleries] = useState<Gallery[]>([]);
+  const [friendIds, setFriendIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -74,10 +77,24 @@ export default function FriendProfileScreen() {
         arr.findIndex((x: any) => x.id === g.id) === i
       );
       setGalleries(unique);
+
+      if (session?.user.id) {
+        const { data: friendRows } = await supabase
+          .from('friends')
+          .select('sender_id, receiver_id')
+          .or(`sender_id.eq.${session.user.id},receiver_id.eq.${session.user.id}`)
+          .eq('status', 'accepted');
+        setFriendIds(
+          (friendRows ?? []).map((r: any) =>
+            r.sender_id === session.user.id ? r.receiver_id : r.sender_id
+          )
+        );
+      }
+
       setLoading(false);
     };
     load();
-  }, [userId]);
+  }, [userId, session?.user.id]);
 
   const letter = (profile?.username ?? username ?? '?').charAt(0).toUpperCase();
 
@@ -132,6 +149,8 @@ export default function FriendProfileScreen() {
                 galleryId: item.id,
                 galleryTitle: item.title,
               })}
+              currentUserId={session?.user.id}
+              friendIds={friendIds}
             />
           }
         />

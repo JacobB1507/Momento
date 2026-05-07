@@ -12,6 +12,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { fetchGalleryPhotos, uploadGalleryPhoto } from '../lib/galleries';
@@ -38,6 +39,7 @@ export default function GalleryDetailScreen() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showContributors, setShowContributors] = useState(false);
+  const [contributorRefreshKey, setContributorRefreshKey] = useState(0);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [showRemovalRequests, setShowRemovalRequests] = useState(false);
   const [removalRequestCount, setRemovalRequestCount] = useState(0);
@@ -156,7 +158,7 @@ export default function GalleryDetailScreen() {
               onPress={() => setSettingsVisible(true)}
               hitSlop={8}
             >
-              <Text style={styles.settingsIcon}>⚙</Text>
+              <Ionicons name="settings-outline" size={16} color="#fff" />
             </Pressable>
           )}
           {removalRequestCount > 0 && (
@@ -173,6 +175,7 @@ export default function GalleryDetailScreen() {
             onPress={() => setShowContributors(true)}
             hitSlop={8}
           >
+            <Ionicons name="people-outline" size={15} color="#fff" />
             <Text style={styles.inviteButtonText}>Contributors</Text>
           </Pressable>
           {photos.length > 0 && !loading && (
@@ -232,7 +235,7 @@ export default function GalleryDetailScreen() {
 
       <ContributorsModal
         visible={showContributors}
-        onClose={() => setShowContributors(false)}
+        onClose={() => { setShowContributors(false); setContributorRefreshKey(k => k + 1); }}
         galleryId={galleryId}
         isOwner={isOwner}
         ownerId={galleryMeta?.created_by ?? ''}

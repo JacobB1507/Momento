@@ -92,15 +92,15 @@ export function SettingsModal({
             })}
           </View>
           <View style={styles.buttons}>
-            <Pressable style={({ pressed }) => [styles.cancel, pressed && { opacity: 0.7 }]} onPress={onClose}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </Pressable>
             <Pressable
               style={({ pressed }) => [styles.save, saving && { opacity: 0.45 }, pressed && { opacity: 0.8 }]}
               onPress={handleSave}
               disabled={saving}
             >
               {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveText}>Save</Text>}
+            </Pressable>
+            <Pressable style={({ pressed }) => [styles.cancel, pressed && { opacity: 0.7 }]} onPress={onClose}>
+              <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
           </View>
           <Pressable style={({ pressed }) => [styles.deleteBtn, pressed && { opacity: 0.7 }]} onPress={handleDelete}>
@@ -133,22 +133,11 @@ const styles = StyleSheet.create({
   privacyLabelSelected: { color: '#FF6B6B' },
   privacyDesc: { fontSize: 10, color: '#9CA3AF' },
   privacyDescSelected: { color: '#FF6B6B' },
-  buttons: { flexDirection: 'row', gap: 12 },
-  cancel: { flex: 1, borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
-  cancelText: { color: '#6B7280', fontWeight: '600', fontSize: 15 },
-  save: {
-    flex: 1,
-    backgroundColor: '#FF6B6B',
-    borderRadius: 12,
-    paddingVertical: 13,
-    alignItems: 'center',
-    shadowColor: '#FF6B6B',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  saveText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  deleteBtn: { alignItems: 'center', paddingVertical: 4, marginTop: 12 },
-  deleteText: { color: '#EF4444', fontSize: 14, fontWeight: '600' },
+  buttons: { flexDirection: 'column' },
+  save: { height: 52, borderRadius: 14, backgroundColor: '#FF6B6B', alignItems: 'center', justifyContent: 'center', marginBottom: 12, shadowColor: '#FF6B6B', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.35, shadowRadius: 8, elevation: 4 },
+  saveText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  cancel: { height: 52, borderRadius: 14, backgroundColor: '#f0f0f0', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  cancelText: { color: '#111827', fontSize: 16, fontWeight: '600' },
+  deleteBtn: { marginTop: 24, borderTopWidth: 1, borderTopColor: '#efefef', paddingTop: 16, alignItems: 'center' },
+  deleteText: { fontSize: 13, fontWeight: '400', color: '#999' },
 });

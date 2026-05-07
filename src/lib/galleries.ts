@@ -32,10 +32,17 @@ export async function fetchUserGalleries(userId: string): Promise<Gallery[]> {
     invited = (data ?? []).map((g) => ({ ...g, role: 'member' as const }));
   }
 
-  return [
+  const all = [
     ...(owned ?? []).map((g) => ({ ...g, role: 'owner' as const })),
     ...invited,
   ];
+  all.sort((a, b) => {
+    if (a.pinned === b.pinned) {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+    return a.pinned ? -1 : 1;
+  });
+  return all;
 }
 
 export async function fetchGalleryPhotos(galleryId: string): Promise<Photo[]> {

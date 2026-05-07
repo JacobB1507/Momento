@@ -124,17 +124,19 @@ export function GalleryActionSheet({
               </Pressable>
             ))}
             <Pressable
-              style={({ pressed }) => [styles.option, pressed && { opacity: 0.6 }]}
-              onPress={handleDelete}
-            >
-              <Text style={[styles.optionText, styles.destructive]}>Delete</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.cancelRow, pressed && { opacity: 0.7 }]}
+              style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.7 }]}
               onPress={onClose}
             >
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={styles.cancelBtnText}>Cancel</Text>
             </Pressable>
+            <View style={styles.deleteRow}>
+              <Pressable
+                style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+                onPress={handleDelete}
+              >
+                <Text style={styles.deleteText}>Delete Gallery</Text>
+              </Pressable>
+            </View>
           </View>
         )}
 
@@ -152,23 +154,31 @@ export function GalleryActionSheet({
               onSubmitEditing={handleSaveRename}
               maxLength={60}
             />
-            <View style={styles.row}>
-              <Pressable style={({ pressed }) => [styles.btn, pressed && { opacity: 0.7 }]} onPress={onClose}>
-                <Text style={styles.btnCancel}>Cancel</Text>
-              </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.saveBtn,
+                (!renameText.trim() || saving) && { opacity: 0.45 },
+                pressed && { opacity: 0.8 },
+              ]}
+              onPress={handleSaveRename}
+              disabled={!renameText.trim() || saving}
+            >
+              {saving
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={styles.saveBtnText}>Save</Text>}
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.7 }]}
+              onPress={onClose}
+            >
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </Pressable>
+            <View style={styles.deleteRow}>
               <Pressable
-                style={({ pressed }) => [
-                  styles.btn,
-                  styles.btnPrimary,
-                  (!renameText.trim() || saving) && { opacity: 0.45 },
-                  pressed && { opacity: 0.8 },
-                ]}
-                onPress={handleSaveRename}
-                disabled={!renameText.trim() || saving}
+                style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+                onPress={handleDelete}
               >
-                {saving
-                  ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={styles.btnPrimaryText}>Save</Text>}
+                <Text style={styles.deleteText}>Delete Gallery</Text>
               </Pressable>
             </View>
           </View>
@@ -201,23 +211,31 @@ export function GalleryActionSheet({
                 );
               })}
             </View>
-            <View style={styles.row}>
-              <Pressable style={({ pressed }) => [styles.btn, pressed && { opacity: 0.7 }]} onPress={onClose}>
-                <Text style={styles.btnCancel}>Cancel</Text>
-              </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.saveBtn,
+                saving && { opacity: 0.45 },
+                pressed && { opacity: 0.8 },
+              ]}
+              onPress={handleSavePrivacy}
+              disabled={saving}
+            >
+              {saving
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={styles.saveBtnText}>Save</Text>}
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.7 }]}
+              onPress={onClose}
+            >
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </Pressable>
+            <View style={styles.deleteRow}>
               <Pressable
-                style={({ pressed }) => [
-                  styles.btn,
-                  styles.btnPrimary,
-                  saving && { opacity: 0.45 },
-                  pressed && { opacity: 0.8 },
-                ]}
-                onPress={handleSavePrivacy}
-                disabled={saving}
+                style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+                onPress={handleDelete}
               >
-                {saving
-                  ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={styles.btnPrimaryText}>Save</Text>}
+                <Text style={styles.deleteText}>Delete Gallery</Text>
               </Pressable>
             </View>
           </View>
@@ -252,10 +270,10 @@ export function GalleryActionSheet({
               />
             )}
             <Pressable
-              style={({ pressed }) => [styles.cancelRow, { marginTop: 8 }, pressed && { opacity: 0.7 }]}
+              style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.7 }]}
               onPress={onClose}
             >
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={styles.cancelBtnText}>Cancel</Text>
             </Pressable>
           </View>
         )}
@@ -282,9 +300,38 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, color: '#9CA3AF', marginBottom: 16 },
   option: { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6' },
   optionText: { fontSize: 16, color: '#111827', fontWeight: '500' },
-  destructive: { color: '#EF4444' },
   cancelRow: { paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   cancelText: { fontSize: 15, color: '#9CA3AF', fontWeight: '600' },
+  saveBtn: {
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#FF6B6B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  cancelBtn: {
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  cancelBtnText: { color: '#111827', fontSize: 16, fontWeight: '600' },
+  deleteRow: {
+    marginTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#efefef',
+    paddingTop: 16,
+    alignItems: 'center',
+  },
+  deleteText: { fontSize: 13, fontWeight: '400', color: '#999' },
   input: {
     borderWidth: 1.5,
     borderColor: '#E5E7EB',

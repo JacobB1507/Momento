@@ -106,7 +106,12 @@ export default function ProfileScreen() {
     // Merge and deduplicate
     const all = [...(owned ?? []), ...(memberGalleries ?? [])];
     const unique = all.filter((g, i, arr) => arr.findIndex((x: any) => x.id === g.id) === i);
-    const sorted = unique.sort((a: any, b: any) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+    const sorted = unique.sort((a: any, b: any) => {
+      if (a.pinned === b.pinned) {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+      return a.pinned ? -1 : 1;
+    });
 
     console.log('loadGalleries owned:', owned?.length, 'member:', memberGalleries?.length);
     setGalleries(sorted);
