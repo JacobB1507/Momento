@@ -23,6 +23,8 @@ export type RootStackParamList = {
   GalleryInvite: { galleryId: string; notificationId: string };
   EditBio: undefined;
   FriendProfile: { userId: string; username: string };
+  Chat: { conversationId: string; otherUserId: string; otherUsername: string };
+  NewMessage: undefined;
 };
 
 export type MainTabParamList = {

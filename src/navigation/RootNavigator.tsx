@@ -19,6 +19,8 @@ import GalleryInviteScreen from '../screens/GalleryInviteScreen';
 import EditBioScreen from '../screens/EditBioScreen';
 import PhotoViewerScreen from '../screens/PhotoViewerScreen';
 import FriendProfileScreen from '../screens/FriendProfileScreen';
+import ChatScreen from '../screens/ChatScreen';
+import NewMessageScreen from '../screens/NewMessageScreen';
 import { resolveInviteCode } from '../lib/friends';
 import type { RootStackParamList } from './types';
 
@@ -133,6 +135,8 @@ export default function RootNavigator() {
               component={FriendProfileScreen}
               options={{ animation: 'slide_from_right' }}
             />
+            <Stack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="NewMessage" component={NewMessageScreen} options={{ headerShown: false }} />
           </>
         ) : (
           <>

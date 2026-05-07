@@ -1,0 +1,108 @@
+import React, { useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { canEditOrDelete } from '../lib/messages';
+
+type MessageItem = {
+  id: string;
+  content: string;
+  image_url?: string | null;
+  sender_id: string;
+  created_at: string;
+  edited?: boolean;
+  deleted?: boolean;
+};
+
+type Props = {
+  message: MessageItem;
+  currentUserId: string;
+  onEdit: (message: MessageItem) => void;
+  onDelete: (message: MessageItem) => void;
+  isLast: boolean;
+};
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+export default function MessageBubble({ message, currentUserId, onEdit, onDelete, isLast }: Props) {
+  const isOwn = message.sender_id === currentUserId;
+  const [showMenu, setShowMenu] = useState(false);
+  const [within2Mins, setWithin2Mins] = useState(false);
+
+  const handleLongPress = async () => {
+    if (!isOwn || message.deleted) return;
+    const canAct = await canEditOrDelete(message.created_at);
+    setWithin2Mins(canAct);
+    setShowMenu(true);
+  };
+
+  return (
+    <View style={[styles.wrapper, isOwn ? styles.wrapperOwn : styles.wrapperOther]}>
+      <Pressable onLongPress={isOwn && !message.deleted ? handleLongPress : undefined} style={{ position: 'relative' }}>
+        {showMenu && (
+          <>
+            <TouchableOpacity
+              style={styles.overlay}
+              onPress={() => setShowMenu(false)}
+              activeOpacity={1}
+            />
+            <View style={styles.menu}>
+              {within2Mins ? (
+                <>
+                  <Pressable style={styles.menuRow} onPress={() => { onEdit(message); setShowMenu(false); }}>
+                    <Ionicons name="pencil-outline" size={15} color="#fff" />
+                    <Text style={styles.menuTextWhite}>Edit</Text>
+                  </Pressable>
+                  <View style={styles.menuDivider} />
+                  <Pressable style={styles.menuRow} onPress={() => { onDelete(message); setShowMenu(false); }}>
+                    <Ionicons name="trash-outline" size={15} color="#ef4444" />
+                    <Text style={styles.menuTextRed}>Delete</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <Text style={styles.menuTextGrey}>Can no longer edit or delete</Text>
+              )}
+            </View>
+          </>
+        )}
+        {message.deleted ? (
+          <View style={styles.deletedPill}>
+            <Text style={styles.deletedText}>Message deleted</Text>
+          </View>
+        ) : message.image_url != null && message.image_url !== '' ? (
+          <Image source={{ uri: message.image_url }} style={styles.image} />
+        ) : (
+          <View style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther]}>
+            <Text style={isOwn ? styles.textOwn : styles.textOther}>{message.content}</Text>
+          </View>
+        )}
+      </Pressable>
+      {message.edited && !message.deleted && <Text style={styles.edited}>edited</Text>}
+      {isLast && <Text style={styles.time}>{formatTime(message.created_at)}</Text>}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrapper: { marginVertical: 3 },
+  wrapperOwn: { alignItems: 'flex-end' },
+  wrapperOther: { alignItems: 'flex-start' },
+  overlay: { position: 'absolute', top: -9999, left: -9999, right: -9999, bottom: -9999, zIndex: 998, backgroundColor: 'transparent' },
+  menu: { position: 'absolute', bottom: '100%', right: 0, backgroundColor: '#1a1a1a', borderRadius: 12, paddingVertical: 4, zIndex: 1000, minWidth: 160, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10 },
+  menuTextWhite: { color: '#fff', fontSize: 14, fontWeight: '500' },
+  menuTextRed: { color: '#ef4444', fontSize: 14, fontWeight: '500' },
+  menuTextGrey: { color: '#9ca3af', fontSize: 12, paddingHorizontal: 14, paddingVertical: 10 },
+  menuDivider: { height: 1, backgroundColor: '#333', marginHorizontal: 8 },
+  bubble: { maxWidth: '75%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
+  bubbleOwn: { backgroundColor: '#FF6B6B', borderBottomRightRadius: 4 },
+  bubbleOther: { backgroundColor: '#f0f0f0', borderBottomLeftRadius: 4 },
+  textOwn: { color: '#fff', fontSize: 15 },
+  textOther: { color: '#111827', fontSize: 15 },
+  deletedPill: { backgroundColor: '#f0f0f0', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 },
+  deletedText: { color: '#9ca3af', fontStyle: 'italic', fontSize: 14 },
+  image: { width: 200, height: 200, borderRadius: 12 },
+  edited: { fontSize: 10, color: '#9ca3af', marginTop: 2, marginHorizontal: 4 },
+  time: { fontSize: 10, color: '#9CA3AF', marginTop: 2, marginHorizontal: 4 },
+});

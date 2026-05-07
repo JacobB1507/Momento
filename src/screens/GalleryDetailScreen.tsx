@@ -127,7 +127,7 @@ export default function GalleryDetailScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
-      selectionLimit: 10,
+      selectionLimit: 100,
       quality: 0.85,
     });
     if (result.canceled || !result.assets.length) return;
