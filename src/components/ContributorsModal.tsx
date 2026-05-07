@@ -23,6 +23,7 @@ type Props = {
 
 type Member = {
   user_id: string;
+  role?: string;
   username: string | null;
   avatar_url: string | null;
 };
@@ -43,17 +44,31 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner }: Prop
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadMembers = useCallback(async () => {
-    const { data } = await supabase
+    const { data: memberRows } = await supabase
       .from('gallery_members')
-      .select('user_id, profiles(username, avatar_url)')
+      .select('user_id, role')
       .eq('gallery_id', galleryId);
-    if (data) {
-      setMembers(data.map((m: any) => ({
-        user_id: m.user_id,
-        username: (m.profiles as any)?.username ?? null,
-        avatar_url: (m.profiles as any)?.avatar_url ?? null,
-      })));
+
+    if (!memberRows || memberRows.length === 0) {
+      setMembers([]);
+      return;
     }
+
+    const userIds = memberRows.map((m: any) => m.user_id);
+
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, username, avatar_url')
+      .in('id', userIds);
+
+    const merged = memberRows.map((m: any) => ({
+      user_id: m.user_id,
+      role: m.role,
+      username: profiles?.find((p: any) => p.id === m.user_id)?.username ?? 'Unknown',
+      avatar_url: profiles?.find((p: any) => p.id === m.user_id)?.avatar_url ?? null,
+    }));
+
+    setMembers(merged);
   }, [galleryId]);
 
   const handleUsernameSearch = (text: string) => {
@@ -113,7 +128,7 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner }: Prop
 
   useEffect(() => {
     if (visible) loadMembers();
-  }, [visible, loadMembers]);
+  }, [visible, galleryId]);
 
   const handleClose = () => {
     onClose();

@@ -23,6 +23,7 @@ import { supabase } from '../lib/supabase';
 import { getProfile, uploadAvatar } from '../lib/galleries';
 import { getFriends } from '../lib/friends';
 import { GalleryCard, CARD_GAP } from '../components/GalleryCard';
+import { FriendsListModal } from '../components/FriendsListModal';
 
 const AVATAR_SIZE = 96;
 const BADGE_SIZE = 26;
@@ -30,8 +31,9 @@ const BADGE_SIZE = 26;
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { session } = useAuth();
-  const userId = session?.user.id ?? '';
-  const email = session?.user.email ?? '';
+  const user = session?.user;
+  const userId = user?.id ?? '';
+  const email = user?.email ?? '';
 
   const [username, setUsername] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -41,6 +43,7 @@ export default function ProfileScreen() {
   const [photoCount, setPhotoCount] = useState(0);
   const [bio, setBio] = useState<string | null>(null);
   const [galleries, setGalleries] = useState<Gallery[]>([]);
+  const [showFriendsList, setShowFriendsList] = useState(false);
 
   const loadProfile = async () => {
     if (!userId) return;
@@ -66,17 +69,33 @@ export default function ProfileScreen() {
   };
 
   const loadGalleries = async () => {
-    if (!userId) return;
-    const { data } = await supabase
+    if (!user?.id) return;
+
+    // Get galleries user owns
+    const { data: owned } = await supabase
       .from('galleries')
       .select('*')
-      .eq('created_by', userId)
-      .order('created_at', { ascending: false });
-    const sorted = [...(data ?? [])].sort((a, b) => {
-      if (a.pinned && !b.pinned) return -1;
-      if (!a.pinned && b.pinned) return 1;
-      return 0;
-    });
+      .eq('created_by', user.id);
+
+    // Get gallery_ids user is a member of
+    const { data: memberships } = await supabase
+      .from('gallery_members')
+      .select('gallery_id')
+      .eq('user_id', user.id);
+
+    const memberGalleryIds = (memberships ?? []).map((m: any) => m.gallery_id);
+
+    // Fetch those galleries separately
+    const { data: memberGalleries } = memberGalleryIds.length > 0
+      ? await supabase.from('galleries').select('*').in('id', memberGalleryIds).neq('created_by', user.id)
+      : { data: [] };
+
+    // Merge and deduplicate
+    const all = [...(owned ?? []), ...(memberGalleries ?? [])];
+    const unique = all.filter((g, i, arr) => arr.findIndex((x: any) => x.id === g.id) === i);
+    const sorted = unique.sort((a: any, b: any) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+
+    console.log('loadGalleries owned:', owned?.length, 'member:', memberGalleries?.length);
     setGalleries(sorted);
   };
 
@@ -138,19 +157,20 @@ export default function ProfileScreen() {
   };
 
   const loadPhotoCount = async () => {
-    if (!userId) return;
+    if (!user?.id) return;
     const { count } = await supabase
       .from('gallery_photos')
       .select('id', { count: 'exact', head: true })
-      .eq('uploaded_by', userId);
+      .eq('uploaded_by', user.id);
     setPhotoCount(count ?? 0);
   };
 
   useFocusEffect(useCallback(() => {
+    if (!user?.id) return;
     loadProfile();
     loadGalleries();
     loadPhotoCount();
-  }, []));
+  }, [user?.id]));
 
   const handleAvatarPress = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -257,10 +277,10 @@ export default function ProfileScreen() {
             <Text style={styles.statLabel}>Photos</Text>
           </View>
           <View style={styles.statDivider} />
-          <View style={styles.statItem}>
+          <Pressable style={styles.statItem} onPress={() => setShowFriendsList(true)}>
             <Text style={styles.statNumber}>{friendCount}</Text>
             <Text style={styles.statLabel}>Friends</Text>
-          </View>
+          </Pressable>
         </View>
 
         {/* Edit Profile button */}
@@ -296,6 +316,12 @@ export default function ProfileScreen() {
           />
         </View>
       </ScrollView>
+
+      <FriendsListModal
+        visible={showFriendsList}
+        onClose={() => setShowFriendsList(false)}
+        userId={userId}
+      />
     </SafeAreaView>
   );
 }

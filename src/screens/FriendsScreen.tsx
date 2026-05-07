@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import {
@@ -29,7 +31,7 @@ const AVATAR = 40;
 const COLLAPSED_COUNT = 2;
 
 export default function FriendsScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { session } = useAuth();
   const userId = session?.user.id ?? '';
 
@@ -210,7 +212,15 @@ export default function FriendsScreen() {
             {friends.map(({ friendshipId, profile }, index) => (
               <View key={friendshipId}>
                 {index > 0 && <View style={styles.separator} />}
-                <View style={styles.row}>
+                <Pressable
+                  style={({ pressed }) => [styles.row, pressed && { backgroundColor: '#F9FAFB' }]}
+                  onPress={() =>
+                    navigation.navigate('FriendProfile', {
+                      userId: profile.id,
+                      username: profile.username ?? 'unknown',
+                    })
+                  }
+                >
                   <AvatarThumb profile={profile} />
                   <Text style={[styles.rowUsername, styles.rowUsernameFlex]} numberOfLines={1}>
                     @{profile.username ?? 'unknown'}
@@ -221,7 +231,7 @@ export default function FriendsScreen() {
                   >
                     <Text style={styles.removeText}>Remove</Text>
                   </Pressable>
-                </View>
+                </Pressable>
               </View>
             ))}
           </View>

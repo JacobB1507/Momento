@@ -46,8 +46,12 @@ export function RemovalRequestsModal({ visible, onClose, galleryId }: Props) {
   };
 
   useEffect(() => {
-    if (visible) loadRemovalRequests();
-  }, [visible, loadRemovalRequests]);
+    if (visible) {
+      getRemovalRequests(galleryId).then(data =>
+        setRemovalRequests(data as RemovalRequest[])
+      );
+    }
+  }, [visible, galleryId]);
 
   return (
     <Modal

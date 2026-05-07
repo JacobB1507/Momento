@@ -15,7 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { fetchGalleryPhotos, uploadGalleryPhoto } from '../lib/galleries';
-import { requestPhotoRemoval } from '../lib/photoRemoval';
+import { requestPhotoRemoval, getRemovalRequests } from '../lib/photoRemoval';
 import type { RootStackParamList } from '../navigation/types';
 import type { GalleryPrivacy, Photo } from '../types/database';
 import { ContributorsModal } from '../components/ContributorsModal';
@@ -40,6 +40,7 @@ export default function GalleryDetailScreen() {
   const [showContributors, setShowContributors] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [showRemovalRequests, setShowRemovalRequests] = useState(false);
+  const [removalRequestCount, setRemovalRequestCount] = useState(0);
   const [galleryMeta, setGalleryMeta] = useState<{ title: string; created_by: string; privacy: GalleryPrivacy } | null>(null);
 
   const isOwner = !!session?.user.id && session.user.id === galleryMeta?.created_by;
@@ -64,7 +65,8 @@ export default function GalleryDetailScreen() {
 
   useEffect(() => {
     Promise.all([load(), loadGalleryMeta()]).finally(() => setLoading(false));
-  }, [load, loadGalleryMeta]);
+    getRemovalRequests(galleryId).then(data => setRemovalRequestCount(data.length));
+  }, [load, loadGalleryMeta, galleryId]);
 
   const handleDeletePhoto = (photo: Photo) => {
     setPhotos(prev => prev.filter(p => p.id !== photo.id));
@@ -147,13 +149,15 @@ export default function GalleryDetailScreen() {
               <Text style={styles.settingsIcon}>⚙</Text>
             </Pressable>
           )}
-          <Pressable
-            style={({ pressed }) => [styles.removalButton, pressed && { opacity: 0.7 }]}
-            onPress={() => setShowRemovalRequests(true)}
-            hitSlop={8}
-          >
-            <Text style={styles.removalButtonText}>Requests</Text>
-          </Pressable>
+          {removalRequestCount > 0 && (
+            <Pressable
+              style={({ pressed }) => [styles.removalButton, pressed && { opacity: 0.7 }]}
+              onPress={() => setShowRemovalRequests(true)}
+              hitSlop={8}
+            >
+              <Text style={styles.removalButtonText}>Requests ({removalRequestCount})</Text>
+            </Pressable>
+          )}
           <Pressable
             style={({ pressed }) => [styles.inviteButton, pressed && { opacity: 0.7 }]}
             onPress={() => setShowContributors(true)}
@@ -208,7 +212,10 @@ export default function GalleryDetailScreen() {
 
       <RemovalRequestsModal
         visible={showRemovalRequests}
-        onClose={() => setShowRemovalRequests(false)}
+        onClose={() => {
+          setShowRemovalRequests(false);
+          getRemovalRequests(galleryId).then(data => setRemovalRequestCount(data.length));
+        }}
         galleryId={galleryId}
       />
 

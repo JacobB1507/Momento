@@ -22,6 +22,7 @@ export type RootStackParamList = {
   ChangePassword: undefined;
   GalleryInvite: { galleryId: string; notificationId: string };
   EditBio: undefined;
+  FriendProfile: { userId: string; username: string };
 };
 
 export type MainTabParamList = {

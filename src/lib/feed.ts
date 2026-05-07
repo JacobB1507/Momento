@@ -71,31 +71,25 @@ export async function getFeedPhotos(userId: string, limit = 30): Promise<FeedPho
   }
 }
 
-export async function getFeedGalleries(userId: string): Promise<FeedGallery[]> {
-  try {
-    const friendIds = await getFriendIds(userId);
-    if (friendIds.length === 0) return [];
+export async function getFeedGalleries(userId: string) {
+  const { data: friendRows } = await supabase
+    .from('friends')
+    .select('sender_id, receiver_id')
+    .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+    .eq('status', 'accepted');
 
-    const { data, error } = await supabase
-      .from('galleries')
-      .select('id, title, cover_photo_url, created_by, created_at, privacy, profiles(username, avatar_url)')
-      .in('created_by', friendIds)
-      .order('created_at', { ascending: false })
-      .limit(10);
+  if (!friendRows || friendRows.length === 0) return [];
 
-    if (error || !data) return [];
+  const friendIds = friendRows.map(row =>
+    row.sender_id === userId ? row.receiver_id : row.sender_id
+  );
 
-    return data.map((row: any) => ({
-      id: row.id,
-      title: row.title,
-      cover_photo_url: row.cover_photo_url ?? null,
-      created_by: row.created_by,
-      created_at: row.created_at,
-      privacy: row.privacy,
-      username: row.profiles?.username ?? null,
-      avatar_url: row.profiles?.avatar_url ?? null,
-    }));
-  } catch {
-    return [];
-  }
+  const { data: galleries } = await supabase
+    .from('galleries')
+    .select('*')
+    .in('created_by', friendIds)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  return galleries ?? [];
 }

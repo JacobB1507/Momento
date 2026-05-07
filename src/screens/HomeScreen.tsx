@@ -44,14 +44,14 @@ export default function HomeScreen() {
     setFriendGalleries(feedGalleries);
     setUnreadCount(count);
 
-    const { data } = await supabase
+    const { data: discoverData } = await supabase
       .from('galleries')
-      .select('*')
+      .select('*, profiles(username, avatar_url)')
       .eq('privacy', 'public')
       .neq('created_by', userId)
       .order('created_at', { ascending: false })
       .limit(20);
-    setDiscoverGalleries((data as Gallery[]) ?? []);
+    setDiscoverGalleries((discoverData as Gallery[]) ?? []);
   }, [userId]);
 
   useFocusEffect(useCallback(() => { loadAll(); }, [loadAll]));
