@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAuth } from '../context/AuthContext';
 import type { RootStackParamList } from '../navigation/types';
 import type { Gallery } from '../types/database';
@@ -22,6 +23,9 @@ import { supabase } from '../lib/supabase';
 import { getProfile, uploadAvatar } from '../lib/galleries';
 import { getFriends } from '../lib/friends';
 import { GalleryCard, CARD_GAP } from '../components/GalleryCard';
+
+const AVATAR_SIZE = 96;
+const BADGE_SIZE = 26;
 
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -34,6 +38,8 @@ export default function ProfileScreen() {
   const [uploading, setUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [friendCount, setFriendCount] = useState(0);
+  const [photoCount, setPhotoCount] = useState(0);
+  const [bio, setBio] = useState<string | null>(null);
   const [galleries, setGalleries] = useState<Gallery[]>([]);
 
   const loadProfile = async () => {
@@ -46,15 +52,17 @@ export default function ProfileScreen() {
     if (profile) {
       if (profile.username) setUsername(profile.username);
       if (profile.avatar_url) setAvatarUrl(profile.avatar_url);
+      setBio(profile.bio ?? null);
       return;
     }
     const { data } = await supabase
       .from('profiles')
-      .select('id, username, email, avatar_url')
+      .select('id, username, email, avatar_url, bio')
       .eq('id', userId)
       .maybeSingle();
     if (data?.username) setUsername(data.username);
     if (data?.avatar_url) setAvatarUrl(data.avatar_url);
+    setBio(data?.bio ?? null);
   };
 
   const loadGalleries = async () => {
@@ -64,12 +72,84 @@ export default function ProfileScreen() {
       .select('*')
       .eq('created_by', userId)
       .order('created_at', { ascending: false });
-    setGalleries(data ?? []);
+    const sorted = [...(data ?? [])].sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return 0;
+    });
+    setGalleries(sorted);
+  };
+
+  const handleGalleryLongPress = (gallery: Gallery) => {
+    const isPinned = !!gallery.pinned;
+    Alert.alert(gallery.title, undefined, [
+      {
+        text: isPinned ? 'Unpin' : 'Pin to Top',
+        onPress: async () => {
+          await supabase
+            .from('galleries')
+            .update({ pinned: !isPinned })
+            .eq('id', gallery.id);
+          loadGalleries();
+        },
+      },
+      {
+        text: 'Rename',
+        onPress: () => {
+          Alert.prompt(
+            'Rename Gallery',
+            'Enter a new name:',
+            async (newTitle) => {
+              if (!newTitle?.trim()) return;
+              await supabase
+                .from('galleries')
+                .update({ title: newTitle.trim() })
+                .eq('id', gallery.id);
+              loadGalleries();
+            },
+            'plain-text',
+            gallery.title,
+          );
+        },
+      },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          Alert.alert(
+            'Delete Gallery',
+            `Delete "${gallery.title}"? This cannot be undone.`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                  await supabase.from('galleries').delete().eq('id', gallery.id);
+                  loadGalleries();
+                },
+              },
+            ],
+          );
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const loadPhotoCount = async () => {
+    if (!userId) return;
+    const { count } = await supabase
+      .from('gallery_photos')
+      .select('id', { count: 'exact', head: true })
+      .eq('uploaded_by', userId);
+    setPhotoCount(count ?? 0);
   };
 
   useFocusEffect(useCallback(() => {
     loadProfile();
     loadGalleries();
+    loadPhotoCount();
   }, []));
 
   const handleAvatarPress = async () => {
@@ -99,32 +179,44 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-  };
-
   const placeholderLetter = (username || email).charAt(0).toUpperCase();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, alignItems: 'center', paddingTop: 16, paddingBottom: 40 }}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              await Promise.all([loadProfile(), loadGalleries()]);
+              await Promise.all([loadProfile(), loadGalleries(), loadPhotoCount()]);
               setRefreshing(false);
             }}
           />
         }
       >
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Profile</Text>
+        {/* Top bar */}
+        <View style={styles.topBar}>
+          <Text style={styles.topBarTitle}>Profile</Text>
+          <View style={styles.topBarIcons}>
+            <Pressable
+              style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.6 }]}
+              onPress={() => navigation.navigate('Friends')}
+            >
+              <MaterialCommunityIcons name="account-multiple-outline" size={24} color="#111827" />
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.6 }]}
+              onPress={() => navigation.navigate('Settings')}
+            >
+              <MaterialCommunityIcons name="cog-outline" size={24} color="#111827" />
+            </Pressable>
+          </View>
         </View>
 
-        <View style={styles.card}>
+        {/* Avatar + info row */}
+        <View style={styles.profileHeader}>
           <Pressable onPress={handleAvatarPress} style={styles.avatarWrapper}>
             {uploading ? (
               <View style={styles.avatarPlaceholder}>
@@ -142,32 +234,46 @@ export default function ProfileScreen() {
             </View>
           </Pressable>
 
-          <Text style={styles.username}>@{username || 'unknown'}</Text>
-          <Text style={styles.email}>{email}</Text>
-          <Text style={styles.friendCount}>{friendCount} Friends</Text>
+          <View style={styles.profileInfo}>
+            <Text style={styles.username}>{username || 'unknown'}</Text>
+            <Text style={styles.friendCountLabel}>{friendCount} Friends</Text>
+            {bio ? (
+              <Text style={styles.bio}>{bio}</Text>
+            ) : (
+              <Text style={styles.bioPlaceholder}>Add a bio...</Text>
+            )}
+          </View>
         </View>
 
-        <View style={styles.section}>
+        {/* Stats bar */}
+        <View style={styles.statsBar}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{galleries.length}</Text>
+            <Text style={styles.statLabel}>Galleries</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{photoCount}</Text>
+            <Text style={styles.statLabel}>Photos</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{friendCount}</Text>
+            <Text style={styles.statLabel}>Friends</Text>
+          </View>
+        </View>
+
+        {/* Edit Profile button */}
+        <View style={styles.actionsRow}>
           <Pressable
-            style={({ pressed }) => [styles.friendsButton, pressed && { opacity: 0.75 }]}
-            onPress={() => navigation.navigate('Friends')}
-          >
-            <Text style={styles.friendsText}>Friends</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.settingsButton, pressed && { opacity: 0.75 }]}
+            style={({ pressed }) => [styles.editProfileButton, pressed && { opacity: 0.75 }]}
             onPress={() => navigation.navigate('Settings')}
           >
-            <Text style={styles.settingsText}>Settings</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.signOutButton, pressed && { opacity: 0.65 }]}
-            onPress={handleSignOut}
-          >
-            <Text style={styles.signOutText}>Sign Out</Text>
+            <Text style={styles.editProfileText}>Edit Profile</Text>
           </Pressable>
         </View>
 
+        {/* Galleries grid */}
         <View style={styles.galleriesSection}>
           <Text style={styles.galleriesSectionTitle}>My Galleries</Text>
           <FlatList
@@ -184,6 +290,7 @@ export default function ProfileScreen() {
               <GalleryCard
                 gallery={item}
                 onPress={() => navigation.navigate('GalleryDetail', { galleryId: item.id, galleryTitle: item.title })}
+                onLongPress={() => handleGalleryLongPress(item)}
               />
             )}
           />
@@ -193,34 +300,32 @@ export default function ProfileScreen() {
   );
 }
 
-const AVATAR_SIZE = 96;
-const BADGE_SIZE = 28;
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F9FAFB' },
+  scrollContent: { paddingBottom: 40 },
 
-  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16, alignSelf: 'stretch' },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
-
-  card: {
-    alignSelf: 'stretch',
-    marginHorizontal: 16,
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    paddingVertical: 32,
-    paddingHorizontal: 24,
+  topBar: {
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 3,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
   },
+  topBarTitle: { fontSize: 22, fontWeight: '800', color: '#111827', letterSpacing: -0.3 },
+  topBarIcons: { flexDirection: 'row', gap: 2 },
+  iconButton: { padding: 6 },
 
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 20,
+  },
   avatarWrapper: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
-    marginBottom: 20,
   },
   avatarImage: {
     width: AVATAR_SIZE,
@@ -241,7 +346,6 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   avatarText: { fontSize: 36, fontWeight: '800', color: '#fff' },
-
   editBadge: {
     position: 'absolute',
     bottom: 0,
@@ -255,37 +359,44 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#fff',
   },
-  editBadgeIcon: { color: '#fff', fontSize: 13, lineHeight: 16 },
+  editBadgeIcon: { color: '#fff', fontSize: 12, lineHeight: 15 },
 
-  username: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 4 },
-  email: { fontSize: 14, color: '#6B7280' },
-  friendCount: { fontSize: 13, color: '#9CA3AF', marginTop: 6 },
+  profileInfo: { flex: 1, justifyContent: 'center', gap: 4 },
+  username: { fontSize: 20, fontWeight: '800', color: '#111827' },
+  friendCountLabel: { fontSize: 14, color: '#6B7280' },
+  bio: { fontSize: 14, color: '#374151' },
+  bioPlaceholder: { fontSize: 14, color: '#9CA3AF', fontStyle: 'italic' },
 
-  section: { alignSelf: 'stretch', paddingHorizontal: 16, marginTop: 24, gap: 12 },
-  friendsButton: {
-    backgroundColor: '#111827',
-    borderRadius: 14,
-    paddingVertical: 14,
+  statsBar: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginHorizontal: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingVertical: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  friendsText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  settingsButton: {
-    backgroundColor: '#111827',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  settingsText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  signOutButton: {
+  statItem: { flex: 1, alignItems: 'center' },
+  statNumber: { fontSize: 20, fontWeight: '800', color: '#111827' },
+  statLabel: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+  statDivider: { width: 1, height: 32, backgroundColor: '#E5E7EB' },
+
+  actionsRow: { paddingHorizontal: 16, marginTop: 12 },
+  editProfileButton: {
     borderWidth: 1.5,
-    borderColor: '#FF6B6B',
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    paddingVertical: 11,
     alignItems: 'center',
+    backgroundColor: '#fff',
   },
-  signOutText: { color: '#FF6B6B', fontSize: 16, fontWeight: '600' },
+  editProfileText: { fontSize: 15, fontWeight: '600', color: '#111827' },
 
-  galleriesSection: { alignSelf: 'stretch', paddingHorizontal: 16, marginTop: 32 },
+  galleriesSection: { paddingHorizontal: 16, marginTop: 24 },
   galleriesSectionTitle: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 12 },
   galleryGrid: { gap: CARD_GAP },
   galleryRow: { gap: CARD_GAP },

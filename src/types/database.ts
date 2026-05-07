@@ -7,6 +7,7 @@ export interface Gallery {
   cover_photo_url: string | null;
   created_at: string;
   created_by: string;
+  pinned?: boolean;
   role?: 'owner' | 'member';
 }
 

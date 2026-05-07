@@ -164,7 +164,7 @@ export async function uploadAvatar(userId: string, uri: string): Promise<string 
 export async function getProfile(userId: string) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, email, avatar_url')
+    .select('id, username, email, avatar_url, bio')
     .eq('id', userId)
     .maybeSingle();
 

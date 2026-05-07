@@ -1,10 +1,18 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
+export type PhotoViewerPhoto = {
+  id: string;
+  url: string;
+  uploaded_by: string;
+  created_at: string;
+};
+
 export type RootStackParamList = {
   Login: undefined;
   SignUp: undefined;
   MainTabs: undefined;
   GalleryDetail: { galleryId: string; galleryTitle: string };
+  PhotoViewer: { photos: PhotoViewerPhoto[]; initialIndex: number; galleryTitle: string };
   Settings: undefined;
   ChangeUsername: undefined;
   Friends: undefined;
@@ -13,6 +21,7 @@ export type RootStackParamList = {
   ChangeEmail: undefined;
   ChangePassword: undefined;
   GalleryInvite: { galleryId: string; notificationId: string };
+  EditBio: undefined;
 };
 
 export type MainTabParamList = {

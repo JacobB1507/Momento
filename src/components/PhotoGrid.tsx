@@ -19,10 +19,12 @@ type Props = {
   currentUserId?: string;
   onDeletePhoto: (photo: Photo) => void;
   onRemovalRequest?: (photoId: string) => void;
+  onPhotoPress?: (photo: Photo, index: number) => void;
 };
 
-export function PhotoGrid({ photos, isOwner, currentUserId, onDeletePhoto, onRemovalRequest }: Props) {
+export function PhotoGrid({ photos, isOwner, currentUserId, onDeletePhoto, onRemovalRequest, onPhotoPress }: Props) {
   const [uploaderProfiles, setUploaderProfiles] = useState<Record<string, UploaderProfile>>({});
+  const [hiddenPhotoIds, setHiddenPhotoIds] = useState<string[]>([]);
 
   useEffect(() => {
     const uniqueIds = [...new Set(photos.map((p) => p.uploaded_by).filter(Boolean))];
@@ -41,9 +43,12 @@ export function PhotoGrid({ photos, isOwner, currentUserId, onDeletePhoto, onRem
 
   const handleLongPress = (item: Photo) => {
     const isOwn = !!currentUserId && currentUserId === item.uploaded_by;
+    const hideOption = {
+      text: 'Hide from My View',
+      onPress: () => setHiddenPhotoIds(prev => [...prev, item.id]),
+    };
     if (isOwn) {
-      Alert.alert('Delete Photo', 'Remove this photo? This cannot be undone.', [
-        { text: 'Cancel', style: 'cancel' },
+      Alert.alert(undefined, undefined, [
         {
           text: 'Delete Photo',
           style: 'destructive',
@@ -53,18 +58,26 @@ export function PhotoGrid({ photos, isOwner, currentUserId, onDeletePhoto, onRem
             else Alert.alert('Error', 'Could not delete photo. Please try again.');
           },
         },
-      ]);
-    } else if (onRemovalRequest) {
-      Alert.alert('Request Removal', 'Ask the gallery to review this photo for removal?', [
+        hideOption,
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Request Removal', onPress: () => onRemovalRequest(item.id) },
+      ]);
+    } else {
+      Alert.alert(undefined, undefined, [
+        {
+          text: 'Request Removal',
+          onPress: () => onRemovalRequest?.(item.id),
+        },
+        hideOption,
+        { text: 'Cancel', style: 'cancel' },
       ]);
     }
   };
 
+  const visiblePhotos = photos.filter(p => !hiddenPhotoIds.includes(p.id));
+
   return (
     <FlatList
-      data={photos}
+      data={visiblePhotos}
       keyExtractor={(item) => item.id}
       numColumns={COLUMNS}
       renderItem={({ item, index }) => {
@@ -78,6 +91,7 @@ export function PhotoGrid({ photos, isOwner, currentUserId, onDeletePhoto, onRem
               !isLastInRow && { marginRight: GAP },
               pressed && styles.cellPressed,
             ]}
+            onPress={onPhotoPress ? () => onPhotoPress(item, index) : undefined}
             onLongPress={canInteract ? () => handleLongPress(item) : undefined}
             delayLongPress={400}
           >

@@ -16,6 +16,8 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import ChangeEmailScreen from '../screens/ChangeEmailScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import GalleryInviteScreen from '../screens/GalleryInviteScreen';
+import EditBioScreen from '../screens/EditBioScreen';
+import PhotoViewerScreen from '../screens/PhotoViewerScreen';
 import { resolveInviteCode } from '../lib/friends';
 import type { RootStackParamList } from './types';
 
@@ -114,6 +116,16 @@ export default function RootNavigator() {
               name="GalleryInvite"
               component={GalleryInviteScreen}
               options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="EditBio"
+              component={EditBioScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="PhotoViewer"
+              component={PhotoViewerScreen}
+              options={{ animation: 'fade' }}
             />
           </>
         ) : (

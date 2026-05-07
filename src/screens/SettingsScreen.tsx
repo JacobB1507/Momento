@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { supabase } from '../lib/supabase';
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
@@ -40,7 +41,24 @@ export default function SettingsScreen() {
             <Text style={styles.rowLabel}>Change Password</Text>
             <Text style={styles.chevron}>›</Text>
           </Pressable>
+          <View style={styles.separator} />
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => navigation.navigate('EditBio' as never)}
+          >
+            <Text style={styles.rowLabel}>Edit Bio</Text>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
         </View>
+      </View>
+
+      <View style={styles.signOutSection}>
+        <Pressable
+          style={({ pressed }) => [styles.signOutButton, pressed && { opacity: 0.7 }]}
+          onPress={() => supabase.auth.signOut()}
+        >
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </Pressable>
       </View>
     </SafeAreaView>
   );
@@ -77,4 +95,18 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 16, color: '#111827' },
   chevron: { fontSize: 20, color: '#C7C7CC', lineHeight: 24 },
   separator: { height: 1, backgroundColor: '#F3F4F6', marginLeft: 16 },
+
+  signOutSection: { paddingHorizontal: 16, marginTop: 24 },
+  signOutButton: {
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  signOutText: { fontSize: 16, fontWeight: '600', color: '#EF4444' },
 });
