@@ -19,6 +19,7 @@ type Props = {
   onClose: () => void;
   galleryId: string;
   isOwner: boolean;
+  ownerId: string;
 };
 
 type Member = {
@@ -34,7 +35,7 @@ type SearchResult = {
   avatar_url: string | null;
 };
 
-export function ContributorsModal({ visible, onClose, galleryId, isOwner }: Props) {
+export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerId }: Props) {
   const { session } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
@@ -49,27 +50,38 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner }: Prop
       .select('user_id, role')
       .eq('gallery_id', galleryId);
 
-    if (!memberRows || memberRows.length === 0) {
-      setMembers([]);
-      return;
-    }
-
-    const userIds = memberRows.map((m: any) => m.user_id);
+    const rows = memberRows ?? [];
+    const userIds = rows.map((m: any) => m.user_id);
 
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, username, avatar_url')
-      .in('id', userIds);
+      .in('id', userIds.length > 0 ? userIds : [ownerId]);
 
-    const merged = memberRows.map((m: any) => ({
+    const merged: Member[] = rows.map((m: any) => ({
       user_id: m.user_id,
       role: m.role,
       username: profiles?.find((p: any) => p.id === m.user_id)?.username ?? 'Unknown',
       avatar_url: profiles?.find((p: any) => p.id === m.user_id)?.avatar_url ?? null,
     }));
 
+    const ownerInList = merged.some(m => m.user_id === ownerId);
+    if (!ownerInList && ownerId) {
+      const { data: ownerProfile } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url')
+        .eq('id', ownerId)
+        .single();
+      merged.unshift({
+        user_id: ownerId,
+        role: 'owner',
+        username: ownerProfile?.username ?? 'Unknown',
+        avatar_url: ownerProfile?.avatar_url ?? null,
+      });
+    }
+
     setMembers(merged);
-  }, [galleryId]);
+  }, [galleryId, ownerId]);
 
   const handleUsernameSearch = (text: string) => {
     setMemberSearch(text);
@@ -155,42 +167,46 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner }: Prop
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-          <Text style={styles.sectionLabel}>Add Member</Text>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by username..."
-            placeholderTextColor="#9CA3AF"
-            autoCapitalize="none"
-            autoCorrect={false}
-            value={memberSearch}
-            onChangeText={handleUsernameSearch}
-          />
-          {searchResults.length > 0 && (
-            <View style={styles.searchDropdown}>
-              {searchResults.map((profile) => (
-                <Pressable
-                  key={profile.id}
-                  style={({ pressed }) => [styles.searchResultRow, pressed && { opacity: 0.7 }]}
-                  onPress={() => handleAddMember(profile)}
-                  disabled={addingUser}
-                >
-                  {profile.avatar_url ? (
-                    <Image source={{ uri: profile.avatar_url }} style={styles.memberAvatar} />
-                  ) : (
-                    <View style={styles.memberAvatarPlaceholder}>
-                      <Text style={styles.memberAvatarLetter}>
-                        {(profile.username ?? '?').charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                  <Text style={styles.searchResultUsername}>@{profile.username ?? 'unknown'}</Text>
-                  <Text style={styles.searchResultAdd}>{addingUser ? '…' : '+'}</Text>
-                </Pressable>
-              ))}
-            </View>
+          {isOwner && (
+            <>
+              <Text style={styles.sectionLabel}>Add Member</Text>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search by username..."
+                placeholderTextColor="#9CA3AF"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={memberSearch}
+                onChangeText={handleUsernameSearch}
+              />
+              {searchResults.length > 0 && (
+                <View style={styles.searchDropdown}>
+                  {searchResults.map((profile) => (
+                    <Pressable
+                      key={profile.id}
+                      style={({ pressed }) => [styles.searchResultRow, pressed && { opacity: 0.7 }]}
+                      onPress={() => handleAddMember(profile)}
+                      disabled={addingUser}
+                    >
+                      {profile.avatar_url ? (
+                        <Image source={{ uri: profile.avatar_url }} style={styles.memberAvatar} />
+                      ) : (
+                        <View style={styles.memberAvatarPlaceholder}>
+                          <Text style={styles.memberAvatarLetter}>
+                            {(profile.username ?? '?').charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      <Text style={styles.searchResultUsername}>@{profile.username ?? 'unknown'}</Text>
+                      <Text style={styles.searchResultAdd}>{addingUser ? '…' : '+'}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+              {!!addSuccess && <Text style={styles.addSuccessText}>{addSuccess}</Text>}
+            </>
           )}
-          {!!addSuccess && <Text style={styles.addSuccessText}>{addSuccess}</Text>}
-          <Text style={[styles.sectionLabel, { marginTop: 24 }]}>Members</Text>
+          <Text style={[styles.sectionLabel, { marginTop: isOwner ? 24 : 0 }]}>Members</Text>
           {members.length === 0 ? (
             <Text style={styles.modalEmpty}>No members yet.</Text>
           ) : (
@@ -207,8 +223,15 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner }: Prop
                 )}
                 <Text style={styles.memberUsername}>
                   @{member.username ?? 'unknown'}
-                  {member.user_id === session?.user.id ? '  (You)' : ''}
                 </Text>
+                {(() => {
+                  const isCurrentUser = member.user_id === session?.user.id;
+                  const isOwnerRole = member.role === 'owner';
+                  if (isCurrentUser && isOwnerRole) return <Text style={styles.memberLabel}>(Owner) (You)</Text>;
+                  if (isCurrentUser) return <Text style={styles.memberLabel}>(You)</Text>;
+                  if (isOwnerRole) return <Text style={styles.memberLabel}>(Owner)</Text>;
+                  return null;
+                })()}
                 {isOwner && member.user_id !== session?.user.id && (
                   <Pressable
                     style={({ pressed }) => [styles.removeButton, pressed && { opacity: 0.7 }]}
@@ -292,7 +315,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   memberAvatarLetter: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  memberUsername: { flex: 1, fontSize: 15, color: '#111827', fontWeight: '500' },
+  memberUsername: { fontSize: 15, color: '#111827', fontWeight: '500' },
+  memberLabel: { fontSize: 12, color: '#9CA3AF', marginLeft: 4 },
   removeButton: { borderWidth: 1.5, borderColor: '#EF4444', borderRadius: 8, paddingVertical: 4, paddingHorizontal: 10 },
   removeButtonText: { color: '#EF4444', fontSize: 13, fontWeight: '600' },
 });

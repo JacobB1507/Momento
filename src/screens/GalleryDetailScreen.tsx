@@ -44,6 +44,7 @@ export default function GalleryDetailScreen() {
   const [galleryMeta, setGalleryMeta] = useState<{ title: string; created_by: string; privacy: GalleryPrivacy } | null>(null);
 
   const isOwner = !!session?.user.id && session.user.id === galleryMeta?.created_by;
+  const [isMember, setIsMember] = useState(false);
 
   const loadGalleryMeta = useCallback(async () => {
     const { data } = await supabase
@@ -66,7 +67,16 @@ export default function GalleryDetailScreen() {
   useEffect(() => {
     Promise.all([load(), loadGalleryMeta()]).finally(() => setLoading(false));
     getRemovalRequests(galleryId).then(data => setRemovalRequestCount(data.length));
-  }, [load, loadGalleryMeta, galleryId]);
+    if (session?.user.id) {
+      supabase
+        .from('gallery_members')
+        .select('user_id')
+        .eq('gallery_id', galleryId)
+        .eq('user_id', session.user.id)
+        .maybeSingle()
+        .then(({ data }) => setIsMember(!!data));
+    }
+  }, [load, loadGalleryMeta, galleryId, session?.user.id]);
 
   const handleDeletePhoto = (photo: Photo) => {
     setPhotos(prev => prev.filter(p => p.id !== photo.id));
@@ -197,6 +207,7 @@ export default function GalleryDetailScreen() {
         <PhotoGrid
           photos={photos}
           isOwner={isOwner}
+          isMember={isOwner || isMember}
           currentUserId={session?.user.id}
           onDeletePhoto={handleDeletePhoto}
           onRemovalRequest={handleRemovalRequest}
@@ -224,6 +235,7 @@ export default function GalleryDetailScreen() {
         onClose={() => setShowContributors(false)}
         galleryId={galleryId}
         isOwner={isOwner}
+        ownerId={galleryMeta?.created_by ?? ''}
       />
 
       <SettingsModal

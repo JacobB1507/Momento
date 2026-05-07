@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import type { Gallery } from '../types/database';
 import { supabase } from '../lib/supabase';
@@ -10,8 +10,9 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - SCREEN_PADDING * 2 - CARD_GAP) / 2;
 const CARD_HEIGHT = CARD_WIDTH * 1.2;
 
-const AVATAR_SIZE = 28;
-const AVATAR_OVERLAP = 10;
+const BUBBLE = 24;
+const OVERLAP = 8;
+const MAX_VISIBLE = 4;
 
 const PLACEHOLDER_COLORS = ['#FF6B6B', '#FF8E53', '#F97316', '#EC4899', '#8B5CF6', '#06B6D4'];
 
@@ -30,9 +31,10 @@ function formatDate(iso: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-type Member = {
+type Contributor = {
   user_id: string;
-  profiles: { avatar_url: string | null; username: string | null } | null;
+  username: string | null;
+  avatar_url: string | null;
 };
 
 export function GalleryCard({
@@ -44,19 +46,42 @@ export function GalleryCard({
   onPress: () => void;
   onLongPress?: () => void;
 }) {
-  const [members, setMembers] = useState<Member[]>([]);
+  const [contributors, setContributors] = useState<Contributor[]>([]);
 
   useEffect(() => {
-    supabase
-      .from('gallery_members')
-      .select('user_id, profiles(avatar_url, username)')
-      .eq('gallery_id', gallery.id)
-      .then(({ data }) => {
-        if (data) setMembers(data as Member[]);
-      });
+    const load = async () => {
+      const { data: memberRows } = await supabase
+        .from('gallery_members')
+        .select('user_id')
+        .eq('gallery_id', gallery.id);
+
+      if (!memberRows || memberRows.length === 0) return;
+
+      const userIds = memberRows.map((m: any) => m.user_id);
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url')
+        .in('id', userIds);
+
+      setContributors(
+        (profiles ?? []).map((p: any) => ({
+          user_id: p.id,
+          username: p.username ?? null,
+          avatar_url: p.avatar_url ?? null,
+        }))
+      );
+    };
+    load();
   }, [gallery.id]);
 
-  const visibleMembers = members.slice(0, 4);
+  const visible = contributors.slice(0, MAX_VISIBLE);
+  const overflow = contributors.length - MAX_VISIBLE;
+
+  const handleBubblesPress = () => {
+    if (contributors.length === 0) return;
+    const names = contributors.map(c => `@${c.username ?? 'unknown'}`).join('\n');
+    Alert.alert('Contributors', names);
+  };
 
   return (
     <Pressable
@@ -91,32 +116,41 @@ export function GalleryCard({
           </Text>
         </View>
         <Text style={styles.cardDate}>{formatDate(gallery.created_at)}</Text>
-        {visibleMembers.length > 0 && (
-          <View style={styles.avatarRow}>
-            {visibleMembers.map((member, index) => (
+        {contributors.length > 0 && (
+          <Pressable
+            style={styles.bubblesRow}
+            onPress={handleBubblesPress}
+            hitSlop={6}
+          >
+            {visible.map((c, index) => (
               <View
-                key={member.user_id}
+                key={c.user_id}
                 style={[
-                  styles.avatarCircle,
-                  index > 0 && styles.avatarOverlap,
-                  { zIndex: 4 - index },
+                  styles.bubble,
+                  index > 0 && { marginLeft: -OVERLAP },
+                  { zIndex: MAX_VISIBLE - index },
                 ]}
               >
-                {member.profiles?.avatar_url ? (
-                  <Image
-                    source={{ uri: member.profiles.avatar_url }}
-                    style={styles.avatarImage}
-                  />
+                {c.avatar_url ? (
+                  <Image source={{ uri: c.avatar_url }} style={styles.bubbleImage} />
                 ) : (
-                  <View style={[styles.avatarPlaceholder, { backgroundColor: placeholderColor(member.user_id) }]}>
-                    <Text style={styles.avatarInitial}>
-                      {(member.profiles?.username ?? '?').charAt(0).toUpperCase()}
+                  <View style={[styles.bubblePlaceholder, { backgroundColor: placeholderColor(c.user_id) }]}>
+                    <Text style={styles.bubbleInitial}>
+                      {(c.username ?? '?').charAt(0).toUpperCase()}
                     </Text>
                   </View>
                 )}
               </View>
             ))}
-          </View>
+            {overflow > 0 && (
+              <View style={[styles.bubble, styles.overflowBubble, { marginLeft: -OVERLAP }]}>
+                <Text style={styles.overflowText}>+{overflow}</Text>
+              </View>
+            )}
+            <View style={styles.countBadge}>
+              <Text style={styles.countText}>{contributors.length}</Text>
+            </View>
+          </Pressable>
         )}
       </View>
     </Pressable>
@@ -163,22 +197,39 @@ const styles = StyleSheet.create({
   cardPrivacy: { fontSize: 11, fontWeight: '500', color: '#9CA3AF', flexShrink: 0 },
   cardDate: { fontSize: 12, color: '#9CA3AF' },
 
-  avatarRow: { flexDirection: 'row', marginTop: 8 },
-  avatarCircle: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
+  bubblesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  bubble: {
+    width: BUBBLE,
+    height: BUBBLE,
+    borderRadius: BUBBLE / 2,
     borderWidth: 1.5,
     borderColor: '#fff',
     overflow: 'hidden',
   },
-  avatarOverlap: { marginLeft: -AVATAR_OVERLAP },
-  avatarImage: { width: AVATAR_SIZE, height: AVATAR_SIZE },
-  avatarPlaceholder: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
+  bubbleImage: { width: BUBBLE, height: BUBBLE },
+  bubblePlaceholder: {
+    width: BUBBLE,
+    height: BUBBLE,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarInitial: { fontSize: 11, fontWeight: '700', color: '#fff' },
+  bubbleInitial: { fontSize: 9, fontWeight: '700', color: '#fff' },
+  overflowBubble: {
+    backgroundColor: '#D1D5DB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overflowText: { fontSize: 9, fontWeight: '700', color: '#374151' },
+  countBadge: {
+    marginLeft: 6,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  countText: { fontSize: 11, fontWeight: '600', color: '#6B7280' },
 });

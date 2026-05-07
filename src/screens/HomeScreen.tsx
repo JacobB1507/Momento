@@ -35,7 +35,7 @@ export default function HomeScreen() {
   const [discoverGalleries, setDiscoverGalleries] = useState<Gallery[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadAll = useCallback(async () => {
+  const loadFriendGalleries = useCallback(async () => {
     if (!userId) return;
     const [feedGalleries, count] = await Promise.all([
       getFeedGalleries(userId),
@@ -43,16 +43,23 @@ export default function HomeScreen() {
     ]);
     setFriendGalleries(feedGalleries);
     setUnreadCount(count);
+  }, [userId]);
 
-    const { data: discoverData } = await supabase
+  const loadDiscover = useCallback(async () => {
+    if (!userId) return;
+    const { data } = await supabase
       .from('galleries')
-      .select('*, profiles(username, avatar_url)')
+      .select('*')
       .eq('privacy', 'public')
       .neq('created_by', userId)
       .order('created_at', { ascending: false })
       .limit(20);
-    setDiscoverGalleries((discoverData as Gallery[]) ?? []);
+    setDiscoverGalleries((data as Gallery[]) ?? []);
   }, [userId]);
+
+  const loadAll = useCallback(async () => {
+    await Promise.all([loadFriendGalleries(), loadDiscover()]);
+  }, [loadFriendGalleries, loadDiscover]);
 
   useFocusEffect(useCallback(() => { loadAll(); }, [loadAll]));
 

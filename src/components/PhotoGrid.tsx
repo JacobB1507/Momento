@@ -16,13 +16,14 @@ const PHOTO_SIZE = Math.floor((SCREEN_WIDTH - GAP * (COLUMNS - 1)) / COLUMNS);
 type Props = {
   photos: Photo[];
   isOwner: boolean;
+  isMember?: boolean;
   currentUserId?: string;
   onDeletePhoto: (photo: Photo) => void;
   onRemovalRequest?: (photoId: string) => void;
   onPhotoPress?: (photo: Photo, index: number) => void;
 };
 
-export function PhotoGrid({ photos, isOwner, currentUserId, onDeletePhoto, onRemovalRequest, onPhotoPress }: Props) {
+export function PhotoGrid({ photos, isOwner, isMember, currentUserId, onDeletePhoto, onRemovalRequest, onPhotoPress }: Props) {
   const [uploaderProfiles, setUploaderProfiles] = useState<Record<string, UploaderProfile>>({});
   const [hiddenPhotoIds, setHiddenPhotoIds] = useState<string[]>([]);
 
@@ -42,6 +43,10 @@ export function PhotoGrid({ photos, isOwner, currentUserId, onDeletePhoto, onRem
   }, [photos]);
 
   const handleLongPress = (item: Photo) => {
+    if (!isMember) {
+      Alert.alert('Not a contributor', 'You must be a contributor to this gallery to request photo removal.');
+      return;
+    }
     const isOwn = !!currentUserId && currentUserId === item.uploaded_by;
     const hideOption = {
       text: 'Hide from My View',
