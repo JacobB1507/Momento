@@ -59,10 +59,10 @@ export default function ChatScreen() {
 
   useEffect(() => {
     load().finally(() => setLoading(false));
-    supabase.from('profiles').select('avatar_url, username').eq('id', otherUserId).single()
+    supabase.from('profiles').select('avatar_url, username, display_name').eq('id', otherUserId).single()
       .then(({ data }) => {
         setOtherAvatar(data?.avatar_url ?? null);
-        setOtherUsername(data?.username ?? otherUsername);
+        setOtherUsername(data?.display_name || data?.username || otherUsername);
       });
 
   }, [conversationId]);

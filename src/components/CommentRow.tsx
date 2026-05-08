@@ -12,7 +12,7 @@ type Comment = {
   edited?: boolean;
   gallery_id?: string;
   reply_count?: number;
-  profile: { username: string; avatar_url?: string | null } | null;
+  profile: { username: string; display_name?: string | null; avatar_url?: string | null } | null;
 };
 
 type Props = {
@@ -71,7 +71,7 @@ export default function CommentRow({ comment, currentUserId, onEdit, onDelete, o
         )}
         <View style={styles.body}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={styles.username}>{comment.profile?.username ?? 'Unknown'}</Text>
+            <Text style={styles.username}>{comment.profile?.display_name || comment.profile?.username || 'Unknown'}</Text>
             {comment.user_id === currentUserId && (
               <Text style={{ fontSize: 12, color: '#9ca3af', fontWeight: '400' }}> (You)</Text>
             )}

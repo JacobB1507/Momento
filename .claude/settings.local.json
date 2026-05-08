@@ -13,7 +13,10 @@
       "Bash(node -e \"console.log\\(require\\('@supabase/supabase-js/package.json'\\).version\\)\")",
       "Bash(node -e \"const {StorageClient} = require\\('@supabase/storage-js'\\); console.log\\(Object.getOwnPropertyNames\\(StorageClient.prototype\\)\\)\")",
       "Bash(node -e ' *)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(Get-Content \"C:\\\\Users\\\\jbatt\\\\my-app\\\\Momento\\\\src\\\\screens\\\\FriendProfileScreen.tsx\")",
+      "Bash(Measure-Object -Line)",
+      "PowerShell(Get-Content *)"
     ]
   }
 }

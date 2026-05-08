@@ -18,7 +18,7 @@ import { getNotifications, markAllRead, markOneRead, markNotificationUnread, del
 import { supabase } from '../lib/supabase';
 import NotificationRow, { type NotificationItem } from '../components/NotificationRow';
 
-type SenderProfileMap = Record<string, { id: string; username: string; avatar_url?: string | null }>;
+type SenderProfileMap = Record<string, { id: string; username: string; display_name?: string | null; avatar_url?: string | null }>;
 type CoverMap = Record<string, string | null>;
 
 export default function NotificationsScreen() {
@@ -46,7 +46,7 @@ export default function NotificationsScreen() {
     )];
 
     const { data: senderProfiles } = senderIds.length > 0
-      ? await supabase.from('profiles').select('id, username, avatar_url').in('id', senderIds)
+      ? await supabase.from('profiles').select('id, username, display_name, avatar_url').in('id', senderIds)
       : { data: [] };
 
     setSenderProfileMap(Object.fromEntries(

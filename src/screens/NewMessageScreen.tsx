@@ -16,8 +16,8 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { createConversation } from '../lib/messages';
 
-type Friend = { id: string; username: string | null; avatar_url: string | null };
-type Request = { id: string; requester_id: string; username: string | null; avatar_url: string | null };
+type Friend = { id: string; username: string | null; display_name: string | null; avatar_url: string | null };
+type Request = { id: string; requester_id: string; username: string | null; display_name: string | null; avatar_url: string | null };
 
 export default function NewMessageScreen() {
   const navigation = useNavigation<any>();
@@ -45,7 +45,7 @@ export default function NewMessageScreen() {
 
       if (ids.length > 0) {
         const { data: profiles } = await supabase
-          .from('profiles').select('id, username, avatar_url').in('id', ids);
+          .from('profiles').select('id, username, display_name, avatar_url').in('id', ids);
         setFriends(profiles ?? []);
       }
 
@@ -58,11 +58,12 @@ export default function NewMessageScreen() {
       if ((reqs ?? []).length > 0) {
         const reqIds = (reqs ?? []).map((r: any) => r.requester_id);
         const { data: reqProfiles } = await supabase
-          .from('profiles').select('id, username, avatar_url').in('id', reqIds);
+          .from('profiles').select('id, username, display_name, avatar_url').in('id', reqIds);
         setRequests((reqs ?? []).map((r: any) => ({
           id: r.id,
           requester_id: r.requester_id,
           username: reqProfiles?.find((p: any) => p.id === r.requester_id)?.username ?? null,
+          display_name: reqProfiles?.find((p: any) => p.id === r.requester_id)?.display_name ?? null,
           avatar_url: reqProfiles?.find((p: any) => p.id === r.requester_id)?.avatar_url ?? null,
         })));
       }
@@ -101,7 +102,7 @@ export default function NewMessageScreen() {
       {item.avatar_url
         ? <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
         : <View style={styles.avatarPlaceholder}><Text style={styles.avatarLetter}>{(item.username ?? '?').charAt(0).toUpperCase()}</Text></View>}
-      <Text style={[styles.username, { flex: 1 }]}>@{item.username ?? 'unknown'}</Text>
+      <Text style={[styles.username, { flex: 1 }]}>{item.display_name || item.username || 'unknown'}</Text>
       {loadingFriendId === item.id && <ActivityIndicator size="small" color="#FF6B6B" />}
     </Pressable>
   );
@@ -128,7 +129,7 @@ export default function NewMessageScreen() {
                   {r.avatar_url
                     ? <Image source={{ uri: r.avatar_url }} style={styles.avatar} />
                     : <View style={styles.avatarPlaceholder}><Text style={styles.avatarLetter}>{(r.username ?? '?').charAt(0).toUpperCase()}</Text></View>}
-                  <Text style={[styles.username, { flex: 1 }]}>@{r.username ?? 'unknown'}</Text>
+                  <Text style={[styles.username, { flex: 1 }]}>{r.display_name || r.username || 'unknown'}</Text>
                   <Pressable style={styles.acceptBtn} onPress={() => supabase.from('message_requests').update({ status: 'accepted' }).eq('id', r.id).then(() => setRequests(prev => prev.filter(x => x.id !== r.id)))}>
                     <Text style={styles.acceptText}>Accept</Text>
                   </Pressable>

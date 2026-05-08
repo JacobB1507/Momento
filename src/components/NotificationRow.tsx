@@ -15,7 +15,7 @@ export type NotificationItem = {
 
 type Props = {
   notification: NotificationItem;
-  senderProfileMap: Record<string, { id: string; username: string; avatar_url?: string | null }>;
+  senderProfileMap: Record<string, { id: string; username: string; display_name?: string | null; avatar_url?: string | null }>;
   coverMap: Record<string, string | null>;
   onPress: () => void;
   onMarkUnread?: () => void;
@@ -49,8 +49,10 @@ function typeIcon(type: string | null): { name: string; color: string } {
 export default function NotificationRow({ notification, senderProfileMap, coverMap, onPress, onMarkUnread, onClear }: Props) {
   const { body, read, created_at, type } = notification;
   const parts = body.split(' ');
-  const username = parts[0]?.toLowerCase();
+  const parsedUsername = parts[0]?.toLowerCase();
   const rest = parts.slice(1).join(' ');
+  const senderProfile = senderProfileMap[notification.sender_id ?? ''];
+  const displayLabel = senderProfile?.display_name || senderProfile?.username || parsedUsername;
   const icon = typeIcon(type);
 
   const swipeableRef = useRef<any>(null);
@@ -100,7 +102,7 @@ export default function NotificationRow({ notification, senderProfileMap, coverM
         </View>
         <View style={styles.content}>
           <Text style={styles.body}>
-            <Text style={styles.username}>{username} </Text>
+            <Text style={styles.username}>{displayLabel} </Text>
             {rest}
           </Text>
           <Text style={styles.time}>{timeAgo(created_at)}</Text>

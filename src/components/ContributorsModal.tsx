@@ -28,12 +28,14 @@ type Member = {
   user_id: string;
   role?: string;
   username: string | null;
+  display_name: string | null;
   avatar_url: string | null;
 };
 
 type SearchResult = {
   id: string;
   username: string | null;
+  display_name: string | null;
   avatar_url: string | null;
 };
 
@@ -58,13 +60,14 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
 
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, username, avatar_url')
+      .select('id, username, display_name, avatar_url')
       .in('id', userIds.length > 0 ? userIds : [ownerId]);
 
     const merged: Member[] = rows.map((m: any) => ({
       user_id: m.user_id,
       role: m.role,
       username: profiles?.find((p: any) => p.id === m.user_id)?.username ?? 'Unknown',
+      display_name: profiles?.find((p: any) => p.id === m.user_id)?.display_name ?? null,
       avatar_url: profiles?.find((p: any) => p.id === m.user_id)?.avatar_url ?? null,
     }));
 
@@ -72,13 +75,14 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
     if (!ownerInList && ownerId) {
       const { data: ownerProfile } = await supabase
         .from('profiles')
-        .select('id, username, avatar_url')
+        .select('id, username, display_name, avatar_url')
         .eq('id', ownerId)
         .single();
       merged.unshift({
         user_id: ownerId,
         role: 'owner',
         username: ownerProfile?.username ?? 'Unknown',
+        display_name: ownerProfile?.display_name ?? null,
         avatar_url: ownerProfile?.avatar_url ?? null,
       });
     }
@@ -94,8 +98,8 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
     searchTimeoutRef.current = setTimeout(async () => {
       const { data } = await supabase
         .from('profiles')
-        .select('id, username, avatar_url')
-        .ilike('username', `%${text}%`)
+        .select('id, username, display_name, avatar_url')
+        .or(`username.ilike.%${text}%,display_name.ilike.%${text}%`)
         .limit(5);
       setSearchResults(data ?? []);
     }, 300);
@@ -200,7 +204,10 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
                           </Text>
                         </View>
                       )}
-                      <Text style={styles.searchResultUsername}>@{profile.username ?? 'unknown'}</Text>
+                      <View>
+                        <Text style={{ fontWeight: '700', fontSize: 15, color: '#111827' }}>{profile.display_name || profile.username || 'unknown'}</Text>
+                        <Text style={{ fontSize: 12, color: '#9ca3af' }}>@{profile.username}</Text>
+                      </View>
                       <Text style={styles.searchResultAdd}>{addingUser ? '…' : '+'}</Text>
                     </Pressable>
                   ))}
@@ -233,7 +240,7 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
                   </View>
                 )}
                 <Text style={styles.memberUsername}>
-                  @{member.username ?? 'unknown'}
+                  {member.display_name || member.username || 'unknown'}
                 </Text>
                 {(() => {
                   const isCurrentUser = member.user_id === session?.user.id;

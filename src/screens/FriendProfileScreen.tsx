@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Pressable,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -12,105 +12,138 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { GalleryCard, CARD_GAP } from '../components/GalleryCard';
+import { supabase } from '../lib/supabase';
+import { sendFriendRequest } from '../lib/friends';
+import { createConversation, requestMessagePermission } from '../lib/messages';
+import { GalleryCard } from '../components/GalleryCard';
+import ProfileActionButtons from '../components/ProfileActionButtons';
 import type { RootStackParamList } from '../navigation/types';
 import type { Gallery } from '../types/database';
+import styles, { AVATAR_SIZE } from '../styles/friendProfileStyles';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'FriendProfile'>;
 type RouteProps = RouteProp<RootStackParamList, 'FriendProfile'>;
-
-type ProfileData = {
-  username: string | null;
-  avatar_url: string | null;
-  bio: string | null;
-};
 
 export default function FriendProfileScreen() {
   const navigation = useNavigation<NavProp>();
   const route = useRoute<RouteProps>();
   const { userId, username } = route.params;
   const { session } = useAuth();
+  const currentUserId = session?.user?.id ?? '';
 
-  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [profileUsername, setProfileUsername] = useState(username);
+  const [displayName, setDisplayName] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [bio, setBio] = useState<string | null>(null);
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [friendIds, setFriendIds] = useState<string[]>([]);
+  const [friendCount, setFriendCount] = useState(0);
+  const [isFriend, setIsFriend] = useState(false);
+  const [hasPendingRequest, setHasPendingRequest] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('username, avatar_url, bio')
-        .eq('id', userId)
-        .single();
+      const [profileRes, ownedRes, membershipsRes, statusRes, countRes, myFriendsRes] =
+        await Promise.all([
+          supabase.from('profiles').select('username, avatar_url, bio, display_name').eq('id', userId).single(),
+          supabase.from('galleries').select('*').eq('created_by', userId).order('created_at', { ascending: false }),
+          supabase.from('gallery_members').select('gallery_id').eq('user_id', userId),
+          supabase.from('friends').select('id, status, sender_id')
+            .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUserId})`)
+            .maybeSingle(),
+          supabase.from('friends').select('id', { count: 'exact', head: true })
+            .eq('status', 'accepted').or(`sender_id.eq.${userId},receiver_id.eq.${userId}`),
+          supabase.from('friends').select('sender_id, receiver_id')
+            .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
+            .eq('status', 'accepted'),
+        ]);
 
-      if (profileData) setProfile(profileData as ProfileData);
-
-      // Galleries the friend created
-      const { data: owned } = await supabase
-        .from('galleries')
-        .select('*')
-        .eq('created_by', userId)
-        .order('created_at', { ascending: false });
-
-      // Galleries the friend is a member of (collaborative)
-      const { data: memberships } = await supabase
-        .from('gallery_members')
-        .select('gallery_id')
-        .eq('user_id', userId);
-
-      const memberGalleryIds = (memberships ?? []).map((m: any) => m.gallery_id);
-
-      const { data: collaborative } = memberGalleryIds.length > 0
-        ? await supabase
-            .from('galleries')
-            .select('*')
-            .in('id', memberGalleryIds)
-            .neq('created_by', userId)
-        : { data: [] };
-
-      // Merge and deduplicate — RLS automatically filters what current user can see
-      const all = [...(owned ?? []), ...(collaborative ?? [])];
-      const unique = all.filter((g, i, arr) =>
-        arr.findIndex((x: any) => x.id === g.id) === i
-      );
-      setGalleries(unique);
-
-      if (session?.user.id) {
-        const { data: friendRows } = await supabase
-          .from('friends')
-          .select('sender_id, receiver_id')
-          .or(`sender_id.eq.${session.user.id},receiver_id.eq.${session.user.id}`)
-          .eq('status', 'accepted');
-        setFriendIds(
-          (friendRows ?? []).map((r: any) =>
-            r.sender_id === session.user.id ? r.receiver_id : r.sender_id
-          )
-        );
+      if (profileRes.data) {
+        setProfileUsername(profileRes.data.username ?? username);
+        setDisplayName(profileRes.data.display_name ?? null);
+        setAvatarUrl(profileRes.data.avatar_url ?? null);
+        setBio(profileRes.data.bio ?? null);
       }
 
+      const memberIds = (membershipsRes.data ?? []).map((m: any) => m.gallery_id);
+      const { data: collab } = memberIds.length > 0
+        ? await supabase.from('galleries').select('*').in('id', memberIds).neq('created_by', userId)
+        : { data: [] };
+      const all = [...(ownedRes.data ?? []), ...(collab ?? [])];
+      setGalleries(all.filter((g, i, arr) => arr.findIndex((x: any) => x.id === g.id) === i));
+
+      const fr = statusRes.data;
+      if (fr) {
+        setIsFriend(fr.status === 'accepted');
+        setHasPendingRequest(fr.status === 'pending' && fr.sender_id === currentUserId);
+      }
+      setFriendCount(countRes.count ?? 0);
+      setFriendIds(
+        (myFriendsRes.data ?? []).map((r: any) =>
+          r.sender_id === currentUserId ? r.receiver_id : r.sender_id
+        )
+      );
       setLoading(false);
     };
     load();
-  }, [userId, session?.user.id]);
+  }, [userId, currentUserId]);
 
-  const letter = (profile?.username ?? username ?? '?').charAt(0).toUpperCase();
+  const handleFriendPress = async () => {
+    const result = await sendFriendRequest(currentUserId, profileUsername);
+    if (result === 'sent') setHasPendingRequest(true);
+    else if (result === 'already_friends') setIsFriend(true);
+  };
 
-  const Header = (
-    <View style={styles.profileSection}>
-      {profile?.avatar_url ? (
-        <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
-      ) : (
-        <View style={styles.avatarPlaceholder}>
-          <Text style={styles.avatarLetter}>{letter}</Text>
+  const handleMessagePress = async () => {
+    if (!isFriend) {
+      try { await requestMessagePermission(currentUserId, userId); } catch {}
+      Alert.alert('Message request sent', 'Your message request has been sent.');
+      return;
+    }
+    try {
+      const convo = await createConversation(currentUserId, userId);
+      navigation.navigate('Chat', { conversationId: convo.id, otherUserId: userId, otherUsername: profileUsername });
+    } catch {}
+  };
+
+  const letter = profileUsername.charAt(0).toUpperCase();
+
+  const ListHeader = (
+    <View>
+      <View style={styles.profileSection}>
+        {avatarUrl
+          ? <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+          : <View style={[styles.avatarPlaceholder, { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }]}>
+              <Text style={styles.avatarLetter}>{letter}</Text>
+            </View>
+        }
+        {displayName ? <Text style={styles.displayName}>{displayName}</Text> : null}
+
+        {!!bio && <Text style={styles.bio}>{bio}</Text>}
+      </View>
+      <View style={styles.statsBar}>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{galleries.length}</Text>
+          <Text style={styles.statLabel}>Galleries</Text>
         </View>
-      )}
-      <Text style={styles.username}>@{profile?.username ?? username}</Text>
-      {!!profile?.bio && <Text style={styles.bio}>{profile.bio}</Text>}
-      <View style={styles.galleriesLabel}>
-        <Text style={styles.galleriesLabelText}>Public Galleries</Text>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{friendCount}</Text>
+          <Text style={styles.statLabel}>Friends</Text>
+        </View>
+      </View>
+      <ProfileActionButtons
+        userId={userId}
+        currentUserId={currentUserId}
+        isFriend={isFriend}
+        hasPendingRequest={hasPendingRequest}
+        onFriendPress={handleFriendPress}
+        onMessagePress={handleMessagePress}
+      />
+      <View style={styles.galleriesSection}>
+        <Text style={styles.galleriesSectionTitle}>Galleries</Text>
       </View>
     </View>
   );
@@ -121,77 +154,30 @@ export default function FriendProfileScreen() {
         <Pressable onPress={() => navigation.goBack()} hitSlop={12} style={styles.backButton}>
           <Text style={styles.backIcon}>‹</Text>
         </Pressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          @{username}
-        </Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>@{profileUsername}</Text>
         <View style={styles.backButton} />
       </View>
-
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#FF6B6B" />
-        </View>
+        <View style={styles.center}><ActivityIndicator size="large" color="#FF6B6B" /></View>
       ) : (
         <FlatList
           data={galleries}
           keyExtractor={item => item.id}
           numColumns={2}
-          ListHeaderComponent={Header}
-          columnWrapperStyle={styles.row}
-          contentContainerStyle={styles.grid}
-          ListEmptyComponent={
-            <Text style={styles.empty}>No public galleries yet</Text>
-          }
-          renderItem={({ item }) =>
+          ListHeaderComponent={ListHeader}
+          columnWrapperStyle={styles.galleryRow}
+          contentContainerStyle={styles.galleryGrid}
+          ListEmptyComponent={<Text style={styles.galleryEmpty}>No galleries yet</Text>}
+          renderItem={({ item }) => (
             <GalleryCard
               gallery={item}
-              onPress={() => navigation.navigate('GalleryDetail', {
-                galleryId: item.id,
-                galleryTitle: item.title,
-              })}
-              currentUserId={session?.user.id}
+              onPress={() => navigation.navigate('GalleryDetail', { galleryId: item.id, galleryTitle: item.title })}
+              currentUserId={currentUserId}
               friendIds={friendIds}
             />
-          }
+          )}
         />
       )}
     </SafeAreaView>
   );
 }
-
-const AVATAR_SIZE = 88;
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F9FAFB' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 12,
-  },
-  backButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  backIcon: { fontSize: 32, color: '#FF6B6B', lineHeight: 36, fontWeight: '300' },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#111827', textAlign: 'center' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-
-  profileSection: { alignItems: 'center', paddingTop: 12, paddingBottom: 24, paddingHorizontal: 16 },
-  avatar: { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 },
-  avatarPlaceholder: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-    backgroundColor: '#FF6B6B',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarLetter: { color: '#fff', fontSize: 32, fontWeight: '700' },
-  username: { marginTop: 12, fontSize: 20, fontWeight: '800', color: '#111827', letterSpacing: -0.3 },
-  bio: { marginTop: 6, fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 20, paddingHorizontal: 24 },
-  galleriesLabel: { marginTop: 20, alignSelf: 'flex-start' },
-  galleriesLabelText: { fontSize: 13, fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5 },
-
-  grid: { paddingHorizontal: 16, paddingBottom: 32, gap: CARD_GAP },
-  row: { gap: CARD_GAP },
-  empty: { textAlign: 'center', color: '#9CA3AF', fontSize: 14, paddingTop: 24 },
-});

@@ -25,7 +25,7 @@ import {
   removeFriend,
 } from '../lib/friends';
 
-type Profile = { id: string; username: string | null; avatar_url: string | null };
+type Profile = { id: string; username: string | null; display_name?: string | null; avatar_url: string | null };
 type FriendItem = { friendshipId: string; profile: Profile };
 type PendingItem = { friendshipId: string; profile: Profile };
 
@@ -183,7 +183,7 @@ export default function FriendsScreen() {
                   <View style={[styles.row, { backgroundColor: friendshipId === route.params?.highlightRequestId ? '#fff5f5' : '#fff' }]}>
                     <AvatarThumb profile={profile} />
                     <Text style={[styles.rowUsername, styles.rowUsernameFlex]} numberOfLines={1}>
-                      @{profile.username ?? 'unknown'}
+                      {profile.display_name || profile.username || 'unknown'}
                     </Text>
                     <Pressable
                       onPress={() => handleRespond(friendshipId, true)}
@@ -240,7 +240,7 @@ export default function FriendsScreen() {
                 >
                   <AvatarThumb profile={profile} />
                   <Text style={[styles.rowUsername, styles.rowUsernameFlex]} numberOfLines={1}>
-                    @{profile.username ?? 'unknown'}
+                    {profile.display_name || profile.username || 'unknown'}
                   </Text>
                   <Pressable
                     onPress={() => handleRemove(friendshipId, profile.username)}
@@ -291,13 +291,14 @@ const styles = StyleSheet.create({
   },
   addButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 
-  content: { paddingHorizontal: 16, paddingBottom: 32 },
+  content: { paddingHorizontal: 16, paddingBottom: 32, paddingTop: 16 },
 
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginBottom: 8,
+    marginTop: 8,
   },
   sectionLabel: {
     fontSize: 13,

@@ -37,6 +37,7 @@ function formatDate(iso: string): string {
 type Contributor = {
   user_id: string;
   username: string | null;
+  display_name: string | null;
   avatar_url: string | null;
 };
 
@@ -72,13 +73,14 @@ export function GalleryCard({
     const userIds = memberRows.map((m: any) => m.user_id);
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, username, avatar_url')
+      .select('id, username, display_name, avatar_url')
       .in('id', userIds);
 
     setContributors(
       (profiles ?? []).map((p: any) => ({
         user_id: p.id,
         username: p.username ?? null,
+        display_name: p.display_name ?? null,
         avatar_url: p.avatar_url ?? null,
       }))
     );
@@ -195,7 +197,7 @@ export function GalleryCard({
                         </View>
                       )}
                       <Text style={styles.dropdownUsername} numberOfLines={1}>
-                        @{c.username ?? 'unknown'}
+                        {c.display_name || c.username}
                       </Text>
                     </View>
                   ))}

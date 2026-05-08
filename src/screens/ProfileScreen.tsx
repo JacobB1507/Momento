@@ -36,6 +36,7 @@ export default function ProfileScreen() {
   const email = user?.email ?? '';
 
   const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -69,16 +70,16 @@ export default function ProfileScreen() {
       if (profile.username) setUsername(profile.username);
       if (profile.avatar_url) setAvatarUrl(profile.avatar_url);
       setBio(profile.bio ?? null);
-      return;
     }
     const { data } = await supabase
       .from('profiles')
-      .select('id, username, email, avatar_url, bio')
+      .select('id, username, email, avatar_url, bio, display_name')
       .eq('id', userId)
       .maybeSingle();
     if (data?.username) setUsername(data.username);
     if (data?.avatar_url) setAvatarUrl(data.avatar_url);
     setBio(data?.bio ?? null);
+    setDisplayName(data?.display_name ?? null);
   };
 
   const loadGalleries = async () => {
@@ -273,7 +274,8 @@ export default function ProfileScreen() {
           </Pressable>
 
           <View style={styles.profileInfo}>
-            <Text style={styles.username}>{username || 'unknown'}</Text>
+            {displayName ? <Text style={styles.displayName}>{displayName}</Text> : null}
+            <Text style={displayName ? styles.usernameSmall : styles.usernameLarge}>{displayName ? `@${username}` : (username || 'unknown')}</Text>
             <Text style={styles.friendCountLabel}>{friendCount} Friends</Text>
             {bio ? (
               <Text style={styles.bio}>{bio}</Text>
@@ -408,7 +410,9 @@ const styles = StyleSheet.create({
   editBadgeIcon: { color: '#fff', fontSize: 12, lineHeight: 15 },
 
   profileInfo: { flex: 1, justifyContent: 'center', gap: 4 },
-  username: { fontSize: 20, fontWeight: '800', color: '#111827' },
+  displayName: { fontSize: 20, fontWeight: '800', color: '#111827' },
+  usernameLarge: { fontSize: 20, fontWeight: '800', color: '#111827' },
+  usernameSmall: { fontSize: 14, color: '#6B7280' },
   friendCountLabel: { fontSize: 14, color: '#6B7280' },
   bio: { fontSize: 14, color: '#374151' },
   bioPlaceholder: { fontSize: 14, color: '#9CA3AF', fontStyle: 'italic' },

@@ -16,7 +16,7 @@ import { getFriends } from '../lib/friends';
 import type { RootStackParamList } from '../navigation/types';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
-type Friend = { id: string; username: string | null; avatar_url: string | null };
+type Friend = { id: string; username: string | null; display_name: string | null; avatar_url: string | null };
 
 type Props = {
   visible: boolean;
@@ -39,7 +39,10 @@ export function FriendsListModal({ visible, onClose, userId }: Props) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return friends;
-    return friends.filter(f => (f.username ?? '').toLowerCase().includes(q));
+    return friends.filter(f =>
+      (f.display_name ?? '').toLowerCase().includes(q) ||
+      (f.username ?? '').toLowerCase().includes(q)
+    );
   }, [friends, search]);
 
   const handleRowPress = (friend: Friend) => {
@@ -96,7 +99,7 @@ export function FriendsListModal({ visible, onClose, userId }: Props) {
                 </View>
               )}
               <Text style={styles.username} numberOfLines={1}>
-                @{item.username ?? 'unknown'}
+                {item.display_name || item.username || 'unknown'}
               </Text>
               <Text style={styles.chevron}>›</Text>
             </Pressable>
@@ -108,7 +111,7 @@ export function FriendsListModal({ visible, onClose, userId }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F9FAFB' },
+  safe: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: 24 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

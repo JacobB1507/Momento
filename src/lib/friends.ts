@@ -39,7 +39,7 @@ export async function getFriends(userId: string) {
       const otherId = row.sender_id === userId ? row.receiver_id : row.sender_id;
       const { data: profile } = await supabase
         .from('profiles')
-        .select('id, username, avatar_url')
+        .select('id, username, display_name, avatar_url')
         .eq('id', otherId)
         .maybeSingle();
       return profile;

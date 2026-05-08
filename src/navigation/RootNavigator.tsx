@@ -17,6 +17,7 @@ import ChangeEmailScreen from '../screens/ChangeEmailScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import GalleryInviteScreen from '../screens/GalleryInviteScreen';
 import EditBioScreen from '../screens/EditBioScreen';
+import EditDisplayNameScreen from '../screens/EditDisplayNameScreen';
 import PhotoViewerScreen from '../screens/PhotoViewerScreen';
 import FriendProfileScreen from '../screens/FriendProfileScreen';
 import ChatScreen from '../screens/ChatScreen';
@@ -123,6 +124,11 @@ export default function RootNavigator() {
             <Stack.Screen
               name="EditBio"
               component={EditBioScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="EditDisplayName"
+              component={EditDisplayNameScreen}
               options={{ animation: 'slide_from_right' }}
             />
             <Stack.Screen

@@ -25,7 +25,7 @@ type Props = {
   onPress: () => void;
 };
 
-type Profile = { username: string | null; avatar_url: string | null };
+type Profile = { username: string | null; display_name: string | null; avatar_url: string | null };
 
 export default function ConversationRow({ conversation, currentUserId, onPress }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -38,7 +38,7 @@ export default function ConversationRow({ conversation, currentUserId, onPress }
     if (!otherId) return;
     supabase
       .from('profiles')
-      .select('username, avatar_url')
+      .select('username, display_name, avatar_url')
       .eq('id', otherId)
       .single()
       .then(({ data }) => setProfile(data));
@@ -60,7 +60,7 @@ export default function ConversationRow({ conversation, currentUserId, onPress }
       )}
       <View style={styles.center}>
         <Text style={styles.username} numberOfLines={1}>
-          {profile?.username ?? '…'}
+          {profile?.display_name || profile?.username || '…'}
         </Text>
         <Text style={styles.preview} numberOfLines={1}>
           {conversation.last_message ?? 'No messages yet'}

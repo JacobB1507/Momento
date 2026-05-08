@@ -49,6 +49,14 @@ export default function SettingsScreen() {
             <Text style={styles.rowLabel}>Edit Bio</Text>
             <Text style={styles.chevron}>›</Text>
           </Pressable>
+          <View style={styles.separator} />
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => navigation.navigate('EditDisplayName' as never)}
+          >
+            <Text style={styles.rowLabel}>Edit Display Name</Text>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
         </View>
       </View>
 
