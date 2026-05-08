@@ -11,11 +11,12 @@ type Props = {
   currentUserId: string;
   onReplyEdit: (comment: any) => void;
   onReplyDelete: (commentId: string) => void;
+  onReply: (comment: any) => void;
   refreshKey?: number;
   forceExpanded?: boolean;
 };
 
-export default function CommentReplies({ parentId, replyCount, galleryId, currentUserId, onReplyEdit, onReplyDelete, refreshKey, forceExpanded }: Props) {
+export default function CommentReplies({ parentId, replyCount, galleryId, currentUserId, onReplyEdit, onReplyDelete, onReply, refreshKey, forceExpanded }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [replies, setReplies] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -67,7 +68,7 @@ export default function CommentReplies({ parentId, replyCount, galleryId, curren
               currentUserId={currentUserId}
               onEdit={onReplyEdit}
               onDelete={() => onReplyDelete(reply.id)}
-              onReply={() => {}}
+              onReply={onReply}
             />
           </View>
         ))

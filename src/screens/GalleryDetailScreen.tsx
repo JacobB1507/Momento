@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -44,8 +44,11 @@ export default function GalleryDetailScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [showRemovalRequests, setShowRemovalRequests] = useState(false);
   const [removalRequestCount, setRemovalRequestCount] = useState(0);
+  const [contributorCount, setContributorCount] = useState(0);
   const [galleryMeta, setGalleryMeta] = useState<{ title: string; created_by: string; privacy: GalleryPrivacy; comment_count?: number } | null>(null);
   const [showComments, setShowComments] = useState(false);
+  const [highlightedRequestId, setHighlightedRequestId] = useState<string | null>(null);
+  const highlightConsumed = useRef(false);
 
   const isOwner = !!session?.user.id && session.user.id === galleryMeta?.created_by;
   const [isMember, setIsMember] = useState(false);
@@ -69,8 +72,22 @@ export default function GalleryDetailScreen() {
   }, [galleryId]);
 
   useEffect(() => {
+    if (!highlightConsumed.current) {
+      highlightConsumed.current = true;
+      if (route.params?.openRemovalRequest) {
+        setShowRemovalRequests(true);
+        setHighlightedRequestId(route.params.openRemovalRequest);
+      }
+      if (route.params?.openComments) {
+        setTimeout(() => setShowComments(true), 500);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     Promise.all([load(), loadGalleryMeta()]).finally(() => setLoading(false));
     getRemovalRequests(galleryId).then(data => setRemovalRequestCount(data.length));
+    supabase.from('gallery_members').select('user_id', { count: 'exact', head: true }).eq('gallery_id', galleryId).then(({ count }) => setContributorCount(count ?? 0));
     if (session?.user.id) {
       supabase
         .from('gallery_members')
@@ -169,7 +186,8 @@ export default function GalleryDetailScreen() {
               onPress={() => setShowRemovalRequests(true)}
               hitSlop={8}
             >
-              <Text style={styles.removalButtonText}>Requests ({removalRequestCount})</Text>
+              <Ionicons name="flag-outline" size={16} color="#F59E0B" />
+              <View style={styles.removalDot} />
             </Pressable>
           )}
           <Pressable
@@ -177,11 +195,16 @@ export default function GalleryDetailScreen() {
             onPress={() => setShowContributors(true)}
             hitSlop={8}
           >
-            <Ionicons name="people-outline" size={15} color="#fff" />
-            <Text style={styles.inviteButtonText}>Contributors</Text>
+            <Ionicons name="people-outline" size={16} color="#fff" />
+            {contributorCount > 1 && (
+              <View style={styles.contributorBadge}>
+                <Text style={styles.contributorBadgeText}>{contributorCount}</Text>
+              </View>
+            )}
           </Pressable>
           {photos.length > 0 && !loading && (
             <View style={styles.countBadge}>
+              <Ionicons name="apps-outline" size={13} color="#fff" />
               <Text style={styles.countText}>{photos.length}</Text>
             </View>
           )}
@@ -233,15 +256,17 @@ export default function GalleryDetailScreen() {
         </Text>
       </Pressable>
 
-      <CommentsSheet galleryId={galleryId} visible={showComments} onClose={() => setShowComments(false)} />
+      <CommentsSheet galleryId={galleryId} visible={showComments} onClose={() => setShowComments(false)} highlightUserId={route.params?.highlightUserId} />
 
       <RemovalRequestsModal
         visible={showRemovalRequests}
         onClose={() => {
           setShowRemovalRequests(false);
+          setHighlightedRequestId(null);
           getRemovalRequests(galleryId).then(data => setRemovalRequestCount(data.length));
         }}
         galleryId={galleryId}
+        highlightedRequestId={highlightedRequestId}
       />
 
       <ContributorsModal

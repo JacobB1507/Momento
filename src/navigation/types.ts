@@ -11,11 +11,11 @@ export type RootStackParamList = {
   Login: undefined;
   SignUp: undefined;
   MainTabs: undefined;
-  GalleryDetail: { galleryId: string; galleryTitle: string };
+  GalleryDetail: { galleryId: string; galleryTitle?: string; openRemovalRequest?: string; openComments?: boolean; highlightUserId?: string };
   PhotoViewer: { photos: PhotoViewerPhoto[]; initialIndex: number; galleryTitle: string };
   Settings: undefined;
   ChangeUsername: undefined;
-  Friends: undefined;
+  Friends: { highlightRequestId?: string } | undefined;
   AddFriend: undefined;
   Notifications: undefined;
   ChangeEmail: undefined;

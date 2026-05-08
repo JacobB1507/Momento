@@ -89,13 +89,18 @@ export default function ChatScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={26} color="#111827" />
         </TouchableOpacity>
-        {otherAvatar
-          ? <Image source={{ uri: otherAvatar }} style={{ width: 36, height: 36, borderRadius: 18 }} />
-          : <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#f0f0f0', alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontWeight: '700', color: '#9ca3af' }}>{otherUsername?.[0]?.toUpperCase()}</Text>
-            </View>
-        }
-        <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>{otherUsername}</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('FriendProfile', { userId: otherUserId, username: otherUsername })}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+        >
+          {otherAvatar
+            ? <Image source={{ uri: otherAvatar }} style={{ width: 36, height: 36, borderRadius: 18 }} />
+            : <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#f0f0f0', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontWeight: '700', color: '#9ca3af' }}>{otherUsername?.[0]?.toUpperCase()}</Text>
+              </View>
+          }
+          <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>{otherUsername}</Text>
+        </TouchableOpacity>
       </View>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         {loading ? (

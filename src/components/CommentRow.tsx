@@ -92,6 +92,7 @@ export default function CommentRow({ comment, currentUserId, onEdit, onDelete, o
       currentUserId={currentUserId}
       onReplyEdit={onEdit}
       onReplyDelete={(commentId) => onDelete({ ...comment, id: commentId })}
+      onReply={onReply}
       refreshKey={refreshKey}
       forceExpanded={expandedCommentId === comment.id}
     />

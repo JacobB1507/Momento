@@ -23,9 +23,10 @@ type Props = {
   galleryId: string;
   visible: boolean;
   onClose: () => void;
+  highlightUserId?: string;
 };
 
-export default function CommentsSheet({ galleryId, visible, onClose }: Props) {
+export default function CommentsSheet({ galleryId, visible, onClose, highlightUserId }: Props) {
   const { session } = useAuth();
   const currentUserId = session?.user?.id ?? '';
   const [comments, setComments] = useState<any[]>([]);
@@ -35,7 +36,9 @@ export default function CommentsSheet({ galleryId, visible, onClose }: Props) {
   const [replyingTo, setReplyingTo] = useState<any | null>(null);
   const [replyRefreshKey, setReplyRefreshKey] = useState(0);
   const [expandedCommentId, setExpandedCommentId] = useState<string | null>(null);
+  const [activeHighlightId, setActiveHighlightId] = useState<string | null>(highlightUserId ?? null);
   const inputRef = useRef<any>(null);
+  const listRef = useRef<FlatList>(null);
 
   const load = async () => {
     const data = await fetchComments(galleryId);
@@ -45,6 +48,23 @@ export default function CommentsSheet({ galleryId, visible, onClose }: Props) {
   useEffect(() => {
     if (visible) load();
   }, [visible, galleryId]);
+
+  useEffect(() => {
+    if (activeHighlightId && comments.length > 0) {
+      const index = comments.findIndex(c => c.user_id === activeHighlightId);
+      if (index >= 0) {
+        setTimeout(() => listRef.current?.scrollToIndex({ index, animated: true }), 400);
+      }
+    }
+  }, [activeHighlightId, comments]);
+
+  useEffect(() => {
+    if (!visible) setActiveHighlightId(null);
+  }, [visible]);
+
+  useEffect(() => {
+    if (highlightUserId) setActiveHighlightId(highlightUserId);
+  }, [highlightUserId]);
 
   useEffect(() => {
     setText(editingComment ? (editingComment.content ?? '') : '');
@@ -103,6 +123,7 @@ export default function CommentsSheet({ galleryId, visible, onClose }: Props) {
             </Pressable>
           </View>
           <FlatList
+            ref={listRef}
             data={comments}
             keyExtractor={c => c.id}
             keyboardShouldPersistTaps="handled"
@@ -111,11 +132,15 @@ export default function CommentsSheet({ galleryId, visible, onClose }: Props) {
             refreshing={refreshing}
             onRefresh={onRefresh}
             renderItem={({ item }) => (
+              <View style={{ backgroundColor: item.user_id === activeHighlightId ? '#fff5f5' : 'transparent' }}>
               <CommentRow
                 comment={item}
                 currentUserId={currentUserId}
                 onEdit={setEditingComment}
-                onReply={setReplyingTo}
+                onReply={(comment) => {
+                  setReplyingTo(comment);
+                  setText('@' + (comment.profile?.username ?? '') + ' ');
+                }}
                 refreshKey={replyRefreshKey}
                 expandedCommentId={expandedCommentId}
                 onDelete={async (c) => {
@@ -123,6 +148,7 @@ export default function CommentsSheet({ galleryId, visible, onClose }: Props) {
                   setComments(prev => prev.filter(x => x.id !== c.id));
                 }}
               />
+              </View>
             )}
             ListEmptyComponent={
               <View style={styles.empty}>

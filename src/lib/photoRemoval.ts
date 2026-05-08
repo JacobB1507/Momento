@@ -30,7 +30,7 @@ export async function requestPhotoRemoval(
   return error ? 'error' : 'ok';
 }
 
-export async function getRemovalRequests(galleryId: string) {
+export async function getRemovalRequests(galleryId: string, currentUserId?: string) {
   const { data: requests, error } = await supabase
     .from('photo_removal_requests')
     .select('id, photo_id, reason, requested_by, created_at')
@@ -40,18 +40,23 @@ export async function getRemovalRequests(galleryId: string) {
 
   const requestorIds = [...new Set(requests.map((r) => r.requested_by))];
   const requestIds = requests.map((r) => r.id);
+  const photoIds = [...new Set(requests.map((r) => r.photo_id))];
 
-  const [{ data: profiles }, { data: votes }] = await Promise.all([
+  const [{ data: profiles }, { data: votes }, { data: photos }, { count: memberCount }] = await Promise.all([
     supabase.from('profiles').select('id, username').in('id', requestorIds),
-    supabase.from('photo_removal_votes').select('request_id, vote').in('request_id', requestIds),
+    supabase.from('photo_removal_votes').select('request_id, user_id, vote').in('request_id', requestIds),
+    supabase.from('gallery_photos').select('id, uploaded_by').in('id', photoIds),
+    supabase.from('gallery_members').select('*', { count: 'exact', head: true }).eq('gallery_id', galleryId),
   ]);
 
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.username]));
-  const voteMap = new Map<string, { yes: number; no: number }>();
+  const photoUploadMap = new Map((photos ?? []).map((p: any) => [p.id, p.uploaded_by]));
+  const voteMap = new Map<string, { yes: number; no: number; voters: Set<string> }>();
   for (const v of votes ?? []) {
-    const entry = voteMap.get(v.request_id) ?? { yes: 0, no: 0 };
+    const entry = voteMap.get(v.request_id) ?? { yes: 0, no: 0, voters: new Set<string>() };
     if (v.vote) entry.yes += 1;
     else entry.no += 1;
+    entry.voters.add(v.user_id);
     voteMap.set(v.request_id, entry);
   }
 
@@ -63,6 +68,9 @@ export async function getRemovalRequests(galleryId: string) {
     yes_votes: voteMap.get(r.id)?.yes ?? 0,
     no_votes: voteMap.get(r.id)?.no ?? 0,
     created_at: r.created_at,
+    uploaded_by: (photoUploadMap.get(r.photo_id) as string | null) ?? null,
+    user_has_voted: currentUserId ? (voteMap.get(r.id)?.voters.has(currentUserId) ?? false) : false,
+    member_count: memberCount ?? 0,
   }));
 }
 

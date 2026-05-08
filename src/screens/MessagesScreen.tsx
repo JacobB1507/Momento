@@ -57,22 +57,24 @@ export default function MessagesScreen() {
           <Ionicons name="create-outline" size={24} color="#FF6B6B" />
         </TouchableOpacity>
       </View>
-      <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={16} color="#9ca3af" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search messages..."
-          placeholderTextColor="#9ca3af"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          clearButtonMode="while-editing"
-        />
-      </View>
       <FlatList
         data={filteredConversations}
         keyExtractor={(item) => item.id}
         alwaysBounceVertical={true}
         contentContainerStyle={{ flexGrow: 1 }}
+        ListHeaderComponent={
+          <View style={styles.searchContainer}>
+            <Ionicons name="search-outline" size={16} color="#9ca3af" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search messages..."
+              placeholderTextColor="#9ca3af"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              clearButtonMode="while-editing"
+            />
+          </View>
+        }
         renderItem={({ item }) => (
           <ConversationRow
             conversation={item}

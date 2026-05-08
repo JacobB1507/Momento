@@ -40,3 +40,21 @@ export async function markOneRead(notificationId: string): Promise<boolean> {
 
   return !error;
 }
+
+export async function markNotificationUnread(notificationId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: false })
+    .eq('id', notificationId);
+
+  return !error;
+}
+
+export async function deleteNotification(notificationId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .eq('id', notificationId);
+
+  return !error;
+}

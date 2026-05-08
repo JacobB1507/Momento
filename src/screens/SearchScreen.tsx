@@ -1,9 +1,11 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -64,6 +66,8 @@ export default function SearchScreen() {
   const hasNoResults = !isEmpty && (activeTab === 'people' ? people.length === 0 : galleries.length === 0);
 
   return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={{ flex: 1 }}>
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.searchBar}>
         <TextInput
@@ -117,6 +121,8 @@ export default function SearchScreen() {
         />
       )}
     </SafeAreaView>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 

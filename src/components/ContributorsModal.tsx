@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { InviteViaSection } from './InviteViaSection';
@@ -37,6 +38,7 @@ type SearchResult = {
 };
 
 export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerId }: Props) {
+  const navigation = useNavigation<any>();
   const { session } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
@@ -213,7 +215,14 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
             <Text style={styles.modalEmpty}>No members yet.</Text>
           ) : (
             members.map((member) => (
-              <View key={member.user_id} style={styles.memberRow}>
+              <Pressable
+                key={member.user_id}
+                style={styles.memberRow}
+                onPress={() => {
+                  onClose();
+                  navigation.navigate('FriendProfile', { userId: member.user_id, username: member.username ?? 'unknown' });
+                }}
+              >
                 {member.avatar_url ? (
                   <Image source={{ uri: member.avatar_url }} style={styles.memberAvatar} />
                 ) : (
@@ -242,7 +251,7 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
                     <Text style={styles.removeButtonText}>Remove</Text>
                   </Pressable>
                 )}
-              </View>
+              </Pressable>
             ))
           )}
         </ScrollView>

@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF6B6B',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
     shadowColor: '#FF6B6B',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
@@ -132,5 +132,5 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   createButtonActive: { backgroundColor: '#E85555' },
-  createIcon: { fontSize: 28, color: '#fff', fontWeight: '300', lineHeight: 34 },
+  createIcon: { fontSize: 32, color: '#fff', fontWeight: '300', lineHeight: 38 },
 });

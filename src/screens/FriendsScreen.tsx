@@ -1,7 +1,8 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
   Pressable,
   RefreshControl,
@@ -11,7 +12,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../context/AuthContext';
@@ -32,8 +34,12 @@ const COLLAPSED_COUNT = 2;
 
 export default function FriendsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'Friends'>>();
   const { session } = useAuth();
   const userId = session?.user.id ?? '';
+  const listRef = useRef<FlatList>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const highlightConsumed = useRef(false);
 
   const [friends, setFriends] = useState<FriendItem[]>([]);
   const [pending, setPending] = useState<PendingItem[]>([]);
@@ -72,6 +78,16 @@ export default function FriendsScreen() {
       loadData().finally(() => setInitialLoading(false));
     }, []),
   );
+
+  useEffect(() => {
+    if (!highlightConsumed.current && route.params?.highlightRequestId && pending.length > 0) {
+      highlightConsumed.current = true;
+      const index = pending.findIndex(r => r.friendshipId === route.params!.highlightRequestId);
+      if (index >= 0) {
+        setTimeout(() => scrollRef.current?.scrollTo({ y: index * 60, animated: true }), 400);
+      }
+    }
+  }, [route.params?.highlightRequestId, pending]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -144,6 +160,7 @@ export default function FriendsScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
@@ -163,7 +180,7 @@ export default function FriendsScreen() {
               {visibleRequests.map(({ friendshipId, profile }, index) => (
                 <View key={friendshipId}>
                   {index > 0 && <View style={styles.separator} />}
-                  <View style={styles.row}>
+                  <View style={[styles.row, { backgroundColor: friendshipId === route.params?.highlightRequestId ? '#fff5f5' : '#fff' }]}>
                     <AvatarThumb profile={profile} />
                     <Text style={[styles.rowUsername, styles.rowUsernameFlex]} numberOfLines={1}>
                       @{profile.username ?? 'unknown'}
