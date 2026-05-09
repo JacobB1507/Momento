@@ -21,7 +21,7 @@ import type { RootStackParamList } from '../navigation/types';
 import type { Gallery } from '../types/database';
 import { supabase } from '../lib/supabase';
 import { getProfile, uploadAvatar } from '../lib/galleries';
-import { getFriends } from '../lib/friends';
+
 import { GalleryCard, CARD_GAP } from '../components/GalleryCard';
 import { FriendsListModal } from '../components/FriendsListModal';
 
@@ -47,13 +47,22 @@ export default function ProfileScreen() {
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [showFriendsList, setShowFriendsList] = useState(false);
 
+  const loadFriendCount = async () => {
+    if (!user?.id) return;
+    const { count } = await supabase
+      .from('friends')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'accepted')
+      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
+    setFriendCount(count ?? 0);
+  };
+
   const loadProfile = async () => {
     if (!userId) return;
-    const [profile, friends] = await Promise.all([
+    const [profile] = await Promise.all([
       getProfile(userId),
-      getFriends(userId),
     ]);
-    setFriendCount((friends as unknown[]).length);
+    await loadFriendCount();
     if (user?.id) {
       const { data: friendRows } = await supabase
         .from('friends')
@@ -190,6 +199,12 @@ export default function ProfileScreen() {
     loadGalleries();
     loadPhotoCount();
   }, [user?.id]));
+
+  useFocusEffect(
+    useCallback(() => {
+      loadFriendCount();
+    }, [user?.id])
+  );
 
   const handleAvatarPress = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();

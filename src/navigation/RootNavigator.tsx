@@ -1,11 +1,17 @@
-import React, { useEffect } from 'react';
-import { ActivityIndicator, Alert, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert } from 'react-native';
+import SplashScreen from '../screens/SplashScreen';
+import UsernameSetupScreen from '../screens/UsernameSetupScreen';
+import ProfileSetupScreen from '../screens/ProfileSetupScreen';
 import { Linking } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
+import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 import SignUpScreen from '../screens/auth/SignUpScreen';
+import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
+import SetupProfileScreen from '../screens/auth/SetupProfileScreen';
 import TabNavigator from './TabNavigator';
 import GalleryDetailScreen from '../screens/GalleryDetailScreen';
 import SettingsScreen from '../screens/SettingsScreen';
@@ -22,6 +28,10 @@ import PhotoViewerScreen from '../screens/PhotoViewerScreen';
 import FriendProfileScreen from '../screens/FriendProfileScreen';
 import ChatScreen from '../screens/ChatScreen';
 import NewMessageScreen from '../screens/NewMessageScreen';
+import MessageRequestsScreen from '../screens/MessageRequestsScreen';
+import ProfilePhotoSetupScreen from '../screens/ProfilePhotoSetupScreen';
+import DeleteAccountScreen from '../screens/DeleteAccountScreen';
+import { supabase } from '../lib/supabase';
 import { resolveInviteCode } from '../lib/friends';
 import type { RootStackParamList } from './types';
 
@@ -29,6 +39,21 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
   const { session, loading } = useAuth();
+  const [profileReady, setProfileReady] = useState(false);
+  const [hasUsername, setHasUsername] = useState(false);
+  const [hasDisplayName, setHasDisplayName] = useState(false);
+
+  useEffect(() => {
+    if (loading) return;
+    if (!session) { setProfileReady(true); return; }
+    setProfileReady(false);
+    supabase.from('profiles').select('username, display_name').eq('id', session.user.id).single()
+      .then(({ data }) => {
+        setHasUsername(!!data?.username);
+        setHasDisplayName(!!data?.display_name);
+        setProfileReady(true);
+      });
+  }, [loading, session]);
 
   useEffect(() => {
     if (!session) return;
@@ -62,12 +87,24 @@ export default function RootNavigator() {
     return () => subscription.remove();
   }, [session]);
 
-  if (loading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#FF6B6B" />
-      </View>
-    );
+  useEffect(() => {
+    const handleVerificationUrl = async (url: string) => {
+      if (!url.includes('token_hash')) return;
+      const parsed = new URL(url);
+      const token_hash = parsed.searchParams.get('token_hash') ?? parsed.hash.match(/token_hash=([^&]+)/)?.[1];
+      const type = parsed.searchParams.get('type') ?? parsed.hash.match(/type=([^&]+)/)?.[1];
+      if (!token_hash || !type) return;
+      await supabase.auth.verifyOtp({ token_hash, type: type as any });
+      await supabase.auth.getSession();
+    };
+
+    Linking.getInitialURL().then(url => { if (url) handleVerificationUrl(url); });
+    const sub = Linking.addEventListener('url', ({ url }) => handleVerificationUrl(url));
+    return () => sub.remove();
+  }, []);
+
+  if (loading || !profileReady) {
+    return <SplashScreen />;
   }
 
   return (
@@ -75,7 +112,17 @@ export default function RootNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
         {session ? (
           <>
-            <Stack.Screen name="MainTabs" component={TabNavigator} />
+            {/* Initial screen: setup if profile incomplete, otherwise main app */}
+            {(!hasUsername || !hasDisplayName) ? (
+              <Stack.Screen name="SetupProfile" component={SetupProfileScreen} />
+            ) : (
+              <Stack.Screen name="MainTabs" component={TabNavigator} />
+            )}
+            {(hasUsername && hasDisplayName) && <Stack.Screen name="SetupProfile" component={SetupProfileScreen} />}
+            {(!hasUsername || !hasDisplayName) && <Stack.Screen name="MainTabs" component={TabNavigator} />}
+            <Stack.Screen name="UsernameSetup" component={UsernameSetupScreen} />
+            <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+
             <Stack.Screen
               name="GalleryDetail"
               component={GalleryDetailScreen}
@@ -143,11 +190,16 @@ export default function RootNavigator() {
             />
             <Stack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />
             <Stack.Screen name="NewMessage" component={NewMessageScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="MessageRequests" component={MessageRequestsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="ProfilePhotoSetup" component={ProfilePhotoSetupScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} options={{ headerShown: false }} />
           </>
         ) : (
           <>
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="SignUp" component={SignUpScreen} />
+            <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ gestureEnabled: false }} />
+            <Stack.Screen name="Login" component={LoginScreen} options={{ animation: 'slide_from_right', gestureEnabled: true }} />
+            <Stack.Screen name="SignUp" component={SignUpScreen} options={{ animation: 'slide_from_right', gestureEnabled: true }} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ animation: 'slide_from_right', gestureEnabled: true }} />
           </>
         )}
       </Stack.Navigator>

@@ -1,0 +1,30 @@
+import { StyleSheet } from 'react-native';
+
+export default StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#fff' },
+  backBtn: { padding: 16, alignSelf: 'flex-start' },
+  backText: { fontSize: 28, color: '#FF6B6B', fontWeight: '300', lineHeight: 32 },
+  container: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 60 },
+  icon: { marginBottom: 20 },
+  heading: { fontSize: 24, fontWeight: '700', color: '#111827', marginBottom: 12, textAlign: 'center' },
+  sub: { fontSize: 15, color: '#6b7280', textAlign: 'center', lineHeight: 22, marginBottom: 40 },
+  email: { fontWeight: '600', color: '#111827' },
+  button: {
+    width: '100%',
+    backgroundColor: '#FF6B6B',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 14,
+  },
+  buttonDisabled: { opacity: 0.55 },
+  buttonText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  notVerifiedText: { color: '#FF3B30', fontSize: 13, marginBottom: 14, textAlign: 'center' },
+  resendText: { color: '#FF6B6B', fontSize: 15, fontWeight: '600' },
+  resendSentText: { color: '#6b7280', fontSize: 14 },
+});

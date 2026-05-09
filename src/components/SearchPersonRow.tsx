@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../lib/supabase';
 import { sendFriendRequest } from '../lib/friends';
@@ -10,7 +10,7 @@ type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type FriendStatus = 'none' | 'pending' | 'friends';
 
 type Props = {
-  user: { id: string; username: string | null; avatar_url: string | null; bio: string | null };
+  user: { id: string; username: string | null; display_name: string | null; avatar_url: string | null; bio: string | null };
   currentUserId: string;
 };
 
@@ -28,20 +28,26 @@ export function SearchPersonRow({ user, currentUserId }: Props) {
   const [status, setStatus] = useState<FriendStatus>('none');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    supabase
-      .from('friends')
-      .select('id, status')
-      .or(
-        `and(sender_id.eq.${currentUserId},receiver_id.eq.${user.id}),` +
-        `and(sender_id.eq.${user.id},receiver_id.eq.${currentUserId})`
-      )
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!data) return;
-        setStatus(data.status === 'accepted' ? 'friends' : 'pending');
-      });
-  }, [user.id, currentUserId]);
+  useFocusEffect(
+    useCallback(() => {
+      supabase
+        .from('friends')
+        .select('id, status')
+        .or(
+          `and(sender_id.eq.${currentUserId},receiver_id.eq.${user.id}),and(sender_id.eq.${user.id},receiver_id.eq.${currentUserId})`
+        )
+        .in('status', ['accepted', 'pending'])
+        .limit(1)
+        .then(({ data }) => {
+          if (!data || data.length === 0) {
+            setStatus('none');
+            return;
+          }
+          const row = data[0];
+          setStatus(row.status === 'accepted' ? 'friends' : 'pending');
+        });
+    }, [user.id, currentUserId])
+  );
 
   const handleAddFriend = async () => {
     if (!user.username) return;
@@ -72,10 +78,8 @@ export function SearchPersonRow({ user, currentUserId }: Props) {
         </View>
       )}
       <View style={styles.info}>
-        <Text style={styles.username}>@{user.username ?? 'unknown'}</Text>
-        {!!user.bio && (
-          <Text style={styles.bio} numberOfLines={1}>{user.bio}</Text>
-        )}
+        <Text style={styles.username}>{user.display_name || user.username || 'unknown'}</Text>
+        <Text style={styles.handle}>@{user.username ?? 'unknown'}</Text>
       </View>
       <Pressable
         style={({ pressed }) => [
@@ -117,8 +121,8 @@ const styles = StyleSheet.create({
   },
   avatarLetter: { color: '#fff', fontSize: 16, fontWeight: '700' },
   info: { flex: 1 },
-  username: { fontSize: 15, fontWeight: '600', color: '#111827' },
-  bio: { fontSize: 13, color: '#9CA3AF', marginTop: 2 },
+  username: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  handle: { fontSize: 12, color: '#9ca3af', marginTop: 1 },
   addButton: {
     backgroundColor: '#FF6B6B',
     borderRadius: 20,

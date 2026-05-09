@@ -8,9 +8,15 @@ export type PhotoViewerPhoto = {
 };
 
 export type RootStackParamList = {
-  Login: undefined;
+  Welcome: undefined;
+  Login: { email?: string } | undefined;
   SignUp: undefined;
   MainTabs: undefined;
+  UsernameSetup: undefined;
+  ProfileSetup: undefined;
+  SetupProfile: undefined;
+  ForgotPassword: undefined;
+  VerifyEmail: { email: string };
   GalleryDetail: { galleryId: string; galleryTitle?: string; openRemovalRequest?: string; openComments?: boolean; highlightUserId?: string };
   PhotoViewer: { photos: PhotoViewerPhoto[]; initialIndex: number; galleryTitle: string };
   Settings: undefined;
@@ -26,6 +32,9 @@ export type RootStackParamList = {
   FriendProfile: { userId: string; username: string };
   Chat: { conversationId: string; otherUserId: string; otherUsername: string };
   NewMessage: undefined;
+  MessageRequests: undefined;
+  DeleteAccount: undefined;
+  ProfilePhotoSetup: undefined;
 };
 
 export type MainTabParamList = {

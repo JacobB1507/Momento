@@ -1,0 +1,56 @@
+import { StyleSheet } from 'react-native';
+
+export const AVATAR_SIZE = 120;
+
+export default StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1, alignItems: 'center', paddingHorizontal: 24, paddingTop: 48, paddingBottom: 40 },
+  logo: { fontSize: 28, fontWeight: '800', color: '#FF6B6B', letterSpacing: -0.5, marginBottom: 32, alignSelf: 'flex-start' },
+  heading: { fontSize: 24, fontWeight: '700', color: '#111827', marginBottom: 6, textAlign: 'center' },
+  sub: { fontSize: 15, color: '#6b7280', textAlign: 'center', marginBottom: 32, lineHeight: 22 },
+  avatarWrapper: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#ccc',
+    marginBottom: 12,
+  },
+  avatar: { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 },
+  avatarPlaceholder: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    backgroundColor: '#e5e7eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  changePhotoText: { color: '#FF6B6B', fontSize: 14, fontWeight: '600', marginBottom: 28 },
+  inputLabel: { alignSelf: 'flex-start', fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
+  input: {
+    width: '100%',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#111827',
+    marginBottom: 32,
+  },
+  saveBtn: {
+    width: '100%',
+    backgroundColor: '#FF6B6B',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 16,
+  },
+  saveBtnDisabled: { opacity: 0.5 },
+  saveBtnText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  skipText: { color: '#9ca3af', fontSize: 15 },
+});

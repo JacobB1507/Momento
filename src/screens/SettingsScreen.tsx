@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
@@ -67,6 +67,29 @@ export default function SettingsScreen() {
         >
           <Text style={styles.signOutText}>Sign Out</Text>
         </Pressable>
+      </View>
+
+      <View style={{ marginTop: 60, marginHorizontal: 16 }}>
+        <View style={{ height: 1, backgroundColor: '#333' }} />
+        <TouchableOpacity
+          style={{ marginTop: 40, alignItems: 'center' }}
+          onPress={() =>
+            Alert.alert(
+              'Delete Account',
+              'This will permanently delete your account and all your data. This cannot be undone.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Continue',
+                  style: 'destructive',
+                  onPress: () => navigation.navigate('DeleteAccount' as never),
+                },
+              ],
+            )
+          }
+        >
+          <Text style={{ color: '#EF4444', fontSize: 16, fontWeight: '600' }}>Delete Account</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );

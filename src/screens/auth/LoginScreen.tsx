@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,19 +11,28 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
-import type { LoginNavigationProp } from '../../navigation/types';
+import type { LoginNavigationProp, RootStackParamList } from '../../navigation/types';
 
 type Props = { navigation: LoginNavigationProp };
 
 export default function LoginScreen({ navigation }: Props) {
-  const [email, setEmail] = useState('');
+  const route = useRoute<RouteProp<RootStackParamList, 'Login'>>();
+  const [email, setEmail] = useState((route.params as any)?.email ?? '');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
+  const clearErrors = () => { setEmailError(''); setPasswordError(''); };
 
   const handleLogin = async () => {
+    clearErrors();
     if (!email.trim() || !password) {
-      Alert.alert('Missing fields', 'Please enter your email and password.');
+      if (!email.trim()) setEmailError('Please enter your email address.');
+      else setPasswordError('Please enter your password.');
       return;
     }
     setLoading(true);
@@ -33,7 +41,22 @@ export default function LoginScreen({ navigation }: Props) {
       password,
     });
     setLoading(false);
-    if (error) Alert.alert('Login failed', error.message);
+    if (error) {
+      if (error.code === 'invalid_credentials' || error.message?.toLowerCase().includes('invalid login credentials')) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', email.trim())
+          .maybeSingle();
+        if (!profile) {
+          setEmailError('No account found with this email.');
+        } else {
+          setPasswordError('Incorrect password.');
+        }
+      } else {
+        setEmailError(error.message);
+      }
+    }
   };
 
   return (
@@ -60,12 +83,13 @@ export default function LoginScreen({ navigation }: Props) {
 
             <View style={styles.field}>
               <Text style={styles.label}>Email</Text>
+              {!!emailError && <Text style={styles.fieldError}>{emailError}</Text>}
               <TextInput
                 style={styles.input}
                 placeholder="you@example.com"
                 placeholderTextColor="#9CA3AF"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={v => { setEmail(v); clearErrors(); }}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -76,12 +100,13 @@ export default function LoginScreen({ navigation }: Props) {
 
             <View style={styles.field}>
               <Text style={styles.label}>Password</Text>
+              {!!passwordError && <Text style={styles.fieldError}>{passwordError}</Text>}
               <TextInput
                 style={styles.input}
                 placeholder="••••••••"
                 placeholderTextColor="#9CA3AF"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={v => { setPassword(v); clearErrors(); }}
                 secureTextEntry
                 autoComplete="current-password"
                 returnKeyType="done"
@@ -99,6 +124,10 @@ export default function LoginScreen({ navigation }: Props) {
               ) : (
                 <Text style={styles.buttonText}>Log In</Text>
               )}
+            </Pressable>
+
+            <Pressable onPress={() => navigation.navigate('ForgotPassword')} style={{ alignItems: 'center', marginTop: 16 }}>
+              <Text style={styles.link}>Forgot password?</Text>
             </Pressable>
 
             <View style={styles.switchRow}>
@@ -197,4 +226,5 @@ const styles = StyleSheet.create({
   },
   switchText: { color: '#6B7280', fontSize: 15 },
   link: { color: '#FF6B6B', fontSize: 15, fontWeight: '600' },
+  fieldError: { color: '#FF3B30', fontSize: 13, marginBottom: 6 },
 });

@@ -97,7 +97,8 @@ export function GalleryCard({
   );
 
   const knownIds = new Set([...(friendIds ?? []), ...(currentUserId ? [currentUserId] : [])]);
-  const showBubbles = contributors.some(c => knownIds.has(c.user_id));
+  const isPublic = gallery.privacy === 'public';
+  const showBubbles = isPublic || contributors.some(c => knownIds.has(c.user_id));
 
   const visible = contributors.slice(0, MAX_VISIBLE);
   const overflow = contributors.length - MAX_VISIBLE;
@@ -206,16 +207,14 @@ export function GalleryCard({
             )}
           </>
         )}
-        {(gallery as any).comment_count > 0 && (
-          <Pressable
-            style={styles.commentRow}
-            onPress={() => { setShowComments(true); onCommentPress?.(); }}
-            hitSlop={4}
-          >
-            <Ionicons name="chatbubble-outline" size={14} color="#6b7280" />
-            <Text style={styles.commentCount}>{(gallery as any).comment_count}</Text>
-          </Pressable>
-        )}
+        <Pressable
+          style={styles.commentRow}
+          onPress={() => { setShowComments(true); onCommentPress?.(); }}
+          hitSlop={4}
+        >
+          <Ionicons name="chatbubble-outline" size={14} color="#6b7280" />
+          <Text style={styles.commentCount}>{(gallery as any).comment_count ?? 0}</Text>
+        </Pressable>
       </View>
     </Pressable>
     <CommentsSheet galleryId={gallery.id} visible={showComments} onClose={() => setShowComments(false)} />

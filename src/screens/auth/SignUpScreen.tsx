@@ -22,8 +22,15 @@ export default function SignUpScreen({ navigation }: Props) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [generalError, setGeneralError] = useState('');
+  const [sent, setSent] = useState(false);
 
   const handleSignUp = async () => {
+    setEmailError('');
+    setPasswordError('');
+    setGeneralError('');
     if (!email.trim() || !password || !confirmPassword) {
       Alert.alert('Missing fields', 'Please fill in all fields.');
       return;
@@ -33,23 +40,37 @@ export default function SignUpScreen({ navigation }: Props) {
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Weak password', 'Password must be at least 6 characters.');
+      setPasswordError('Password must be at least 6 characters.');
       return;
     }
     setLoading(true);
+    const { error: probeError } = await supabase.auth.signInWithPassword({ email: email.trim(), password: 'probe' });
+    if (
+      probeError?.message?.toLowerCase().includes('invalid login credentials') ||
+      probeError?.message?.toLowerCase().includes('invalid credentials')
+    ) {
+      // Account doesn't exist — proceed with sign up
+    } else if (!probeError) {
+      setLoading(false);
+      return;
+    } else {
+      setLoading(false);
+      setEmailError('An account with this email already exists.');
+      return;
+    }
     const { error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
     });
     setLoading(false);
-    if (error) {
-      Alert.alert('Sign up failed', error.message);
+    if (error?.message?.toLowerCase().includes('already registered')) {
+      setEmailError('An account with this email already exists.');
+    } else if (error?.message?.toLowerCase().includes('password')) {
+      setPasswordError('Password must be at least 6 characters.');
+    } else if (error) {
+      setGeneralError(error.message);
     } else {
-      Alert.alert(
-        'Check your email',
-        'We sent you a confirmation link. Please verify your email before logging in.',
-        [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
-      );
+      setSent(true);
     }
   };
 
@@ -75,62 +96,75 @@ export default function SignUpScreen({ navigation }: Props) {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Create account</Text>
 
-            <View style={styles.field}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="you@example.com"
-                placeholderTextColor="#9CA3AF"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                autoComplete="email"
-                returnKeyType="next"
-              />
-            </View>
+            {sent ? (
+              <View style={styles.successBox}>
+                <Text style={styles.successText}>Account created! Check your email for a verification link.</Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.field}>
+                  <Text style={styles.label}>Email</Text>
+                  {!!emailError && <Text style={styles.fieldError}>{emailError}</Text>}
+                  <TextInput
+                    style={styles.input}
+                    placeholder="you@example.com"
+                    placeholderTextColor="#9CA3AF"
+                    value={email}
+                    onChangeText={v => { setEmail(v); setEmailError(''); }}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    autoComplete="email"
+                    returnKeyType="next"
+                  />
+                </View>
 
-            <View style={styles.field}>
-              <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="At least 6 characters"
-                placeholderTextColor="#9CA3AF"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                autoComplete="new-password"
-                returnKeyType="next"
-              />
-            </View>
+                <View style={styles.field}>
+                  <Text style={styles.label}>Password</Text>
+                  {!!passwordError && <Text style={styles.fieldError}>{passwordError}</Text>}
+                  <TextInput
+                    style={styles.input}
+                    placeholder="At least 6 characters"
+                    placeholderTextColor="#9CA3AF"
+                    value={password}
+                    onChangeText={v => { setPassword(v); setPasswordError(''); }}
+                    secureTextEntry
+                    autoComplete="off"
+                    textContentType="oneTimeCode"
+                    passwordRules=""
+                    returnKeyType="next"
+                  />
+                </View>
 
-            <View style={styles.field}>
-              <Text style={styles.label}>Confirm Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="••••••••"
-                placeholderTextColor="#9CA3AF"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry
-                autoComplete="new-password"
-                returnKeyType="done"
-                onSubmitEditing={handleSignUp}
-              />
-            </View>
+                <View style={styles.field}>
+                  <Text style={styles.label}>Confirm Password</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="••••••••"
+                    placeholderTextColor="#9CA3AF"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry
+                    autoComplete="new-password"
+                    returnKeyType="done"
+                    onSubmitEditing={handleSignUp}
+                  />
+                </View>
 
-            <Pressable
-              style={({ pressed }) => [styles.button, pressed && styles.buttonPressed, loading && styles.buttonDisabled]}
-              onPress={handleSignUp}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Create Account</Text>
-              )}
-            </Pressable>
+                {!!generalError && <Text style={styles.generalError}>{generalError}</Text>}
+                <Pressable
+                  style={({ pressed }) => [styles.button, pressed && styles.buttonPressed, loading && styles.buttonDisabled]}
+                  onPress={handleSignUp}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Create Account</Text>
+                  )}
+                </Pressable>
+              </>
+            )}
 
             <View style={styles.switchRow}>
               <Text style={styles.switchText}>Already have an account? </Text>
@@ -139,6 +173,7 @@ export default function SignUpScreen({ navigation }: Props) {
               </Pressable>
             </View>
           </View>
+
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -228,4 +263,22 @@ const styles = StyleSheet.create({
   },
   switchText: { color: '#6B7280', fontSize: 15 },
   link: { color: '#FF6B6B', fontSize: 15, fontWeight: '600' },
+  fieldError: { color: '#FF3B30', fontSize: 13, marginBottom: 8 },
+  generalError: { color: '#FF3B30', fontSize: 13, marginBottom: 12, textAlign: 'center' },
+
+  successBox: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#86EFAC',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    marginBottom: 24,
+  },
+  successText: {
+    color: '#166534',
+    fontSize: 15,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
 });

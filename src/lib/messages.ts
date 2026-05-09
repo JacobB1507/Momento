@@ -24,7 +24,12 @@ export async function fetchConversations(userId: string): Promise<Conversation[]
     .order('last_message_at', { ascending: false });
 
   if (error) throw error;
-  return data ?? [];
+  const filtered = (data ?? []).filter(c => {
+    if (c.participant_1 === userId && c.cleared_by_1) return false;
+    if (c.participant_2 === userId && c.cleared_by_2) return false;
+    return true;
+  });
+  return filtered;
 }
 
 export async function fetchMessages(conversationId: string): Promise<Message[]> {
@@ -91,15 +96,73 @@ export async function createConversation(
   return created;
 }
 
-export async function requestMessagePermission(
-  requesterId: string,
-  targetUserId: string,
-): Promise<void> {
-  const { error } = await supabase
+export async function requestMessagePermission(requesterId: string, targetUserId: string, messagePreview?: string): Promise<any> {
+  const { data: existing } = await supabase
     .from('message_requests')
-    .insert({ requester_id: requesterId, target_user_id: targetUserId, status: 'pending' });
+    .select('*')
+    .eq('requester_id', requesterId)
+    .eq('target_user_id', targetUserId)
+    .single();
+
+  if (existing) return existing;
+
+  const { data, error } = await supabase
+    .from('message_requests')
+    .insert({
+      requester_id: requesterId,
+      target_user_id: targetUserId,
+      status: 'pending',
+      message_preview: messagePreview ?? null,
+    })
+    .select('*')
+    .single();
 
   if (error) throw error;
+  return data;
+}
+
+export async function sendMessageRequest(
+  requesterId: string,
+  targetUserId: string,
+  messageContent: string
+): Promise<{ conversation: any; request: any }> {
+  const conversation = await createConversation(requesterId, targetUserId);
+  await sendMessage(conversation.id, requesterId, messageContent);
+  const request = await requestMessagePermission(requesterId, targetUserId, messageContent);
+  return { conversation, request };
+}
+
+export async function fetchMessageRequests(userId: string): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('message_requests')
+    .select('*')
+    .eq('target_user_id', userId)
+    .eq('status', 'pending');
+
+  if (error) throw error;
+
+  const requesterIds = (data ?? []).map(r => r.requester_id);
+  if (requesterIds.length === 0) return [];
+
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url')
+    .in('id', requesterIds);
+
+  const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.id, p]));
+  return (data ?? []).map(r => ({ ...r, profile: profileMap[r.requester_id] }));
+}
+
+export async function respondToMessageRequest(requestId: string, accept: boolean, requesterId: string, targetUserId: string): Promise<any> {
+  await supabase
+    .from('message_requests')
+    .update({ status: accept ? 'accepted' : 'declined' })
+    .eq('id', requestId);
+
+  if (accept) {
+    return await createConversation(targetUserId, requesterId);
+  }
+  return null;
 }
 
 export async function editMessage(messageId: string, newContent: string): Promise<void> {
@@ -137,4 +200,23 @@ export async function sendImageMessage(conversationId: string, senderId: string,
 export async function canEditOrDelete(createdAt: string): Promise<boolean> {
   const diff = Date.now() - new Date(createdAt).getTime();
   return diff <= 2 * 60 * 1000;
+}
+
+export async function clearConversationForUser(conversationId: string, userId: string): Promise<void> {
+  const { data: convo } = await supabase
+    .from('conversations')
+    .select('participant_1, participant_2')
+    .eq('id', conversationId)
+    .single();
+
+  if (!convo) return;
+
+  const field = convo.participant_1 === userId ? 'cleared_by_1' : 'cleared_by_2';
+
+  const { error } = await supabase
+    .from('conversations')
+    .update({ [field]: true })
+    .eq('id', conversationId);
+
+  if (error) throw error;
 }

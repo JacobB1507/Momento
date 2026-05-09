@@ -135,3 +135,29 @@ export async function resolveInviteCode(
   if (result === 'sent' || result === 'already_friends') return 'ok';
   return 'error';
 }
+
+export async function getMutualFriends(currentUserId: string, otherUserId: string): Promise<any[]> {
+  const getFriendIds = async (uid: string): Promise<string[]> => {
+    const { data } = await supabase
+      .from('friends')
+      .select('sender_id, receiver_id')
+      .eq('status', 'accepted')
+      .or(`sender_id.eq.${uid},receiver_id.eq.${uid}`);
+    return (data ?? []).map(f => f.sender_id === uid ? f.receiver_id : f.sender_id);
+  };
+
+  const [myFriendIds, theirFriendIds] = await Promise.all([
+    getFriendIds(currentUserId),
+    getFriendIds(otherUserId),
+  ]);
+
+  const mutualIds = myFriendIds.filter(id => theirFriendIds.includes(id));
+  if (mutualIds.length === 0) return [];
+
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url')
+    .in('id', mutualIds);
+
+  return profiles ?? [];
+}

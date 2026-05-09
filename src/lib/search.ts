@@ -4,8 +4,8 @@ export async function searchUsers(query: string, currentUserId: string) {
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, avatar_url, bio')
-      .ilike('username', `%${query}%`)
+      .select('id, username, display_name, avatar_url, bio')
+      .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
       .neq('id', currentUserId)
       .limit(20);
     if (error || !data) return [];

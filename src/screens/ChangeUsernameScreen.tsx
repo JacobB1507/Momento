@@ -46,13 +46,15 @@ export default function ChangeUsernameScreen() {
       return;
     }
 
-    /* if (lastChange) {
+    if (lastChange) {
       const daysSince = (Date.now() - new Date(lastChange).getTime()) / (1000 * 60 * 60 * 24);
       if (daysSince < 30) {
-        Alert.alert('Too soon', 'You can only change your username once every 30 days.');
+        const nextAllowed = new Date(new Date(lastChange).getTime() + 30 * 24 * 60 * 60 * 1000);
+        const formatted = nextAllowed.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        Alert.alert('Too soon', `You can next change your username on ${formatted}.`);
         return;
       }
-    } */
+    }
 
     setSaving(true);
     const { error } = await supabase
