@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Keyboard,
   Pressable,
@@ -11,12 +11,20 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import { searchUsers, searchGalleries } from '../lib/search';
 import { PeopleSearchResults } from '../components/PeopleSearchResults';
 import { GallerySearchResults } from '../components/GallerySearchResults';
+import { SearchRecentPeople } from '../components/SearchRecentPeople';
+import type { RecentSearch } from '../components/SearchRecentPeople';
+import { SearchRecentGalleries } from '../components/SearchRecentGalleries';
 import type { RootStackParamList } from '../navigation/types';
 import type { Gallery } from '../types/database';
+
+const RECENT_KEY = 'momento_recent_searches';
+const MAX_RECENT = 8;
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type Tab = 'people' | 'galleries';
@@ -30,7 +38,80 @@ export default function SearchScreen() {
   const [activeTab, setActiveTab] = useState<Tab>('people');
   const [people, setPeople] = useState<any[]>([]);
   const [galleries, setGalleries] = useState<Gallery[]>([]);
+  const [popularGalleries, setPopularGalleries] = useState<Gallery[]>([]);
+  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
+  const [recentGalleries, setRecentGalleries] = useState<any[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const friendIds: string[] = [];
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('galleries')
+        .select('id, title, cover_photo_url, created_by, created_at, privacy, pinned, comment_count')
+        .eq('privacy', 'public')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      setPopularGalleries(data || []);
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(RECENT_KEY);
+        const parsed = JSON.parse(raw ?? '[]');
+        if (!Array.isArray(parsed)) { setRecentSearches([]); }
+        else if (parsed.length > 0 && typeof parsed[0] === 'string') {
+          AsyncStorage.removeItem(RECENT_KEY);
+          setRecentSearches([]);
+        } else {
+          setRecentSearches(parsed);
+        }
+      } catch {
+        setRecentSearches([]);
+      }
+      try {
+        const stored = await AsyncStorage.getItem('momento_recent_galleries');
+        if (stored) setRecentGalleries(JSON.parse(stored));
+      } catch {}
+    })();
+  }, []);
+
+  const saveRecentQuery = useCallback((term: string) => {
+    const trimmed = term.trim();
+    if (!trimmed) return;
+    setRecentSearches(prev => {
+      const filtered = prev.filter(s => !(s.type === 'query' && s.text === trimmed));
+      const updated: RecentSearch[] = [{ type: 'query', text: trimmed }, ...filtered].slice(0, MAX_RECENT);
+      AsyncStorage.setItem(RECENT_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const saveRecentProfile = useCallback((entry: Extract<RecentSearch, { type: 'profile' }>) => {
+    setRecentSearches(prev => {
+      const filtered = prev.filter(s => !(s.type === 'profile' && s.userId === entry.userId));
+      const updated: RecentSearch[] = [entry, ...filtered].slice(0, MAX_RECENT);
+      AsyncStorage.setItem(RECENT_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const saveRecentGallery = async (gallery: any) => {
+    const updated = [gallery, ...recentGalleries.filter(g => g.id !== gallery.id)].slice(0, 8);
+    setRecentGalleries(updated);
+    await AsyncStorage.setItem('momento_recent_galleries', JSON.stringify(updated));
+  };
+
+  const removeRecent = useCallback((index: number) => {
+    setRecentSearches(prev => {
+      const updated = prev.filter((_, i) => i !== index);
+      AsyncStorage.setItem(RECENT_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
 
   const runSearch = useCallback((text: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -54,11 +135,32 @@ export default function SearchScreen() {
     runSearch(text);
   };
 
+  const handleSubmit = () => {
+    saveRecentQuery(query);
+  };
+
+  const handleRecentQueryTap = (text: string) => {
+    setQuery(text);
+    runSearch(text);
+  };
+
   const handleAddFriend = (_userId: string, _username: string) => {};
+
   const handleNavigate = (userId: string, username: string) => {
+    const found = people.find(p => p.id === userId);
+    saveRecentProfile({
+      type: 'profile',
+      userId,
+      username,
+      displayName: found?.display_name ?? null,
+      avatarUrl: found?.avatar_url ?? null,
+    });
     navigation.navigate('FriendProfile', { userId, username });
   };
+
   const handleGalleryPress = (galleryId: string, galleryTitle: string) => {
+    const item = [...galleries, ...popularGalleries].find(g => g.id === galleryId);
+    if (item) saveRecentGallery(item);
     navigation.navigate('GalleryDetail', { galleryId, galleryTitle });
   };
 
@@ -76,6 +178,7 @@ export default function SearchScreen() {
           placeholderTextColor="#9CA3AF"
           value={query}
           onChangeText={handleChangeText}
+          onSubmitEditing={handleSubmit}
           autoFocus
           autoCapitalize="none"
           autoCorrect={false}
@@ -98,27 +201,47 @@ export default function SearchScreen() {
         ))}
       </View>
 
-      {isEmpty ? (
-        <View style={styles.center}>
-          <Text style={styles.hint}>Search for people or galleries...</Text>
-        </View>
-      ) : hasNoResults ? (
-        <View style={styles.center}>
-          <Text style={styles.hint}>No results found</Text>
-        </View>
-      ) : activeTab === 'people' ? (
+      {isEmpty && activeTab === 'people' && (
+        <SearchRecentPeople
+          recentSearches={recentSearches}
+          onClearAll={() => { setRecentSearches([]); AsyncStorage.removeItem('momento_recent_searches'); }}
+          onRemove={(i) => removeRecent(i)}
+          onQueryTap={handleRecentQueryTap}
+          onProfileTap={(userId, username) => navigation.navigate('FriendProfile', { userId, username })}
+        />
+      )}
+
+      {isEmpty && activeTab === 'galleries' && (
+        <SearchRecentGalleries
+          recentGalleries={recentGalleries}
+          onClearAll={() => { setRecentGalleries([]); AsyncStorage.removeItem('momento_recent_galleries'); }}
+          onGalleryPress={handleGalleryPress}
+          currentUserId={session?.user?.id}
+          friendIds={friendIds}
+        />
+      )}
+
+      {query.trim() !== '' && activeTab === 'people' && (
         <PeopleSearchResults
           results={people}
           onAddFriend={handleAddFriend}
-          onNavigate={handleNavigate}
+          onNavigate={(user) => saveRecentProfile({ type: 'profile', userId: user.userId, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl })}
         />
-      ) : (
+      )}
+
+      {query.trim() !== '' && activeTab === 'galleries' && (
         <GallerySearchResults
           results={galleries}
           onPress={handleGalleryPress}
           currentUserId={currentUserId}
           friendIds={[]}
         />
+      )}
+
+      {query.trim() !== '' && hasNoResults && (
+        <View style={styles.center}>
+          <Text style={styles.hint}>No results found</Text>
+        </View>
       )}
     </SafeAreaView>
       </View>

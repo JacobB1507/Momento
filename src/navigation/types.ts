@@ -35,6 +35,7 @@ export type RootStackParamList = {
   MessageRequests: undefined;
   DeleteAccount: undefined;
   ProfilePhotoSetup: undefined;
+  PrivacyPolicy: undefined;
 };
 
 export type MainTabParamList = {

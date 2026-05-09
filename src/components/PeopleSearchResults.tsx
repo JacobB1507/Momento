@@ -10,13 +10,20 @@ type User = {
   bio: string | null;
 };
 
+type NavigateUser = {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+};
+
 type Props = {
   results: User[];
   onAddFriend: (userId: string, username: string) => void;
-  onNavigate: (userId: string, username: string) => void;
+  onNavigate?: (user: NavigateUser) => void;
 };
 
-export function PeopleSearchResults({ results }: Props) {
+export function PeopleSearchResults({ results, onNavigate }: Props) {
   const { session } = useAuth();
   const currentUserId = session?.user.id ?? '';
 
@@ -28,7 +35,16 @@ export function PeopleSearchResults({ results }: Props) {
       keyboardShouldPersistTaps="handled"
       ItemSeparatorComponent={() => <View style={styles.separator} />}
       renderItem={({ item }) => (
-        <SearchPersonRow user={item} currentUserId={currentUserId} />
+        <SearchPersonRow
+          user={item as any}
+          currentUserId={currentUserId}
+          onPress={onNavigate ? () => onNavigate({
+            userId: item.id,
+            username: item.username ?? 'unknown',
+            displayName: (item as any).display_name ?? null,
+            avatarUrl: item.avatar_url ?? null,
+          }) : undefined}
+        />
       )}
     />
   );

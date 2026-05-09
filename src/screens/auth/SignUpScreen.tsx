@@ -9,8 +9,10 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import type { SignUpNavigationProp } from '../../navigation/types';
@@ -26,11 +28,18 @@ export default function SignUpScreen({ navigation }: Props) {
   const [passwordError, setPasswordError] = useState('');
   const [generalError, setGeneralError] = useState('');
   const [sent, setSent] = useState(false);
+  const [acceptedPolicy, setAcceptedPolicy] = useState(false);
+  const [policyError, setPolicyError] = useState('');
 
   const handleSignUp = async () => {
     setEmailError('');
     setPasswordError('');
     setGeneralError('');
+    setPolicyError('');
+    if (!acceptedPolicy) {
+      setPolicyError('Please accept the Privacy Policy to continue.');
+      return;
+    }
     if (!email.trim() || !password || !confirmPassword) {
       Alert.alert('Missing fields', 'Please fill in all fields.');
       return;
@@ -152,8 +161,30 @@ export default function SignUpScreen({ navigation }: Props) {
                 </View>
 
                 {!!generalError && <Text style={styles.generalError}>{generalError}</Text>}
+
+                <View style={styles.policyRow}>
+                  <TouchableOpacity
+                    style={[styles.checkbox, acceptedPolicy && styles.checkboxChecked]}
+                    onPress={() => { setAcceptedPolicy(v => !v); setPolicyError(''); }}
+                    activeOpacity={0.7}
+                  >
+                    {acceptedPolicy && <Ionicons name="checkmark" size={14} color="#fff" />}
+                  </TouchableOpacity>
+                  <Text style={styles.policyText}>
+                    I agree to the{' '}
+                    <Text style={styles.policyLink} onPress={() => navigation.navigate('PrivacyPolicy')}>
+                      Privacy Policy
+                    </Text>
+                  </Text>
+                </View>
+                {!!policyError && <Text style={styles.fieldError}>{policyError}</Text>}
+
                 <Pressable
-                  style={({ pressed }) => [styles.button, pressed && styles.buttonPressed, loading && styles.buttonDisabled]}
+                  style={({ pressed }) => [
+                    styles.button,
+                    pressed && styles.buttonPressed,
+                    (loading || !acceptedPolicy) && styles.buttonDisabled,
+                  ]}
                   onPress={handleSignUp}
                   disabled={loading}
                 >
@@ -265,6 +296,37 @@ const styles = StyleSheet.create({
   link: { color: '#FF6B6B', fontSize: 15, fontWeight: '600' },
   fieldError: { color: '#FF3B30', fontSize: 13, marginBottom: 8 },
   generalError: { color: '#FF3B30', fontSize: 13, marginBottom: 12, textAlign: 'center' },
+
+  policyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 1.5,
+    borderColor: '#555',
+    borderRadius: 4,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  checkboxChecked: {
+    backgroundColor: '#E91E8C',
+    borderColor: '#E91E8C',
+  },
+  policyText: {
+    color: '#6B7280',
+    fontSize: 14,
+    flex: 1,
+  },
+  policyLink: {
+    color: '#E91E8C',
+    fontWeight: '600',
+  },
 
   successBox: {
     backgroundColor: '#F0FDF4',

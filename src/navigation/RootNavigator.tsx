@@ -31,6 +31,7 @@ import NewMessageScreen from '../screens/NewMessageScreen';
 import MessageRequestsScreen from '../screens/MessageRequestsScreen';
 import ProfilePhotoSetupScreen from '../screens/ProfilePhotoSetupScreen';
 import DeleteAccountScreen from '../screens/DeleteAccountScreen';
+import PrivacyPolicyScreen from '../screens/auth/PrivacyPolicyScreen';
 import { supabase } from '../lib/supabase';
 import { resolveInviteCode } from '../lib/friends';
 import type { RootStackParamList } from './types';
@@ -200,6 +201,7 @@ export default function RootNavigator() {
             <Stack.Screen name="Login" component={LoginScreen} options={{ animation: 'slide_from_right', gestureEnabled: true }} />
             <Stack.Screen name="SignUp" component={SignUpScreen} options={{ animation: 'slide_from_right', gestureEnabled: true }} />
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ animation: 'slide_from_right', gestureEnabled: true }} />
+            <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ animation: 'slide_from_right', gestureEnabled: true }} />
           </>
         )}
       </Stack.Navigator>

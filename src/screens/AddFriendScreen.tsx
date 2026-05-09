@@ -20,6 +20,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Entypo from '@expo/vector-icons/Entypo';
 import { useAuth } from '../context/AuthContext';
 import { sendFriendRequest, createInviteLink } from '../lib/friends';
+import SuggestedFriendsSection from '../components/SuggestedFriendsSection';
 
 type ShareType = 'message' | 'whatsapp' | 'email' | 'more';
 
@@ -163,6 +164,11 @@ export default function AddFriendScreen() {
                 <Text style={styles.shareLabel}>{label}</Text>
               </Pressable>
             ))}
+          </View>
+
+          <Text style={[styles.sectionLabel, { marginTop: 32, paddingTop: 12 }]}>People you may know</Text>
+          <View style={{ marginTop: 8 }}>
+            <SuggestedFriendsSection onFriendAdded={() => {}} />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

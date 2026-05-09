@@ -12,6 +12,7 @@ type FriendStatus = 'none' | 'pending' | 'friends';
 type Props = {
   user: { id: string; username: string | null; display_name: string | null; avatar_url: string | null; bio: string | null };
   currentUserId: string;
+  onPress?: () => void;
 };
 
 const AVATAR = 40;
@@ -23,7 +24,7 @@ function avatarColor(id: string): string {
   return COLORS[h % COLORS.length];
 }
 
-export function SearchPersonRow({ user, currentUserId }: Props) {
+export function SearchPersonRow({ user, currentUserId, onPress }: Props) {
   const navigation = useNavigation<NavProp>();
   const [status, setStatus] = useState<FriendStatus>('none');
   const [loading, setLoading] = useState(false);
@@ -63,12 +64,13 @@ export function SearchPersonRow({ user, currentUserId }: Props) {
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: '#F9FAFB' }]}
-      onPress={() =>
+      onPress={() => {
+        onPress?.();
         navigation.navigate('FriendProfile', {
           userId: user.id,
           username: user.username ?? 'unknown',
-        })
-      }
+        });
+      }}
     >
       {user.avatar_url ? (
         <Image source={{ uri: user.avatar_url }} style={styles.avatar} />
