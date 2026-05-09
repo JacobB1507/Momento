@@ -46,6 +46,7 @@ export default function ProfileScreen() {
   const [bio, setBio] = useState<string | null>(null);
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [showFriendsList, setShowFriendsList] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   const loadFriendCount = async () => {
     if (!user?.id) return;
@@ -195,9 +196,9 @@ export default function ProfileScreen() {
 
   useFocusEffect(useCallback(() => {
     if (!user?.id) return;
-    loadProfile();
-    loadGalleries();
-    loadPhotoCount();
+    Promise.all([loadProfile(), loadGalleries(), loadPhotoCount()]).then(() => {
+      setHasLoadedOnce(true);
+    });
   }, [user?.id]));
 
   useFocusEffect(
@@ -234,6 +235,16 @@ export default function ProfileScreen() {
   };
 
   const placeholderLetter = (username || email).charAt(0).toUpperCase();
+
+  if (!hasLoadedOnce) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color="#FF6B6B" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

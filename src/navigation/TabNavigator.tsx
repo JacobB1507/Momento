@@ -1,6 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { clearDraft } from '../lib/createGalleryDraft';
 import HomeScreen from '../screens/HomeScreen';
 import SearchScreen from '../screens/SearchScreen';
 import CreateScreen from '../screens/CreateScreen';
@@ -8,14 +10,6 @@ import ProfileScreen from '../screens/ProfileScreen';
 import MessagesScreen from '../screens/MessagesScreen';
 
 const Tab = createBottomTabNavigator();
-
-function TabIcon({ focused, icon }: { focused: boolean; icon: string }) {
-  return (
-    <View style={styles.tabItem}>
-      <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>{icon}</Text>
-    </View>
-  );
-}
 
 function CreateTabIcon({ focused }: { focused: boolean }) {
   return (
@@ -40,8 +34,11 @@ export default function TabNavigator() {
       <Tab.Screen
         name="Home"
         component={HomeScreen}
+        listeners={{ focus: () => clearDraft() }}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon="🏠" />,
+          tabBarIcon: ({ focused, color }: { focused: boolean; color: string; size: number }) => (
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={26} color={color} />
+          ),
           tabBarLabel: ({ color }) => (
             <Text allowFontScaling={false} style={{ color, fontSize: 10, textAlign: 'center', flexShrink: 0 }}>
               Home
@@ -52,8 +49,11 @@ export default function TabNavigator() {
       <Tab.Screen
         name="Search"
         component={SearchScreen}
+        listeners={{ focus: () => clearDraft() }}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon="🔍" />,
+          tabBarIcon: ({ focused, color }: { focused: boolean; color: string; size: number }) => (
+            <Ionicons name={focused ? 'search' : 'search-outline'} size={26} color={color} />
+          ),
           tabBarLabel: ({ color }) => (
             <Text allowFontScaling={false} style={{ color, fontSize: 10, textAlign: 'center', flexShrink: 0 }}>
               Search
@@ -67,7 +67,7 @@ export default function TabNavigator() {
         options={{
           tabBarIcon: ({ focused }) => <CreateTabIcon focused={focused} />,
           tabBarLabel: ({ color }) => (
-            <Text style={{ color, fontSize: 10, textAlign: 'center', flexShrink: 0, marginTop: 12 }}>
+            <Text style={{ color, fontSize: 10, textAlign: 'center', flexShrink: 0, marginTop: 8 }}>
               Create
             </Text>
           ),
@@ -76,8 +76,11 @@ export default function TabNavigator() {
       <Tab.Screen
         name="Messages"
         component={MessagesScreen}
+        listeners={{ focus: () => clearDraft() }}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon="💬" />,
+          tabBarIcon: ({ focused, color }: { focused: boolean; color: string; size: number }) => (
+            <Ionicons name={focused ? 'paper-plane' : 'paper-plane-outline'} size={26} color={color} />
+          ),
           tabBarLabel: ({ color }) => (
             <Text allowFontScaling={false} style={{ color, fontSize: 10, textAlign: 'center', flexShrink: 0 }}>
               Messages
@@ -88,8 +91,11 @@ export default function TabNavigator() {
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
+        listeners={{ focus: () => clearDraft() }}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon focused={focused} icon="👤" />,
+          tabBarIcon: ({ focused, color }: { focused: boolean; color: string; size: number }) => (
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={26} color={color} />
+          ),
           tabBarLabel: ({ color }) => (
             <Text allowFontScaling={false} style={{ color, fontSize: 10, textAlign: 'center', flexShrink: 0 }}>
               Profile
@@ -114,9 +120,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 12,
   },
-  tabItem: { alignItems: 'center', gap: 3 },
-  tabIcon: { fontSize: 22, opacity: 0.45 },
-  tabIconActive: { opacity: 1 },
   createButton: {
     width: 52,
     height: 52,

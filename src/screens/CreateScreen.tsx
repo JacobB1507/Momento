@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -11,12 +11,13 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { MainTabParamList } from '../navigation/types';
 import type { GalleryPrivacy } from '../types/database';
+import { getDraft, setDraft } from '../lib/createGalleryDraft';
 
 const PRIVACY_OPTIONS: { value: GalleryPrivacy; label: string; description: string }[] = [
   { value: 'private', label: 'Private', description: 'Only members' },
@@ -27,32 +28,28 @@ const PRIVACY_OPTIONS: { value: GalleryPrivacy; label: string; description: stri
 export default function CreateScreen() {
   const { session } = useAuth();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
-  const [title, setTitle] = useState('');
-  const [privacy, setPrivacy] = useState<GalleryPrivacy>('friends');
+  const [title, setTitle] = useState<string>(getDraft().title);
+  const [privacy, setPrivacy] = useState<GalleryPrivacy>(getDraft().privacy ?? 'friends');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const handleCreate = async () => {
+
+  useFocusEffect(
+    useCallback(() => {
+      const draft = getDraft();
+      setTitle(draft.title);
+      setPrivacy(draft.privacy ?? 'friends');
+    }, [])
+  );
+  const handleCreate = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
 
     Keyboard.dismiss();
-    setLoading(true);
-    setError(null);
-
-    const { data: newGallery, error: dbError } = await supabase
-      .from('galleries')
-      .insert({ title: trimmed, privacy, created_by: session?.user.id })
-      .select('id')
-      .single();
-
-    setLoading(false);
-
-    if (dbError || !newGallery) {
-      setError(dbError?.message ?? 'Failed to create gallery');
-    } else {
-      setTitle('');
-      (navigation as any).navigate('GalleryInviteNew', { galleryId: newGallery.id, galleryTitle: trimmed });
-    }
+    (navigation as any).navigate('GalleryInviteNew', {
+      galleryTitle: trimmed,
+      privacy,
+      pendingCreate: true,
+    });
   };
 
   return (
@@ -75,7 +72,7 @@ export default function CreateScreen() {
           placeholder="Gallery name"
           placeholderTextColor="#9CA3AF"
           value={title}
-          onChangeText={setTitle}
+          onChangeText={(text) => { setTitle(text); setDraft({ title: text }); }}
           autoCapitalize="words"
           returnKeyType="done"
           onSubmitEditing={handleCreate}
@@ -94,7 +91,7 @@ export default function CreateScreen() {
                   selected && styles.privacyOptionSelected,
                   pressed && !selected && styles.privacyOptionPressed,
                 ]}
-                onPress={() => setPrivacy(opt.value)}
+                onPress={() => { setPrivacy(opt.value); setDraft({ privacy: opt.value }); }}
               >
                 <Text style={[styles.privacyOptionLabel, selected && styles.privacyOptionLabelSelected]}>
                   {opt.label}

@@ -57,6 +57,8 @@ export default function ChatScreen() {
   const [pendingRequestId, setRequestId] = useState<string | null>(null);
   const [showChatMenu, setShowChatMenu] = useState(false);
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+  const [mutualFriends, setMutualFriends] = useState<any[]>([]);
+  const [mutualsExpanded, setMutualsExpanded] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -79,6 +81,7 @@ export default function ChatScreen() {
       setOtherUsernameHandle(data?.username ?? '');
       const m = await getMutualFriends(currentUserId, otherUserId);
       setMutuals(m);
+      setMutualFriends(m);
       const { data: existingRequest } = await supabase
         .from('message_requests')
         .select('id, status, requester_id')
@@ -102,12 +105,24 @@ export default function ChatScreen() {
   }, [conversationId]);
 
   useEffect(() => {
-    const interval = setInterval(async () => {
-      const data = await fetchMessages(conversationId);
-      setMessages(data);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    }, 3000);
-    return () => clearInterval(interval);
+    const channel = supabase
+      .channel(`messages:${conversationId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setMessages((prev) => [...prev, payload.new as Message]);
+            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+          } else if (payload.eventType === 'UPDATE') {
+            setMessages((prev) => prev.map((m) => (m.id === payload.new.id ? (payload.new as Message) : m)));
+          } else if (payload.eventType === 'DELETE') {
+            setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [conversationId]);
 
   const onRefresh = useCallback(async () => {
@@ -132,12 +147,58 @@ export default function ChatScreen() {
                 <Text style={{ fontWeight: '700', color: '#9ca3af' }}>{otherUsername?.[0]?.toUpperCase()}</Text>
               </View>
           }
-          <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>{otherUsername}</Text>
+          <View>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>{otherUsername}</Text>
+            {isPending && isReceiver && (
+              mutualFriends.length === 0 ? (
+                <Text style={{ color: '#9CA3AF', fontSize: 12 }}>No mutual friends</Text>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => setMutualsExpanded(v => !v)}
+                  style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}
+                >
+                  <View style={{ flexDirection: 'row', marginRight: 6 }}>
+                    {mutualFriends.slice(0, 3).map((m, i) => (
+                      <View key={m.id} style={{ width: 20, height: 20, borderRadius: 10, overflow: 'hidden', borderWidth: 1.5, borderColor: 'white', marginLeft: i === 0 ? 0 : -6, zIndex: 3 - i }}>
+                        {m.avatar_url
+                          ? <Image source={{ uri: m.avatar_url }} style={{ width: 20, height: 20 }} />
+                          : <View style={{ width: 20, height: 20, backgroundColor: '#FF6B6B', alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ color: 'white', fontSize: 8, fontWeight: '700' }}>{(m.display_name || m.username || '?')[0].toUpperCase()}</Text>
+                            </View>
+                        }
+                      </View>
+                    ))}
+                  </View>
+                  <Text style={{ color: '#9CA3AF', fontSize: 12 }}>
+                    {mutualFriends.length} mutual friend{mutualFriends.length !== 1 ? 's' : ''}
+                  </Text>
+                  <Ionicons name={mutualsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color="#9CA3AF" style={{ marginLeft: 4 }} />
+                </TouchableOpacity>
+              )
+            )}
+          </View>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowChatMenu(v => !v)} hitSlop={12} style={{ marginLeft: 'auto' }}>
           <Ionicons name="ellipsis-horizontal" size={22} color="#111827" />
         </TouchableOpacity>
       </View>
+      {isPending && isReceiver && mutualsExpanded && mutualFriends.length > 0 && (
+        <View style={{ backgroundColor: 'white', borderRadius: 10, padding: 8, marginHorizontal: 12, marginTop: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}>
+          {mutualFriends.map(m => (
+            <View key={m.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6 }}>
+              <View style={{ width: 28, height: 28, borderRadius: 14, overflow: 'hidden', marginRight: 8 }}>
+                {m.avatar_url
+                  ? <Image source={{ uri: m.avatar_url }} style={{ width: 28, height: 28 }} />
+                  : <View style={{ width: 28, height: 28, backgroundColor: '#FF6B6B', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ color: 'white', fontSize: 10, fontWeight: '700' }}>{(m.display_name || m.username || '?')[0].toUpperCase()}</Text>
+                    </View>
+                }
+              </View>
+              <Text style={{ fontSize: 13, color: '#1F2937', fontWeight: '500' }}>{m.display_name || m.username}</Text>
+            </View>
+          ))}
+        </View>
+      )}
       {showChatMenu && (
         <>
           <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 998 }} onPress={() => setShowChatMenu(false)} />

@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchReplies } from '../lib/comments';
-import CommentRow from './CommentRow';
 
 type Props = {
   parentId: string;
@@ -14,9 +13,10 @@ type Props = {
   onReply: (comment: any) => void;
   refreshKey?: number;
   forceExpanded?: boolean;
+  renderComment: (comment: any, isReply: boolean) => React.ReactNode;
 };
 
-export default function CommentReplies({ parentId, replyCount, galleryId, currentUserId, onReplyEdit, onReplyDelete, onReply, refreshKey, forceExpanded }: Props) {
+export default function CommentReplies({ parentId, replyCount, galleryId, currentUserId, onReplyEdit, onReplyDelete, onReply, refreshKey, forceExpanded, renderComment }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [replies, setReplies] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,13 +63,7 @@ export default function CommentReplies({ parentId, replyCount, galleryId, curren
       ) : (
         replies.map(reply => (
           <View key={reply.id} style={styles.replyIndent}>
-            <CommentRow
-              comment={reply}
-              currentUserId={currentUserId}
-              onEdit={onReplyEdit}
-              onDelete={() => onReplyDelete(reply.id)}
-              onReply={onReply}
-            />
+            {renderComment(reply, true)}
           </View>
         ))
       )}

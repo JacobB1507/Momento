@@ -23,6 +23,7 @@ type Props = {
   onReply: (comment: any) => void;
   refreshKey?: number;
   expandedCommentId?: string | null;
+  isReply?: boolean;
 };
 
 function relativeTime(iso: string): string {
@@ -95,6 +96,18 @@ export default function CommentRow({ comment, currentUserId, onEdit, onDelete, o
       onReply={onReply}
       refreshKey={refreshKey}
       forceExpanded={expandedCommentId === comment.id}
+      renderComment={(reply, isReply) => (
+        <CommentRow
+          comment={reply}
+          isReply={isReply}
+          currentUserId={currentUserId}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onReply={onReply}
+          refreshKey={refreshKey}
+          expandedCommentId={expandedCommentId}
+        />
+      )}
     />
     </>
   );

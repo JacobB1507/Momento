@@ -36,7 +36,7 @@ export type RootStackParamList = {
   DeleteAccount: undefined;
   ProfilePhotoSetup: undefined;
   PrivacyPolicy: undefined;
-  GalleryInviteNew: { galleryId: string; galleryTitle: string };
+  GalleryInviteNew: { galleryId?: string; galleryTitle: string; privacy?: string; pendingCreate?: boolean };
   TrustedFriends: undefined;
 };
 

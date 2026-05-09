@@ -1,5 +1,6 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity, RefreshControl, TextInput, Pressable, Image } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -20,6 +21,14 @@ export default function MessagesScreen() {
   const [messageRequests, setMessageRequests] = useState<any[]>([]);
   const [requestsExpanded, setRequestsExpanded] = useState(false);
   const [pendingSentIds, setPendingSentIds] = useState<Set<string>>(new Set());
+  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    AsyncStorage.getItem(`momento_pinned_convs_${user.id}`).then(stored => {
+      if (stored) setPinnedIds(JSON.parse(stored));
+    });
+  }, [user?.id]);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -84,6 +93,22 @@ export default function MessagesScreen() {
     navigation.navigate('Chat', { conversationId: convo.id, otherUserId: r.requester_id, otherUsername: name, isPendingRequest: true });
   };
 
+  const togglePin = async (otherId: string) => {
+    if (pinnedIds.includes(otherId)) {
+      const updated = pinnedIds.filter(id => id !== otherId);
+      setPinnedIds(updated);
+      await AsyncStorage.setItem(`momento_pinned_convs_${user!.id}`, JSON.stringify(updated));
+    } else {
+      if (pinnedIds.length >= 3) {
+        Alert.alert('Maximum pins reached', 'You can only pin up to 3 conversations.');
+        return;
+      }
+      const updated = [otherId, ...pinnedIds];
+      setPinnedIds(updated);
+      await AsyncStorage.setItem(`momento_pinned_convs_${user!.id}`, JSON.stringify(updated));
+    }
+  };
+
   const handleClearConversation = (conversation: any) => {
     const otherUsername = conversation.otherUsername ?? 'this conversation';
     Alert.alert(
@@ -103,9 +128,17 @@ export default function MessagesScreen() {
     );
   };
 
-  const filteredConversations = conversations.filter(item =>
-    (item.otherUsername ?? '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredConversations = conversations
+    .filter(item => (item.otherUsername ?? '').toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => {
+      const aOtherId = a.participant_1 === user?.id ? a.participant_2 : a.participant_1;
+      const bOtherId = b.participant_1 === user?.id ? b.participant_2 : b.participant_1;
+      const aPinned = pinnedIds.includes(aOtherId);
+      const bPinned = pinnedIds.includes(bOtherId);
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
+      return 0;
+    });
 
   const RequestsHeader = messageRequests.length > 0 ? (
     <View>
@@ -195,11 +228,25 @@ export default function MessagesScreen() {
                 </Pressable>
               )}
             >
-              <Pressable onLongPress={() => handleClearConversation(item)} delayLongPress={400}>
+              <Pressable
+                onLongPress={() => {
+                  const alreadyPinned = pinnedIds.includes(otherId);
+                  Alert.alert(
+                    alreadyPinned ? 'Unpin conversation' : 'Pin conversation',
+                    undefined,
+                    [
+                      { text: alreadyPinned ? 'Unpin' : 'Pin', onPress: () => togglePin(otherId) },
+                      { text: 'Cancel', style: 'cancel' },
+                    ]
+                  );
+                }}
+                delayLongPress={400}
+              >
                 <ConversationRow
                   conversation={item}
                   currentUserId={user!.id}
                   customPreview={isPendingSent ? 'Waiting for them to accept your message request...' : undefined}
+                  isPinned={pinnedIds.includes(otherId)}
                   onPress={() => navigation.navigate('Chat', { conversationId: item.id, otherUserId: otherId, otherUsername: item.otherUsername ?? '' })}
                 />
               </Pressable>

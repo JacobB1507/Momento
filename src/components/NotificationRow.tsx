@@ -14,6 +14,9 @@ export type NotificationItem = {
   type: string | null;
   related_id: string | null;
   sender_id: string | null;
+  gallery_cover_photo_url?: string | null;
+  gallery_title?: string | null;
+  gallery_contributor_count?: number;
 };
 
 type Props = {
@@ -108,9 +111,8 @@ export default function NotificationRow({ notification, senderProfileMap, coverM
   const swipeableRef = useRef<any>(null);
 
   const resolveNotificationImage = () => {
-    if (type === 'gallery_invite' || type === 'gallery_photo_added') {
-      return notification.related_id ? coverMap[notification.related_id] ?? null : null;
-    }
+    if (type === 'gallery_invite') return notification.gallery_cover_photo_url ?? null;
+    if (type === 'gallery_photo_added') return notification.related_id ? coverMap[notification.related_id] ?? null : null;
     return senderProfileMap[notification.sender_id ?? '']?.avatar_url ?? null;
   };
   const imageUrl = resolveNotificationImage();
@@ -141,6 +143,10 @@ export default function NotificationRow({ notification, senderProfileMap, coverM
         <View style={styles.avatarWrap}>
           {imageUrl ? (
             <Image source={{ uri: imageUrl }} style={styles.avatar} />
+          ) : type === 'gallery_invite' ? (
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <Ionicons name="images-outline" size={20} color="#9ca3af" />
+            </View>
           ) : (
             <View style={[styles.avatar, styles.avatarFallback]}>
               <Text style={styles.avatarInitial}>{notification.body?.[0]?.toUpperCase() ?? '?'}</Text>
@@ -151,10 +157,20 @@ export default function NotificationRow({ notification, senderProfileMap, coverM
           </View>
         </View>
         <View style={styles.content}>
-          <Text style={styles.body}>
-            <Text style={styles.username}>{displayLabel} </Text>
-            {rest}
-          </Text>
+          {type === 'gallery_invite' ? (
+            <Text style={styles.body}>
+              {'You\'ve been invited to join '}
+              <Text style={{ fontWeight: '600' }}>{notification.gallery_title ?? 'a gallery'}</Text>
+            </Text>
+          ) : (
+            <Text style={styles.body}>
+              <Text style={styles.username}>{displayLabel} </Text>
+              {rest}
+            </Text>
+          )}
+          {type === 'gallery_invite' && !!notification.gallery_contributor_count && (
+            <Text style={styles.time}>{notification.gallery_contributor_count} contributor{notification.gallery_contributor_count === 1 ? '' : 's'}</Text>
+          )}
           <Text style={styles.time}>{timeAgo(created_at)}</Text>
           {type === 'friend_request' && actionState !== 'loading' && (
             actionState === 'pending' ? (

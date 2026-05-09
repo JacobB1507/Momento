@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -18,6 +19,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../lib/supabase';
 import type { RootStackParamList } from '../navigation/types';
+import { clearDraft } from '../lib/createGalleryDraft';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'GalleryInviteNew'>;
@@ -99,9 +101,10 @@ function InviteRow({ item, invitedIds, onInvite, subLabel }: {
 export default function GalleryInviteNewScreen() {
   const navigation = useNavigation<NavProp>();
   const route = useRoute<RouteProps>();
-  const { galleryId, galleryTitle } = route.params;
+  const { galleryId: routeGalleryId, galleryTitle, privacy, pendingCreate } = route.params;
 
   const [currentUserId, setCurrentUserId] = useState('');
+  const [createdGalleryId, setCreatedGalleryId] = useState<string | null>(routeGalleryId ?? null);
   const [inviteCode, setInviteCode] = useState('');
   const [smartSuggestions, setSmartSuggestions] = useState<SmartSuggestion[]>([]);
   const [smartLoading, setSmartLoading] = useState(false);
@@ -109,12 +112,25 @@ export default function GalleryInviteNewScreen() {
   const [existingMemberIds, setExistingMemberIds] = useState<Set<string>>(new Set());
   const [searchText, setSearchText] = useState('');
   const [copied, setCopied] = useState(false);
+  const creatingRef = useRef(false);
 
   useEffect(() => {
-    init();
-  }, [galleryId]);
+    if (pendingCreate && !createdGalleryId) {
+      initUser();
+    } else {
+      init(createdGalleryId!);
+    }
+  }, []);
 
-  const init = async () => {
+  const initUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    setCurrentUserId(user.id);
+    const code = await getOrCreateInviteCode(user.id);
+    setInviteCode(code);
+  };
+
+  const init = async (gid: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setCurrentUserId(user.id);
@@ -125,16 +141,37 @@ export default function GalleryInviteNewScreen() {
     const { data: members } = await supabase
       .from('gallery_members')
       .select('user_id')
-      .eq('gallery_id', galleryId);
+      .eq('gallery_id', gid);
     setExistingMemberIds(new Set((members ?? []).map((m: { user_id: string }) => m.user_id)));
 
     setSmartLoading(true);
     const { data: suggestions } = await supabase.rpc('get_smart_invite_suggestions', {
       uid: user.id,
-      gid: galleryId,
+      gid,
     });
     setSmartSuggestions(suggestions ?? []);
     setSmartLoading(false);
+  };
+
+  const createGallery = async (): Promise<string | null> => {
+    if (createdGalleryId) return createdGalleryId;
+    if (creatingRef.current) return null;
+    creatingRef.current = true;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      const { data, error } = await supabase
+        .from('galleries')
+        .insert({ title: galleryTitle, owner_id: user.id, privacy: privacy ?? 'friends' })
+        .select('id')
+        .single();
+      if (error) throw error;
+      setCreatedGalleryId(data.id);
+      await init(data.id);
+      return data.id;
+    } finally {
+      creatingRef.current = false;
+    }
   };
 
   const getOrCreateInviteCode = async (userId: string): Promise<string> => {
@@ -151,7 +188,9 @@ export default function GalleryInviteNewScreen() {
   };
 
   const handleInvite = async (userId: string) => {
-    await supabase.from('gallery_members').insert({ gallery_id: galleryId, user_id: userId, role: 'member', status: 'pending' });
+    const gid = await createGallery();
+    if (!gid) return;
+    await supabase.from('gallery_members').insert({ gallery_id: gid, user_id: userId, role: 'member', status: 'pending' });
     setInvitedIds(prev => new Set([...prev, userId]));
   };
 
@@ -190,11 +229,37 @@ export default function GalleryInviteNewScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.headerSide} hitSlop={12}>
+        <Pressable
+          onPress={() => {
+            if (createdGalleryId) {
+              Alert.alert(
+                'Leave gallery?',
+                'Your gallery was created. Do you want to leave without inviting anyone?',
+                [
+                  { text: 'Stay', style: 'cancel' },
+                  { text: 'Leave', style: 'destructive', onPress: () => navigation.goBack() },
+                ]
+              );
+            } else {
+              navigation.goBack();
+            }
+          }}
+          style={styles.headerSide}
+          hitSlop={12}
+        >
           <Text style={styles.headerBack}>✕</Text>
         </Pressable>
         <Text style={styles.headerTitle}>Invite Friends</Text>
-        <Pressable onPress={() => navigation.goBack()} style={[styles.headerSide, styles.headerSideRight]} hitSlop={12}>
+        <Pressable
+          onPress={async () => {
+            const gid = createdGalleryId ?? await createGallery();
+            if (!gid) { navigation.goBack(); return; }
+            clearDraft();
+            navigation.replace('GalleryDetail', { galleryId: gid });
+          }}
+          style={[styles.headerSide, styles.headerSideRight]}
+          hitSlop={12}
+        >
           <Text style={styles.headerDone}>Done</Text>
         </Pressable>
       </View>

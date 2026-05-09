@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 
 function formatTime(iso: string | null): string {
@@ -23,12 +24,14 @@ type Props = {
   conversation: ConversationItem;
   currentUserId: string;
   onPress: () => void;
+  onLongPress?: () => void;
   customPreview?: string;
+  isPinned?: boolean;
 };
 
 type Profile = { username: string | null; display_name: string | null; avatar_url: string | null };
 
-export default function ConversationRow({ conversation, currentUserId, onPress, customPreview }: Props) {
+export default function ConversationRow({ conversation, currentUserId, onPress, onLongPress, customPreview, isPinned }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const otherId =
     conversation.participant_1 !== currentUserId
@@ -49,6 +52,8 @@ export default function ConversationRow({ conversation, currentUserId, onPress, 
     <Pressable
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={400}
     >
       {profile?.avatar_url ? (
         <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
@@ -68,6 +73,7 @@ export default function ConversationRow({ conversation, currentUserId, onPress, 
         </Text>
       </View>
       <View style={styles.right}>
+        {isPinned && <Ionicons name="pin" size={14} color="#FF6B6B" />}
         <Text style={styles.time}>{formatTime(conversation.last_message_at)}</Text>
         {!customPreview && conversation.unread_count > 0 && (
           <View style={styles.badge}>
