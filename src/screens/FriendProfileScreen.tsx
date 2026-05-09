@@ -18,7 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { sendFriendRequest, getMutualFriends, removeFriend } from '../lib/friends';
 import { isTrustedFriend, addTrustedFriend, removeTrustedFriend } from '../lib/trustedFriends';
-import { createConversation, requestMessagePermission } from '../lib/messages';
+import { createConversation, requestMessagePermission, getOrCreateConversation } from '../lib/messages';
 import { GalleryCard } from '../components/GalleryCard';
 import ProfileActionButtons from '../components/ProfileActionButtons';
 import MutualFriendsModal from '../components/MutualFriendsModal';
@@ -112,15 +112,16 @@ export default function FriendProfileScreen() {
   };
 
   const handleMessagePress = async () => {
-    if (!isFriend) {
-      try { await requestMessagePermission(currentUserId, userId); } catch {}
-      Alert.alert('Message request sent', 'Your message request has been sent.');
-      return;
-    }
-    try {
-      const convo = await createConversation(currentUserId, userId);
-      navigation.navigate('Chat', { conversationId: convo.id, otherUserId: userId, otherUsername: profileUsername });
-    } catch {}
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const conv = await getOrCreateConversation(user.id, userId);
+    if (!conv) return;
+    navigation.navigate('Chat', {
+      conversationId: conv.id,
+      otherUserId: userId,
+      otherUsername: profileUsername,
+      isPendingRequest: !isFriend,
+    });
   };
 
   const letter = profileUsername.charAt(0).toUpperCase();

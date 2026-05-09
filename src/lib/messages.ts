@@ -66,6 +66,8 @@ export async function sendMessage(
   return message;
 }
 
+export const getOrCreateConversation = (userA: string, userB: string) => createConversation(userA, userB);
+
 export async function createConversation(
   currentUserId: string,
   otherUserId: string,
@@ -97,14 +99,15 @@ export async function createConversation(
 }
 
 export async function requestMessagePermission(requesterId: string, targetUserId: string, messagePreview?: string): Promise<any> {
-  const { data: existing } = await supabase
+  const { data: oldRequest } = await supabase
     .from('message_requests')
-    .select('*')
-    .eq('requester_id', requesterId)
-    .eq('target_user_id', targetUserId)
-    .single();
+    .select('id')
+    .or(`and(requester_id.eq.${requesterId},target_user_id.eq.${targetUserId}),and(requester_id.eq.${targetUserId},target_user_id.eq.${requesterId})`)
+    .limit(1);
 
-  if (existing) return existing;
+  if (oldRequest && oldRequest.length > 0) {
+    await supabase.from('message_requests').delete().eq('id', oldRequest[0].id);
+  }
 
   const { data, error } = await supabase
     .from('message_requests')
@@ -154,14 +157,29 @@ export async function fetchMessageRequests(userId: string): Promise<any[]> {
 }
 
 export async function respondToMessageRequest(requestId: string, accept: boolean, requesterId: string, targetUserId: string): Promise<any> {
-  await supabase
-    .from('message_requests')
-    .update({ status: accept ? 'accepted' : 'declined' })
-    .eq('id', requestId);
-
   if (accept) {
-    return await createConversation(targetUserId, requesterId);
+    await supabase.from('message_requests').update({ status: 'accepted' }).eq('id', requestId);
+    const { data: conv } = await supabase
+      .from('conversations')
+      .select('*')
+      .or(`and(participant_1.eq.${requesterId},participant_2.eq.${targetUserId}),and(participant_1.eq.${targetUserId},participant_2.eq.${requesterId})`)
+      .limit(1);
+    return conv?.[0] || null;
   }
+
+  await supabase.from('message_requests').update({ status: 'declined' }).eq('id', requestId);
+
+  const { data: convData } = await supabase
+    .from('conversations')
+    .select('id')
+    .or(`and(participant_1.eq.${requesterId},participant_2.eq.${targetUserId}),and(participant_1.eq.${targetUserId},participant_2.eq.${requesterId})`)
+    .limit(1);
+
+  if (convData && convData.length > 0) {
+    await supabase.from('messages').delete().eq('conversation_id', convData[0].id);
+    await supabase.from('conversations').delete().eq('id', convData[0].id);
+  }
+
   return null;
 }
 

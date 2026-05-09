@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -120,7 +121,17 @@ export default function NewMessageScreen() {
           data={filtered}
           keyExtractor={f => f.id}
           renderItem={renderFriend}
-          ListEmptyComponent={<Text style={styles.empty}>No friends found</Text>}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center' }}>
+              <Text style={styles.empty}>No friends found</Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('AddFriend')}
+                style={{ backgroundColor: '#FF6B6B', borderRadius: 8, paddingHorizontal: 20, paddingVertical: 10, marginTop: 12, marginBottom: 20 }}
+              >
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>Add Friends</Text>
+              </TouchableOpacity>
+            </View>
+          }
           ListFooterComponent={requests.length > 0 ? (
             <View>
               <Text style={styles.sectionLabel}>Message Requests</Text>
@@ -157,7 +168,7 @@ const styles = StyleSheet.create({
   avatarPlaceholder: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FF6B6B', alignItems: 'center', justifyContent: 'center' },
   avatarLetter: { color: '#fff', fontSize: 16, fontWeight: '700' },
   username: { fontSize: 15, fontWeight: '600', color: '#111827' },
-  empty: { textAlign: 'center', color: '#9CA3AF', fontSize: 14, marginTop: 40 },
+  empty: { textAlign: 'center', color: '#9CA3AF', fontSize: 14, marginTop: 10 },
   sectionLabel: { fontSize: 12, fontWeight: '600', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 8 },
   acceptBtn: { backgroundColor: '#FF6B6B', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
   acceptText: { color: '#fff', fontSize: 13, fontWeight: '600' },

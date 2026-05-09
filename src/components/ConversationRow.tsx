@@ -23,11 +23,12 @@ type Props = {
   conversation: ConversationItem;
   currentUserId: string;
   onPress: () => void;
+  customPreview?: string;
 };
 
 type Profile = { username: string | null; display_name: string | null; avatar_url: string | null };
 
-export default function ConversationRow({ conversation, currentUserId, onPress }: Props) {
+export default function ConversationRow({ conversation, currentUserId, onPress, customPreview }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const otherId =
     conversation.participant_1 !== currentUserId
@@ -62,13 +63,13 @@ export default function ConversationRow({ conversation, currentUserId, onPress }
         <Text style={styles.username} numberOfLines={1}>
           {profile?.display_name || profile?.username || '…'}
         </Text>
-        <Text style={styles.preview} numberOfLines={1}>
-          {conversation.last_message ?? 'No messages yet'}
+        <Text style={[styles.preview, customPreview ? { fontStyle: 'italic', color: '#9ca3af' } : {}]} numberOfLines={1}>
+          {customPreview ?? conversation.last_message ?? 'No messages yet'}
         </Text>
       </View>
       <View style={styles.right}>
         <Text style={styles.time}>{formatTime(conversation.last_message_at)}</Text>
-        {conversation.unread_count > 0 && (
+        {!customPreview && conversation.unread_count > 0 && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{conversation.unread_count}</Text>
           </View>

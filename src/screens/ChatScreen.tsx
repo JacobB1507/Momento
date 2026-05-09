@@ -10,6 +10,7 @@ import {
   RefreshControl,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,7 +18,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { RouteProp } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
-import { fetchMessages, sendMessage, editMessage, deleteMessage, sendImageMessage, requestMessagePermission, clearConversationForUser } from '../lib/messages';
+import { fetchMessages, sendMessage, editMessage, deleteMessage, sendImageMessage, requestMessagePermission, clearConversationForUser, respondToMessageRequest } from '../lib/messages';
 import { getMutualFriends } from '../lib/friends';
 import type { Message } from '../lib/messages';
 import MessageBubble from '../components/MessageBubble';
@@ -49,8 +50,13 @@ export default function ChatScreen() {
   const [mutuals, setMutuals] = useState<any[]>([]);
   const [otherUsernameHandle, setOtherUsernameHandle] = useState('');
   const [requestSent, setRequestSent] = useState(false);
+  const requestSentRef = useRef(false);
+  const isRequestConversation = useRef(false);
   const [isPending, setIsPending] = useState(route.params?.isPendingRequest ?? false);
+  const [isReceiver, setIsReceiver] = useState(false);
+  const [pendingRequestId, setRequestId] = useState<string | null>(null);
   const [showChatMenu, setShowChatMenu] = useState(false);
+  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -64,6 +70,7 @@ export default function ChatScreen() {
   }, [conversationId]);
 
   useEffect(() => {
+    if (route.params?.isPendingRequest) isRequestConversation.current = true;
     load().finally(() => setLoading(false));
     (async () => {
       const { data } = await supabase.from('profiles').select('avatar_url, username, display_name').eq('id', otherUserId).single();
@@ -74,12 +81,23 @@ export default function ChatScreen() {
       setMutuals(m);
       const { data: existingRequest } = await supabase
         .from('message_requests')
-        .select('id, status')
-        .eq('requester_id', currentUserId)
-        .eq('target_user_id', otherUserId)
+        .select('id, status, requester_id')
+        .or(
+          `and(requester_id.eq.${currentUserId},target_user_id.eq.${otherUserId}),and(requester_id.eq.${otherUserId},target_user_id.eq.${currentUserId})`
+        )
         .eq('status', 'pending')
         .maybeSingle();
-      if (existingRequest) setRequestSent(true);
+      if (existingRequest) {
+        setRequestId(existingRequest.id);
+        if (existingRequest.requester_id === currentUserId) {
+          isRequestConversation.current = true;
+          requestSentRef.current = true;
+          setRequestSent(true);
+        } else {
+          setIsReceiver(true);
+          setIsPending(true);
+        }
+      }
     })();
   }, [conversationId]);
 
@@ -153,7 +171,7 @@ export default function ChatScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         {loading ? (
           <ActivityIndicator style={{ flex: 1 }} color="#FF6B6B" />
-        ) : !loading && messages.length === 0 ? (
+        ) : !loading && messages.length === 0 && !requestSent ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 12 }}>
             {otherAvatar
               ? <Image source={{ uri: otherAvatar }} style={{ width: 80, height: 80, borderRadius: 40 }} />
@@ -176,6 +194,7 @@ export default function ChatScreen() {
             <Text style={{ fontSize: 14, color: '#9ca3af', marginTop: 8 }}>Say hi! Start the conversation 👋</Text>
           </View>
         ) : (
+          <TouchableWithoutFeedback onPress={() => setActiveMessageId(null)}>
           <FlatList
             data={messages}
             keyExtractor={m => m.id}
@@ -185,6 +204,8 @@ export default function ChatScreen() {
                   message={item}
                   currentUserId={currentUserId}
                   isLast={index === messages.length - 1}
+                  activeMessageId={activeMessageId}
+                  setActiveMessageId={setActiveMessageId}
                   onEdit={(msg) => setEditingMessage(msg)}
                   onDelete={async (msg) => {
                     await deleteMessage(msg.id);
@@ -202,9 +223,34 @@ export default function ChatScreen() {
             keyboardShouldPersistTaps="handled"
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF6B6B" />}
           />
+          </TouchableWithoutFeedback>
+        )}
+        {isPending && isReceiver && (
+          <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#E5E7EB', backgroundColor: 'white' }}>
+            <TouchableOpacity
+              onPress={async () => {
+                await respondToMessageRequest(pendingRequestId!, true, otherUserId, currentUserId);
+                setIsPending(false);
+                setIsReceiver(false);
+              }}
+              style={{ flex: 1, backgroundColor: '#22C55E', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ color: 'white', fontSize: 16, fontWeight: '700' }}>Accept</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={async () => {
+                await respondToMessageRequest(pendingRequestId!, false, otherUserId, currentUserId);
+                navigation.goBack();
+              }}
+              style={{ flex: 1, backgroundColor: '#EF4444', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
+            >
+              <Text style={{ color: 'white', fontSize: 16, fontWeight: '700' }}>Decline</Text>
+            </TouchableOpacity>
+          </View>
         )}
         <MessageInputBar
           onSend={async (text) => {
+            if (isRequestConversation.current && (requestSent || requestSentRef.current)) return;
             if (editingMessage) {
               await editMessage(editingMessage.id, text);
               setMessages(prev => prev.map(m => m.id === editingMessage.id ? { ...m, content: text, edited: true } : m));
@@ -216,9 +262,10 @@ export default function ChatScreen() {
               const msg = await sendMessage(conversationId, currentUserId, text);
               setMessages(prev => [...prev, msg]);
               if (isPending && !requestSent) {
-                await requestMessagePermission(currentUserId, otherUserId, text);
+                requestSentRef.current = true;
                 setRequestSent(true);
-                setIsPending(false);
+                await requestMessagePermission(currentUserId, otherUserId, text);
+                navigation.setParams({ _refresh: Date.now() });
               }
             }
           }}
@@ -228,7 +275,7 @@ export default function ChatScreen() {
           }}
           editingMessage={editingMessage}
           onCancelEdit={() => setEditingMessage(null)}
-          disabled={requestSent}
+          disabled={isRequestConversation.current && (requestSent || requestSentRef.current)}
         />
         {requestSent && (
           <View style={{ backgroundColor: '#f3f4f6', paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center' }}>

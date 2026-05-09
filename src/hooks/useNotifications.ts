@@ -159,6 +159,24 @@ export function useNotifications(navigation: any) {
         }
         break;
       }
+      case 'message_request': {
+        const { data: reqData } = await supabase
+          .from('message_requests')
+          .select('id, requester_id, status')
+          .eq('id', notification.related_id)
+          .limit(1);
+        if (!reqData || reqData.length === 0) break;
+        if (reqData[0].status === 'declined') break;
+        const { getOrCreateConversation } = await import('../lib/messages');
+        const conv = await getOrCreateConversation(notification.sender_id, session?.user?.id);
+        navigation.navigate('Chat', {
+          conversationId: conv.id,
+          otherUserId: notification.sender_id,
+          otherUsername: notification.sender_profile?.username || '',
+          isPendingRequest: reqData[0].status === 'pending',
+        });
+        break;
+      }
       default:
         break;
     }

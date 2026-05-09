@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Alert, View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity, RefreshControl, TextInput, Pressable, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Swipeable } from 'react-native-gesture-handler';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import { fetchConversations, fetchMessageRequests, respondToMessageRequest, clearConversationForUser } from '../lib/messages';
 import ConversationRow from '../components/ConversationRow';
 
@@ -18,16 +19,28 @@ export default function MessagesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [messageRequests, setMessageRequests] = useState<any[]>([]);
   const [requestsExpanded, setRequestsExpanded] = useState(false);
+  const [pendingSentIds, setPendingSentIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     if (!user?.id) return;
     try {
-      const [data, requests] = await Promise.all([
+      const [data, requests, sentRes] = await Promise.all([
         fetchConversations(user.id),
         fetchMessageRequests(user.id),
+        supabase.from('message_requests').select('target_user_id').eq('requester_id', user.id).eq('status', 'pending'),
       ]);
-      setConversations(data ?? []);
+      const pendingReceivedUserIds = new Set(
+        (requests ?? [])
+          .filter((r: any) => r.status === 'pending')
+          .map((r: any) => r.requester_id)
+      );
+      const visibleConversations = (data ?? []).filter((c: any) => {
+        const otherId = c.participant_1 === user.id ? c.participant_2 : c.participant_1;
+        return !pendingReceivedUserIds.has(otherId);
+      });
+      setConversations(visibleConversations);
       setMessageRequests(requests ?? []);
+      setPendingSentIds(new Set((sentRes.data ?? []).map((r: any) => r.target_user_id)));
     } catch (e) {
       console.error('fetchConversations error:', e);
     } finally {
@@ -35,8 +48,6 @@ export default function MessagesScreen() {
       setRefreshing(false);
     }
   }, [user?.id]);
-
-  useEffect(() => { load(); }, [load]);
 
   useFocusEffect(
     useCallback(() => {
@@ -59,6 +70,18 @@ export default function MessagesScreen() {
   const handleDecline = async (r: any) => {
     await respondToMessageRequest(r.id, false, r.requester_id, user!.id);
     setMessageRequests(prev => prev.filter(x => x.id !== r.id));
+  };
+
+  const handleRequestTap = async (r: any) => {
+    const { data: convo } = await supabase
+      .from('conversations')
+      .select('id')
+      .or(`and(participant_1.eq.${r.requester_id},participant_2.eq.${user!.id}),and(participant_1.eq.${user!.id},participant_2.eq.${r.requester_id})`)
+      .maybeSingle();
+    if (!convo) return;
+    const profile = r.profile ?? {};
+    const name = profile.display_name || profile.username || '';
+    navigation.navigate('Chat', { conversationId: convo.id, otherUserId: r.requester_id, otherUsername: name, isPendingRequest: true });
   };
 
   const handleClearConversation = (conversation: any) => {
@@ -101,7 +124,7 @@ export default function MessagesScreen() {
         const name = profile.display_name || profile.username || 'Unknown';
         const avatar = profile.avatar_url;
         return (
-          <View key={r.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', gap: 12 }}>
+          <Pressable key={r.id} onPress={() => handleRequestTap(r)} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', gap: 12 }}>
             {avatar
               ? <Image source={{ uri: avatar }} style={{ width: 44, height: 44, borderRadius: 22 }} />
               : <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#f0f0f0', alignItems: 'center', justifyContent: 'center' }}>
@@ -120,7 +143,7 @@ export default function MessagesScreen() {
                 <Ionicons name="close" size={20} color="#ef4444" />
               </Pressable>
             </View>
-          </View>
+          </Pressable>
         );
       })}
     </View>
@@ -157,30 +180,32 @@ export default function MessagesScreen() {
             </View>
           </View>
         }
-        renderItem={({ item }) => (
-          <Swipeable
-            renderRightActions={() => (
-              <Pressable
-                style={{ backgroundColor: '#ef4444', justifyContent: 'center', alignItems: 'center', width: 80 }}
-                onPress={() => handleClearConversation(item)}
-              >
-                <Ionicons name="trash-outline" size={22} color="#fff" />
-                <Text style={{ color: '#fff', fontSize: 11, marginTop: 4 }}>Delete</Text>
+        renderItem={({ item }) => {
+          const otherId = item.participant_1 === user?.id ? item.participant_2 : item.participant_1;
+          const isPendingSent = pendingSentIds.has(otherId);
+          return (
+            <Swipeable
+              renderRightActions={() => (
+                <Pressable
+                  style={{ backgroundColor: '#ef4444', justifyContent: 'center', alignItems: 'center', width: 80 }}
+                  onPress={() => handleClearConversation(item)}
+                >
+                  <Ionicons name="trash-outline" size={22} color="#fff" />
+                  <Text style={{ color: '#fff', fontSize: 11, marginTop: 4 }}>Delete</Text>
+                </Pressable>
+              )}
+            >
+              <Pressable onLongPress={() => handleClearConversation(item)} delayLongPress={400}>
+                <ConversationRow
+                  conversation={item}
+                  currentUserId={user!.id}
+                  customPreview={isPendingSent ? 'Waiting for them to accept your message request...' : undefined}
+                  onPress={() => navigation.navigate('Chat', { conversationId: item.id, otherUserId: otherId, otherUsername: item.otherUsername ?? '' })}
+                />
               </Pressable>
-            )}
-          >
-            <Pressable onLongPress={() => handleClearConversation(item)} delayLongPress={400}>
-              <ConversationRow
-                conversation={item}
-                currentUserId={user!.id}
-                onPress={() => {
-                  const otherUserId = item.participant_1 === user!.id ? item.participant_2 : item.participant_1;
-                  navigation.navigate('Chat', { conversationId: item.id, otherUserId, otherUsername: item.otherUsername ?? '' });
-                }}
-              />
-            </Pressable>
-          </Swipeable>
-        )}
+            </Swipeable>
+          );
+        }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF6B6B" />}
         ListEmptyComponent={
           <View style={styles.empty}>

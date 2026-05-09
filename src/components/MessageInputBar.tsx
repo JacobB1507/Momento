@@ -8,9 +8,10 @@ type Props = {
   onSendImage: (uri: string) => void;
   editingMessage: any | null;
   onCancelEdit: () => void;
+  disabled?: boolean;
 };
 
-export default function MessageInputBar({ onSend, onSendImage, editingMessage, onCancelEdit }: Props) {
+export default function MessageInputBar({ onSend, onSendImage, editingMessage, onCancelEdit, disabled = false }: Props) {
   const [text, setText] = useState('');
 
   useEffect(() => {
@@ -50,9 +51,9 @@ export default function MessageInputBar({ onSend, onSendImage, editingMessage, o
           returnKeyType="default"
         />
         <Pressable
-          style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
+          style={[styles.sendBtn, (!text.trim() || disabled) && styles.sendBtnDisabled]}
           onPress={handleSend}
-          disabled={!text.trim()}
+          disabled={!text.trim() || disabled}
         >
           <Text style={styles.sendIcon}>↑</Text>
         </Pressable>

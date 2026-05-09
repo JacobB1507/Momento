@@ -19,43 +19,45 @@ type Props = {
   onEdit: (message: MessageItem) => void;
   onDelete: (message: MessageItem) => void;
   isLast: boolean;
+  activeMessageId?: string | null;
+  setActiveMessageId?: (id: string | null) => void;
 };
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-export default function MessageBubble({ message, currentUserId, onEdit, onDelete, isLast }: Props) {
+export default function MessageBubble({ message, currentUserId, onEdit, onDelete, isLast, activeMessageId, setActiveMessageId }: Props) {
   const isOwn = message.sender_id === currentUserId;
-  const [showMenu, setShowMenu] = useState(false);
+  const isMenuOpen = activeMessageId === message.id;
   const [within2Mins, setWithin2Mins] = useState(false);
 
   const handleLongPress = async () => {
     if (!isOwn || message.deleted) return;
     const canAct = await canEditOrDelete(message.created_at);
     setWithin2Mins(canAct);
-    setShowMenu(true);
+    setActiveMessageId?.(message.id);
   };
 
   return (
     <View style={[styles.wrapper, isOwn ? styles.wrapperOwn : styles.wrapperOther]}>
       <Pressable onLongPress={isOwn && !message.deleted ? handleLongPress : undefined} style={{ position: 'relative' }}>
-        {showMenu && (
+        {isMenuOpen && (
           <>
             <TouchableOpacity
               style={styles.overlay}
-              onPress={() => setShowMenu(false)}
+              onPress={() => setActiveMessageId?.(null)}
               activeOpacity={1}
             />
             <View style={styles.menu}>
               {within2Mins ? (
                 <>
-                  <Pressable style={styles.menuRow} onPress={() => { onEdit(message); setShowMenu(false); }}>
+                  <Pressable style={styles.menuRow} onPress={() => { onEdit(message); setActiveMessageId?.(null); }}>
                     <Ionicons name="pencil-outline" size={15} color="#fff" />
                     <Text style={styles.menuTextWhite}>Edit</Text>
                   </Pressable>
                   <View style={styles.menuDivider} />
-                  <Pressable style={styles.menuRow} onPress={() => { onDelete(message); setShowMenu(false); }}>
+                  <Pressable style={styles.menuRow} onPress={() => { onDelete(message); setActiveMessageId?.(null); }}>
                     <Ionicons name="trash-outline" size={15} color="#ef4444" />
                     <Text style={styles.menuTextRed}>Delete</Text>
                   </Pressable>

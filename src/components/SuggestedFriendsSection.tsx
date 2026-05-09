@@ -17,12 +17,21 @@ export default function SuggestedFriendsSection({ onFriendAdded, hideHeader = fa
   const [suggestions, setSuggestions] = useState<SuggestedFriend[]>([]);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<Set<string>>(new Set());
+  const [pendingFromThem, setPendingFromThem] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    getSuggestedFriends(supabase).then(data => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const [data, pendingRes] = await Promise.all([
+        getSuggestedFriends(supabase),
+        user
+          ? supabase.from('friends').select('sender_id').eq('receiver_id', user.id).eq('status', 'pending')
+          : Promise.resolve({ data: [] }),
+      ]);
       setSuggestions(data);
+      setPendingFromThem(new Set(((pendingRes as any).data ?? []).map((r: any) => r.sender_id)));
       setLoading(false);
-    });
+    })();
   }, []);
 
   const handleAdd = async (item: SuggestedFriend) => {
@@ -39,10 +48,21 @@ export default function SuggestedFriendsSection({ onFriendAdded, hideHeader = fa
     }
   };
 
+  const handleAccept = async (item: SuggestedFriend) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('friends').update({ status: 'accepted' })
+      .eq('sender_id', item.user_id)
+      .eq('receiver_id', user.id)
+      .eq('status', 'pending');
+    setSuggestions(prev => prev.filter(s => s.user_id !== item.user_id));
+    onFriendAdded?.();
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator color="#E91E8C" />
+        <ActivityIndicator color="#FF6B6B" />
       </View>
     );
   }
@@ -61,7 +81,9 @@ export default function SuggestedFriendsSection({ onFriendAdded, hideHeader = fa
           <SuggestionCard
             item={item}
             isPending={pending.has(item.user_id)}
+            theyAddedMe={pendingFromThem.has(item.user_id)}
             onAdd={() => handleAdd(item)}
+            onAccept={() => handleAccept(item)}
           />
         )}
       />
@@ -72,20 +94,30 @@ export default function SuggestedFriendsSection({ onFriendAdded, hideHeader = fa
 function SuggestionCard({
   item,
   isPending,
+  theyAddedMe,
   onAdd,
+  onAccept,
 }: {
   item: SuggestedFriend;
   isPending: boolean;
+  theyAddedMe: boolean;
   onAdd: () => void;
+  onAccept: () => void;
 }) {
   const displayName = item.display_name || item.username;
   const initials = displayName.slice(0, 2).toUpperCase();
 
-  let subText: string | null = null;
-  if (item.mutual_count > 0) {
-    subText = `${item.mutual_count} mutual friend${item.mutual_count === 1 ? '' : 's'}`;
-  } else if (item.friend_count > 0) {
-    subText = 'Popular on Momento';
+  let reasonText: string;
+  let reasonColor: string = '#9CA3AF';
+  if (theyAddedMe) {
+    reasonText = 'Added you!';
+    reasonColor = '#22C55E';
+  } else if (item.mutual_count > 0) {
+    reasonText = `${item.mutual_count} mutual friend${item.mutual_count === 1 ? '' : 's'}`;
+  } else if (!item.is_friend && item.mutual_count === 0) {
+    reasonText = 'Popular on Momento';
+  } else {
+    reasonText = 'You may know';
   }
 
   return (
@@ -98,17 +130,23 @@ function SuggestionCard({
         </View>
       )}
       <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
-      {subText && <Text style={styles.subText}>{subText}</Text>}
-      <TouchableOpacity
-        style={[styles.addButton, isPending && styles.pendingButton]}
-        onPress={onAdd}
-        disabled={isPending}
-        activeOpacity={0.75}
-      >
-        <Text style={[styles.addButtonText, isPending && styles.pendingButtonText]}>
-          {isPending ? 'Pending' : 'Add'}
-        </Text>
-      </TouchableOpacity>
+      <Text style={[styles.subText, { color: reasonColor, marginBottom: 10 }]}>{reasonText}</Text>
+      {theyAddedMe ? (
+        <TouchableOpacity style={styles.acceptButton} onPress={onAccept} activeOpacity={0.75}>
+          <Text style={styles.addButtonText}>Accept</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={[styles.addButton, isPending && styles.pendingButton]}
+          onPress={onAdd}
+          disabled={isPending}
+          activeOpacity={0.75}
+        >
+          <Text style={[styles.addButtonText, isPending && styles.pendingButtonText]}>
+            {isPending ? 'Pending' : 'Add'}
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -123,14 +161,14 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   header: {
-    color: '#ffffff',
+    color: '#111827',
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 4,
     marginTop: 0,
   },
   sectionTitle: {
-    color: '#ffffff',
+    color: '#111827',
     fontSize: 16,
     fontWeight: '700',
     marginBottom: 4,
@@ -142,8 +180,10 @@ const styles = StyleSheet.create({
     width: 120,
     marginRight: 12,
     alignItems: 'center',
-    backgroundColor: '#1C1C1E',
+    backgroundColor: '#fff',
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
     paddingVertical: 8,
     paddingHorizontal: 8,
   },
@@ -157,7 +197,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#3A3A3C',
+    backgroundColor: '#FF6B6B',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
@@ -168,7 +208,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   name: {
-    color: '#ffffff',
+    color: '#111827',
     fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',
@@ -181,14 +221,21 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   addButton: {
-    backgroundColor: '#E91E8C',
+    backgroundColor: '#FF6B6B',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  acceptButton: {
+    backgroundColor: '#22C55E',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginTop: 4,
   },
   pendingButton: {
-    backgroundColor: '#3A3A3C',
+    backgroundColor: '#F3F4F6',
   },
   addButtonText: {
     color: '#ffffff',
@@ -196,6 +243,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   pendingButtonText: {
-    color: '#9CA3AF',
+    color: '#6B7280',
   },
 });

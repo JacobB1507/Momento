@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -108,6 +108,12 @@ export default function ProfilePhotoSetupScreen() {
             : <Text style={styles.saveBtnText}>Save &amp; Continue</Text>
           }
         </Pressable>
+        <TouchableOpacity
+          onPress={() => navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] })}
+          style={{ paddingVertical: 12, alignItems: 'center' }}
+        >
+          <Text style={{ fontSize: 14, color: '#9CA3AF' }}>Skip for now</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );

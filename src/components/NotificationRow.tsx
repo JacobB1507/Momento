@@ -71,6 +71,16 @@ export default function NotificationRow({ notification, senderProfileMap, coverM
         if (status === 'accepted') setActionState('accepted');
         else if (status === 'declined') setActionState('declined');
         else setActionState('pending');
+      } else if (type === 'message_request') {
+        const { data } = await supabase
+          .from('message_requests')
+          .select('status')
+          .eq('id', notification.related_id)
+          .limit(1);
+        if (!data || data.length === 0) { setActionState('declined'); return; }
+        if (data[0].status === 'accepted') setActionState('accepted');
+        else if (data[0].status === 'declined') setActionState('declined');
+        else setActionState('pending');
       } else if (type === 'gallery_invite') {
         const { data } = await supabase
           .from('gallery_members')
@@ -206,6 +216,53 @@ export default function NotificationRow({ notification, senderProfileMap, coverM
             ) : (
               <Text style={{ color: '#9CA3AF', fontSize: 12, marginTop: 6 }}>
                 {actionState === 'joined' ? 'Joined ✓' : 'Declined'}
+              </Text>
+            )
+          )}
+          {type === 'message_request' && (
+            actionState === 'loading' ? null :
+            actionState === 'pending' ? (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                <TouchableOpacity
+                  onPress={async () => {
+                    const uid = session?.user?.id;
+                    if (!uid) return;
+                    const { data } = await supabase
+                      .from('message_requests')
+                      .select('id, requester_id')
+                      .eq('id', notification.related_id)
+                      .limit(1);
+                    if (!data || data.length === 0) return;
+                    const { respondToMessageRequest } = await import('../lib/messages');
+                    await respondToMessageRequest(data[0].id, true, data[0].requester_id, uid);
+                    setActionState('accepted');
+                  }}
+                  style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, backgroundColor: '#E91E8C' }}
+                >
+                  <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>Accept</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={async () => {
+                    const uid = session?.user?.id;
+                    if (!uid) return;
+                    const { data } = await supabase
+                      .from('message_requests')
+                      .select('id, requester_id')
+                      .eq('id', notification.related_id)
+                      .limit(1);
+                    if (!data || data.length === 0) return;
+                    const { respondToMessageRequest } = await import('../lib/messages');
+                    await respondToMessageRequest(data[0].id, false, data[0].requester_id, uid);
+                    setActionState('declined');
+                  }}
+                  style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, backgroundColor: '#E5E7EB' }}
+                >
+                  <Text style={{ color: '#6B7280', fontSize: 13, fontWeight: '600' }}>Decline</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={{ color: '#9CA3AF', fontSize: 12, marginTop: 6 }}>
+                {actionState === 'accepted' ? 'Accepted ✓' : 'Declined'}
               </Text>
             )
           )}
