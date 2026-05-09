@@ -32,6 +32,8 @@ import MessageRequestsScreen from '../screens/MessageRequestsScreen';
 import ProfilePhotoSetupScreen from '../screens/ProfilePhotoSetupScreen';
 import DeleteAccountScreen from '../screens/DeleteAccountScreen';
 import PrivacyPolicyScreen from '../screens/auth/PrivacyPolicyScreen';
+import GalleryInviteNewScreen from '../screens/GalleryInviteNewScreen';
+import TrustedFriendsScreen from '../screens/TrustedFriendsScreen';
 import { supabase } from '../lib/supabase';
 import { resolveInviteCode } from '../lib/friends';
 import type { RootStackParamList } from './types';
@@ -194,6 +196,16 @@ export default function RootNavigator() {
             <Stack.Screen name="MessageRequests" component={MessageRequestsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ProfilePhotoSetup" component={ProfilePhotoSetupScreen} options={{ headerShown: false }} />
             <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} options={{ headerShown: false }} />
+            <Stack.Screen
+              name="GalleryInviteNew"
+              component={GalleryInviteNewScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="TrustedFriends"
+              component={TrustedFriendsScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
           </>
         ) : (
           <>

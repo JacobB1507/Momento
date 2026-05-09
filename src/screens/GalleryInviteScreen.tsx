@@ -53,11 +53,26 @@ export default function GalleryInviteScreen() {
 
   const handleJoin = async () => {
     setJoining(true);
-    const { error } = await supabase
+
+    const { data: existing } = await supabase
       .from('gallery_members')
-      .update({ role: 'member' })
+      .select('user_id')
       .eq('gallery_id', galleryId)
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    let error;
+    if (existing) {
+      ({ error } = await supabase
+        .from('gallery_members')
+        .update({ status: 'accepted' })
+        .eq('gallery_id', galleryId)
+        .eq('user_id', userId));
+    } else {
+      ({ error } = await supabase
+        .from('gallery_members')
+        .insert({ gallery_id: galleryId, user_id: userId, role: 'member', status: 'accepted' }));
+    }
 
     if (error) {
       setJoining(false);

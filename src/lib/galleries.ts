@@ -13,7 +13,8 @@ export async function fetchUserGalleries(userId: string): Promise<Gallery[]> {
   const { data: memberships, error: memberError } = await supabase
     .from('gallery_members')
     .select('gallery_id')
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .eq('status', 'accepted');
 
   if (memberError) throw memberError;
 

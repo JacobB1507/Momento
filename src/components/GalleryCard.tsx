@@ -66,7 +66,8 @@ export function GalleryCard({
     const { data: memberRows } = await supabase
       .from('gallery_members')
       .select('user_id')
-      .eq('gallery_id', gallery.id);
+      .eq('gallery_id', gallery.id)
+      .eq('status', 'accepted');
 
     if (!memberRows || memberRows.length === 0) return;
 

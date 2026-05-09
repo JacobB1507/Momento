@@ -23,7 +23,6 @@ import { SearchRecentGalleries } from '../components/SearchRecentGalleries';
 import type { RootStackParamList } from '../navigation/types';
 import type { Gallery } from '../types/database';
 
-const RECENT_KEY = 'momento_recent_searches';
 const MAX_RECENT = 8;
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -43,6 +42,9 @@ export default function SearchScreen() {
   const [recentGalleries, setRecentGalleries] = useState<any[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const searchKeyRef = useRef('');
+  const galleriesKeyRef = useRef('');
+
   const friendIds: string[] = [];
 
   useEffect(() => {
@@ -59,12 +61,20 @@ export default function SearchScreen() {
 
   useEffect(() => {
     (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const searchKey = `momento_recent_searches_${user.id}`;
+      const galleriesKey = `momento_recent_galleries_${user.id}`;
+      searchKeyRef.current = searchKey;
+      galleriesKeyRef.current = galleriesKey;
+
       try {
-        const raw = await AsyncStorage.getItem(RECENT_KEY);
+        const raw = await AsyncStorage.getItem(searchKey);
         const parsed = JSON.parse(raw ?? '[]');
         if (!Array.isArray(parsed)) { setRecentSearches([]); }
         else if (parsed.length > 0 && typeof parsed[0] === 'string') {
-          AsyncStorage.removeItem(RECENT_KEY);
+          AsyncStorage.removeItem(searchKey);
           setRecentSearches([]);
         } else {
           setRecentSearches(parsed);
@@ -73,7 +83,7 @@ export default function SearchScreen() {
         setRecentSearches([]);
       }
       try {
-        const stored = await AsyncStorage.getItem('momento_recent_galleries');
+        const stored = await AsyncStorage.getItem(galleriesKey);
         if (stored) setRecentGalleries(JSON.parse(stored));
       } catch {}
     })();
@@ -85,7 +95,7 @@ export default function SearchScreen() {
     setRecentSearches(prev => {
       const filtered = prev.filter(s => !(s.type === 'query' && s.text === trimmed));
       const updated: RecentSearch[] = [{ type: 'query', text: trimmed }, ...filtered].slice(0, MAX_RECENT);
-      AsyncStorage.setItem(RECENT_KEY, JSON.stringify(updated));
+      AsyncStorage.setItem(searchKeyRef.current, JSON.stringify(updated));
       return updated;
     });
   }, []);
@@ -94,7 +104,7 @@ export default function SearchScreen() {
     setRecentSearches(prev => {
       const filtered = prev.filter(s => !(s.type === 'profile' && s.userId === entry.userId));
       const updated: RecentSearch[] = [entry, ...filtered].slice(0, MAX_RECENT);
-      AsyncStorage.setItem(RECENT_KEY, JSON.stringify(updated));
+      AsyncStorage.setItem(searchKeyRef.current, JSON.stringify(updated));
       return updated;
     });
   }, []);
@@ -102,13 +112,13 @@ export default function SearchScreen() {
   const saveRecentGallery = async (gallery: any) => {
     const updated = [gallery, ...recentGalleries.filter(g => g.id !== gallery.id)].slice(0, 8);
     setRecentGalleries(updated);
-    await AsyncStorage.setItem('momento_recent_galleries', JSON.stringify(updated));
+    await AsyncStorage.setItem(galleriesKeyRef.current, JSON.stringify(updated));
   };
 
   const removeRecent = useCallback((index: number) => {
     setRecentSearches(prev => {
       const updated = prev.filter((_, i) => i !== index);
-      AsyncStorage.setItem(RECENT_KEY, JSON.stringify(updated));
+      AsyncStorage.setItem(searchKeyRef.current, JSON.stringify(updated));
       return updated;
     });
   }, []);
@@ -204,7 +214,7 @@ export default function SearchScreen() {
       {isEmpty && activeTab === 'people' && (
         <SearchRecentPeople
           recentSearches={recentSearches}
-          onClearAll={() => { setRecentSearches([]); AsyncStorage.removeItem('momento_recent_searches'); }}
+          onClearAll={() => { setRecentSearches([]); AsyncStorage.removeItem(searchKeyRef.current); }}
           onRemove={(i) => removeRecent(i)}
           onQueryTap={handleRecentQueryTap}
           onProfileTap={(userId, username) => navigation.navigate('FriendProfile', { userId, username })}
@@ -214,7 +224,7 @@ export default function SearchScreen() {
       {isEmpty && activeTab === 'galleries' && (
         <SearchRecentGalleries
           recentGalleries={recentGalleries}
-          onClearAll={() => { setRecentGalleries([]); AsyncStorage.removeItem('momento_recent_galleries'); }}
+          onClearAll={() => { setRecentGalleries([]); AsyncStorage.removeItem(galleriesKeyRef.current); }}
           onGalleryPress={handleGalleryPress}
           currentUserId={session?.user?.id}
           friendIds={friendIds}

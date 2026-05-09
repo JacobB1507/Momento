@@ -162,7 +162,7 @@ export default function FriendsScreen() {
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FF6B6B" />}
       >
         {/* Section 1 — Friend Requests */}
         <View style={styles.sectionHeaderRow}>
@@ -180,7 +180,7 @@ export default function FriendsScreen() {
               {visibleRequests.map(({ friendshipId, profile }, index) => (
                 <View key={friendshipId}>
                   {index > 0 && <View style={styles.separator} />}
-                  <View style={[styles.row, { backgroundColor: friendshipId === route.params?.highlightRequestId ? '#fff5f5' : '#fff' }]}>
+                  <View style={[styles.row, { backgroundColor: friendshipId === route.params?.highlightRequestId ? '#FFF5F5' : 'transparent' }]}>
                     <AvatarThumb profile={profile} />
                     <Text style={[styles.rowUsername, styles.rowUsernameFlex]} numberOfLines={1}>
                       {profile.display_name || profile.username || 'unknown'}
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
   sectionLabelSpaced: { marginTop: 28, marginBottom: 8 },
 
   expandLink: { marginTop: 8, alignSelf: 'flex-start' },
-  expandLinkText: { fontSize: 14, color: '#3B82F6', fontWeight: '500' },
+  expandLinkText: { fontSize: 14, color: '#FF6B6B', fontWeight: '500' },
 
   card: {
     backgroundColor: '#fff',
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
   removeText: { color: '#6B7280', fontSize: 13, fontWeight: '500' },
 
   acceptButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: '#FF6B6B',
     borderRadius: 8,
     paddingVertical: 5,
     paddingHorizontal: 10,
@@ -383,10 +383,11 @@ const styles = StyleSheet.create({
   acceptText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 
   declineButton: {
-    backgroundColor: '#FF3B30',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     borderRadius: 8,
     paddingVertical: 5,
     paddingHorizontal: 10,
   },
-  declineText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  declineText: { color: '#6B7280', fontSize: 13, fontWeight: '600' },
 });

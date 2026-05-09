@@ -202,6 +202,13 @@ export default function GalleryDetailScreen() {
               </View>
             )}
           </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.inviteButton, pressed && { opacity: 0.7 }]}
+            onPress={() => navigation.navigate('GalleryInviteNew', { galleryId: galleryId, galleryTitle: galleryMeta?.title || '' })}
+            hitSlop={8}
+          >
+            <Ionicons name="person-add-outline" size={16} color="#fff" />
+          </Pressable>
           {photos.length > 0 && !loading && (
             <View style={styles.countBadge}>
               <Ionicons name="apps-outline" size={13} color="#fff" />
@@ -285,6 +292,7 @@ export default function GalleryDetailScreen() {
         onPrivacySaved={(privacy) => setGalleryMeta(prev => prev ? { ...prev, privacy } : prev)}
         onGalleryDeleted={() => navigation.goBack()}
       />
+
 
       {photos.length > 0 && !loading && (
         <Pressable

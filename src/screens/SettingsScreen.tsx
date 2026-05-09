@@ -2,6 +2,7 @@ import React from 'react';
 import { Alert, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 
 export default function SettingsScreen() {
@@ -55,6 +56,24 @@ export default function SettingsScreen() {
             onPress={() => navigation.navigate('EditDisplayName' as never)}
           >
             <Text style={styles.rowLabel}>Edit Display Name</Text>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={[styles.section, { marginTop: 16 }]}>
+        <View style={styles.card}>
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => navigation.navigate('TrustedFriends' as never)}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+              <Ionicons name="star-outline" size={18} color="#111827" />
+              <View>
+                <Text style={styles.rowLabel}>Trusted Friends</Text>
+                <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 1 }}>Auto-accept gallery invites from trusted friends</Text>
+              </View>
+            </View>
             <Text style={styles.chevron}>›</Text>
           </Pressable>
         </View>

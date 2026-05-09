@@ -31,7 +31,6 @@ export default function CreateScreen() {
   const [privacy, setPrivacy] = useState<GalleryPrivacy>('friends');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const handleCreate = async () => {
     const trimmed = title.trim();
     if (!trimmed) return;
@@ -40,19 +39,19 @@ export default function CreateScreen() {
     setLoading(true);
     setError(null);
 
-    const { error: dbError } = await supabase.from('galleries').insert({
-      title: trimmed,
-      privacy,
-      created_by: session?.user.id,
-    });
+    const { data: newGallery, error: dbError } = await supabase
+      .from('galleries')
+      .insert({ title: trimmed, privacy, created_by: session?.user.id })
+      .select('id')
+      .single();
 
     setLoading(false);
 
-    if (dbError) {
-      setError(dbError.message);
+    if (dbError || !newGallery) {
+      setError(dbError?.message ?? 'Failed to create gallery');
     } else {
       setTitle('');
-      navigation.navigate('Profile');
+      (navigation as any).navigate('GalleryInviteNew', { galleryId: newGallery.id, galleryTitle: trimmed });
     }
   };
 

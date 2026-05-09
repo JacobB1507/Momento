@@ -17,6 +17,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { sendFriendRequest, getMutualFriends, removeFriend } from '../lib/friends';
+import { isTrustedFriend, addTrustedFriend, removeTrustedFriend } from '../lib/trustedFriends';
 import { createConversation, requestMessagePermission } from '../lib/messages';
 import { GalleryCard } from '../components/GalleryCard';
 import ProfileActionButtons from '../components/ProfileActionButtons';
@@ -47,6 +48,7 @@ export default function FriendProfileScreen() {
   const [mutuals, setMutuals] = useState<any[]>([]);
   const [showMutualsModal, setShowMutualsModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [isTrusted, setIsTrusted] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -96,6 +98,8 @@ export default function FriendProfileScreen() {
       );
       const m = await getMutualFriends(currentUserId, userId);
       setMutuals(m);
+      const trusted = await isTrustedFriend(supabase, userId);
+      setIsTrusted(trusted);
       setLoading(false);
     };
     load();
@@ -222,6 +226,26 @@ export default function FriendProfileScreen() {
                 }}
               >
                 <Text style={{ color: '#ef4444', fontSize: 15, fontWeight: '500' }}>Remove Friend</Text>
+              </Pressable>
+            )}
+            {isFriend && (
+              <Pressable
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 }}
+                onPress={async () => {
+                  setShowMenu(false);
+                  if (isTrusted) {
+                    await removeTrustedFriend(supabase, userId);
+                    setIsTrusted(false);
+                  } else {
+                    await addTrustedFriend(supabase, userId);
+                    setIsTrusted(true);
+                  }
+                }}
+              >
+                <Ionicons name={isTrusted ? 'star' : 'star-outline'} size={18} color={isTrusted ? '#E91E8C' : '#9ca3af'} />
+                <Text style={{ color: isTrusted ? '#E91E8C' : '#ffffff', fontSize: 15, fontWeight: '500' }}>
+                  {isTrusted ? 'Remove from Trusted' : 'Add to Trusted'}
+                </Text>
               </Pressable>
             )}
             <Pressable

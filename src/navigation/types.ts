@@ -36,6 +36,8 @@ export type RootStackParamList = {
   DeleteAccount: undefined;
   ProfilePhotoSetup: undefined;
   PrivacyPolicy: undefined;
+  GalleryInviteNew: { galleryId: string; galleryTitle: string };
+  TrustedFriends: undefined;
 };
 
 export type MainTabParamList = {

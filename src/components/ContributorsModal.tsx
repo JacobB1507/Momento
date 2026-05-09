@@ -53,7 +53,8 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
     const { data: memberRows } = await supabase
       .from('gallery_members')
       .select('user_id, role')
-      .eq('gallery_id', galleryId);
+      .eq('gallery_id', galleryId)
+      .eq('status', 'accepted');
 
     const rows = memberRows ?? [];
     const userIds = rows.map((m: any) => m.user_id);

@@ -1,5 +1,8 @@
-import React, { useRef } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { addTrustedFriend } from '../lib/trustedFriends';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 
@@ -47,7 +50,44 @@ function typeIcon(type: string | null): { name: string; color: string } {
 }
 
 export default function NotificationRow({ notification, senderProfileMap, coverMap, onPress, onMarkUnread, onClear }: Props) {
+  const { session } = useAuth();
   const { body, read, created_at, type } = notification;
+  const [trustedAdded, setTrustedAdded] = useState(false);
+  const [actionState, setActionState] = useState<'pending' | 'accepted' | 'declined' | 'joined' | 'loading'>('loading');
+
+  useEffect(() => {
+    const checkState = async () => {
+      const uid = session?.user?.id;
+      if (!uid) { setActionState('pending'); return; }
+
+      if (type === 'friend_request') {
+        const { data } = await supabase
+          .from('friends')
+          .select('status')
+          .eq('id', notification.related_id)
+          .limit(1);
+        if (!data || data.length === 0) { setActionState('declined'); return; }
+        const status = data[0].status;
+        if (status === 'accepted') setActionState('accepted');
+        else if (status === 'declined') setActionState('declined');
+        else setActionState('pending');
+      } else if (type === 'gallery_invite') {
+        const { data } = await supabase
+          .from('gallery_members')
+          .select('status')
+          .eq('gallery_id', notification.related_id)
+          .eq('user_id', uid)
+          .limit(1);
+        if (!data || data.length === 0) { setActionState('pending'); return; }
+        const status = data[0].status;
+        if (status === 'accepted') setActionState('joined');
+        else setActionState('pending');
+      } else {
+        setActionState('pending');
+      }
+    };
+    checkState();
+  }, [notification.related_id, type, session?.user?.id]);
   const parts = body.split(' ');
   const parsedUsername = parts[0]?.toLowerCase();
   const rest = parts.slice(1).join(' ');
@@ -106,6 +146,81 @@ export default function NotificationRow({ notification, senderProfileMap, coverM
             {rest}
           </Text>
           <Text style={styles.time}>{timeAgo(created_at)}</Text>
+          {type === 'friend_request' && actionState !== 'loading' && (
+            actionState === 'pending' ? (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                <TouchableOpacity
+                  onPress={async () => {
+                    await supabase.from('friends').update({ status: 'accepted' }).eq('id', notification.related_id);
+                    setActionState('accepted');
+                  }}
+                  style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, backgroundColor: '#E91E8C' }}
+                >
+                  <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>Accept</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={async () => {
+                    await supabase.from('friends').update({ status: 'declined' }).eq('id', notification.related_id);
+                    setActionState('declined');
+                  }}
+                  style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, backgroundColor: '#E5E7EB' }}
+                >
+                  <Text style={{ color: '#6B7280', fontSize: 13, fontWeight: '600' }}>Decline</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={{ color: '#9CA3AF', fontSize: 12, marginTop: 6 }}>
+                {actionState === 'accepted' ? 'Accepted ✓' : 'Declined'}
+              </Text>
+            )
+          )}
+          {type === 'gallery_invite' && actionState !== 'loading' && (
+            actionState === 'pending' ? (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                <TouchableOpacity
+                  onPress={async () => {
+                    const uid = session?.user?.id;
+                    if (!uid) return;
+                    const { data } = await supabase.from('gallery_members').update({ status: 'accepted' }).eq('gallery_id', notification.related_id).eq('user_id', uid).select();
+                    if (!data || data.length === 0) {
+                      await supabase.from('gallery_members').insert({ gallery_id: notification.related_id, user_id: uid, role: 'member', status: 'accepted' });
+                    }
+                    setActionState('joined');
+                  }}
+                  style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, backgroundColor: '#E91E8C' }}
+                >
+                  <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>Join</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={async () => {
+                    const uid = session?.user?.id;
+                    if (!uid) return;
+                    await supabase.from('gallery_members').delete().eq('gallery_id', notification.related_id).eq('user_id', uid);
+                    setActionState('declined');
+                  }}
+                  style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, backgroundColor: '#E5E7EB' }}
+                >
+                  <Text style={{ color: '#6B7280', fontSize: 13, fontWeight: '600' }}>Decline</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={{ color: '#9CA3AF', fontSize: 12, marginTop: 6 }}>
+                {actionState === 'joined' ? 'Joined ✓' : 'Declined'}
+              </Text>
+            )
+          )}
+          {type === 'trusted_friend' && notification.sender_id && (
+            <Pressable
+              style={[styles.trustedBtn, trustedAdded && styles.trustedBtnAdded]}
+              disabled={trustedAdded}
+              onPress={async () => {
+                await addTrustedFriend(supabase, notification.sender_id!);
+                setTrustedAdded(true);
+              }}
+            >
+              <Text style={styles.trustedBtnText}>{trustedAdded ? 'Added ✓' : 'Add to your trusted friends'}</Text>
+            </Pressable>
+          )}
         </View>
       </Pressable>
     </Swipeable>
@@ -130,4 +245,7 @@ const styles = StyleSheet.create({
   actionUnread: { backgroundColor: '#3b82f6' },
   actionClear: { backgroundColor: '#ef4444' },
   actionText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+  trustedBtn: { alignSelf: 'flex-start', marginTop: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#E91E8C' },
+  trustedBtnAdded: { backgroundColor: '#9CA3AF' },
+  trustedBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
 });

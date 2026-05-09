@@ -138,6 +138,10 @@ export function useNotifications(navigation: any) {
         setTimeout(() => navigation.setParams({ openRemovalRequest: null }), 1000);
         break;
       }
+      case 'trusted_friend': {
+        navigation.navigate('TrustedFriends');
+        break;
+      }
       case 'gallery_invite': {
         const { data: member } = await supabase
           .from('gallery_members')
