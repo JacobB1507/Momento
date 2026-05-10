@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
@@ -64,6 +65,9 @@ export default function LoginScreen({ navigation }: Props) {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
+        <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={8}>
+          <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
+        </Pressable>
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
@@ -74,6 +78,9 @@ export default function LoginScreen({ navigation }: Props) {
             <Text style={styles.logo}>📸</Text>
             <Text style={styles.appName}>Momento</Text>
             <Text style={styles.tagline}>Your memories, beautifully shared</Text>
+            <View style={styles.privateBetaPill}>
+              <Text style={styles.privateBetaText}>PRIVATE BETA</Text>
+            </View>
           </View>
 
           {/* Form card */}
@@ -145,6 +152,13 @@ export default function LoginScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#FF6B6B' },
   flex: { flex: 1 },
+  backButton: {
+    position: 'absolute',
+    top: 12,
+    left: 20,
+    zIndex: 10,
+    padding: 4,
+  },
   scroll: { flexGrow: 1 },
 
   hero: {
@@ -226,4 +240,19 @@ const styles = StyleSheet.create({
   switchText: { color: '#6B7280', fontSize: 15 },
   link: { color: '#FF6B6B', fontSize: 15, fontWeight: '600' },
   fieldError: { color: '#FF3B30', fontSize: 13, marginBottom: 6 },
+
+  privateBetaPill: {
+    alignSelf: 'center',
+    marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  privateBetaText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.65)',
+    letterSpacing: 1.5,
+  },
 });

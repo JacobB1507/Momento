@@ -33,8 +33,31 @@ export default function SignUpScreen({ navigation }: Props) {
   const [acceptedPolicy, setAcceptedPolicy] = useState(false);
   const [policyError, setPolicyError] = useState('');
   const [accountExistsForEmail, setAccountExistsForEmail] = useState<string | null>(null);
+  const [inviteCode, setInviteCode] = useState('');
+  const [inviteCodeError, setInviteCodeError] = useState<string | null>(null);
 
   const handleSignUp = async () => {
+    if (!inviteCode.trim()) {
+      setInviteCodeError('Invite code is required');
+      return;
+    }
+
+    const { data: codeValid, error: codeError } = await supabase.rpc(
+      'validate_invite_code',
+      { p_code: inviteCode.trim() }
+    );
+
+    if (codeError) {
+      setInviteCodeError('Could not validate code. Please try again.');
+      reportError('SignUpScreen.validateInviteCode', codeError);
+      return;
+    }
+
+    if (!codeValid) {
+      setInviteCodeError('Invalid or already-used invite code');
+      return;
+    }
+
     const allowed = await checkRateLimit('signup_attempt');
     if (!allowed) {
       Alert.alert('Slow down', 'Please wait a few minutes before trying again.');
@@ -93,6 +116,13 @@ export default function SignUpScreen({ navigation }: Props) {
       Alert.alert('Sign up failed', userFacingError(error));
       reportError('SignUpScreen.signUp', error);
     } else {
+      const { data: redeemed, error: redeemError } = await supabase.rpc(
+        'redeem_invite_code',
+        { p_code: inviteCode.trim() }
+      );
+      if (redeemError || !redeemed) {
+        reportError('SignUpScreen.redeemInviteCode', redeemError ?? new Error('Redeem returned false'));
+      }
       setSent(true);
     }
   };
@@ -103,6 +133,9 @@ export default function SignUpScreen({ navigation }: Props) {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
+        <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={8}>
+          <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
+        </Pressable>
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
@@ -113,6 +146,9 @@ export default function SignUpScreen({ navigation }: Props) {
             <Text style={styles.logo}>📸</Text>
             <Text style={styles.appName}>Momento</Text>
             <Text style={styles.tagline}>Start sharing your world</Text>
+            <View style={styles.privateBetaPill}>
+              <Text style={styles.privateBetaText}>PRIVATE BETA</Text>
+            </View>
           </View>
 
           {/* Form card */}
@@ -125,6 +161,31 @@ export default function SignUpScreen({ navigation }: Props) {
               </View>
             ) : (
               <>
+                <View style={styles.field}>
+                  <Text style={styles.label}>Invite Code</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="MOMENTO-XXXXXXX"
+                    placeholderTextColor="#9CA3AF"
+                    value={inviteCode}
+                    onChangeText={(text) => {
+                      setInviteCode(text.toUpperCase());
+                      if (inviteCodeError) setInviteCodeError(null);
+                    }}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    spellCheck={false}
+                    maxLength={32}
+                    returnKeyType="next"
+                  />
+                </View>
+
+                {inviteCodeError && (
+                  <View style={styles.existingAccountBanner}>
+                    <Text style={styles.existingAccountText}>{inviteCodeError}</Text>
+                  </View>
+                )}
+
                 <View style={styles.field}>
                   <Text style={styles.label}>Email</Text>
                   {!!emailError && <Text style={styles.fieldError}>{emailError}</Text>}
@@ -244,6 +305,13 @@ export default function SignUpScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#FF6B6B' },
   flex: { flex: 1 },
+  backButton: {
+    position: 'absolute',
+    top: 12,
+    left: 20,
+    zIndex: 10,
+    padding: 4,
+  },
   scroll: { flexGrow: 1 },
 
   hero: {
@@ -388,5 +456,20 @@ const styles = StyleSheet.create({
     color: '#FF6B6B',
     fontWeight: '600',
     textDecorationLine: 'underline',
+  },
+
+  privateBetaPill: {
+    alignSelf: 'center',
+    marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  privateBetaText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.65)',
+    letterSpacing: 1.5,
   },
 });

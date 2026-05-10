@@ -8,6 +8,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
+import WelcomeBetaScreen from '../screens/WelcomeBetaScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 import SignUpScreen from '../screens/auth/SignUpScreen';
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
@@ -50,17 +51,26 @@ export default function RootNavigator() {
   const [profileReady, setProfileReady] = useState(false);
   const [hasUsername, setHasUsername] = useState(false);
   const [hasDisplayName, setHasDisplayName] = useState(false);
+  const [hasWelcomeSeen, setHasWelcomeSeen] = useState(false);
 
   useEffect(() => {
     if (loading) return;
     if (!session) { setProfileReady(true); return; }
     setProfileReady(false);
-    supabase.from('profiles').select('username, display_name').eq('id', session.user.id).single()
-      .then(({ data }) => {
+    supabase.from('profiles').select('username, display_name, welcome_seen').eq('id', session.user.id).single()
+      .then(({ data, error }) => {
+        if (error) {
+          console.warn('[RootNavigator] profile fetch failed, falling back to MainTabs:', error.message);
+          setHasUsername(true);
+          setHasDisplayName(true);
+          setHasWelcomeSeen(true);
+          return;
+        }
         setHasUsername(!!data?.username);
         setHasDisplayName(!!data?.display_name);
-        setProfileReady(true);
-      });
+        setHasWelcomeSeen(!!data?.welcome_seen);
+      })
+      .finally(() => setProfileReady(true));
   }, [loading, session]);
 
   useEffect(() => {
@@ -122,8 +132,14 @@ export default function RootNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
         {session ? (
           <>
-            {/* Initial screen: setup if profile incomplete, otherwise main app */}
-            {(!hasUsername || !hasDisplayName) ? (
+            {/* Initial screen: welcome beta → setup profile → main app */}
+            {!hasWelcomeSeen ? (
+              <Stack.Screen
+                name="WelcomeBeta"
+                component={WelcomeBetaScreen}
+                initialParams={{ onDismissed: () => setHasWelcomeSeen(true) }}
+              />
+            ) : (!hasUsername || !hasDisplayName) ? (
               <Stack.Screen name="SetupProfile" component={SetupProfileScreen} />
             ) : (
               <Stack.Screen name="MainTabs" component={TabNavigator} />
@@ -234,7 +250,7 @@ export default function RootNavigator() {
           </>
         )}
       </Stack.Navigator>
-      <TutorialBootstrap />
+      <TutorialBootstrap welcomeSeen={hasWelcomeSeen} />
       <TutorialOverlay />
       </>
     </NavigationContainer>

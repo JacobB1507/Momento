@@ -137,6 +137,10 @@ export default function SettingsScreen() {
             <Text style={styles.deleteText}>Delete Account</Text>
           </TouchableOpacity>
         </View>
+
+        <View style={styles.betaFooter}>
+          <Text style={styles.betaFooterText}>Momento · Private Beta · v1.0.0</Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -199,4 +203,6 @@ const styles = StyleSheet.create({
   deleteDivider: { height: 1, backgroundColor: '#333' },
   deleteButton: { marginTop: 40, alignItems: 'center' },
   deleteText: { color: '#EF4444', fontSize: 16, fontWeight: '600' },
+  betaFooter: { marginTop: 24, paddingBottom: 40, alignItems: 'center' },
+  betaFooterText: { fontSize: 12, color: '#9CA3AF', letterSpacing: 0.3 },
 });

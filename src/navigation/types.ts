@@ -15,6 +15,7 @@ export type RootStackParamList = {
   UsernameSetup: undefined;
   ProfileSetup: undefined;
   SetupProfile: undefined;
+  WelcomeBeta: undefined;
   ForgotPassword: undefined;
   VerifyEmail: { email: string };
   GalleryDetail: { galleryId: string; galleryTitle?: string; openRemovalRequest?: string; openComments?: boolean; highlightUserId?: string };
