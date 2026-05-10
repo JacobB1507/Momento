@@ -43,3 +43,6 @@ yarn-error.*
 /ios
 /android
 security_audit_secrets.md
+beta_invite_codes*.txt
+beta_codes*.txt
+invite_codes*.txt
