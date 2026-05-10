@@ -1,12 +1,24 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
+import { getDefaultGalleryPrivacy } from '../lib/galleries';
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
+  const { session } = useAuth();
+  const userId = session?.user.id ?? '';
+  const [defaultPrivacy, setDefaultPrivacy] = useState<string>('friends');
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId) return;
+      getDefaultGalleryPrivacy(userId).then(setDefaultPrivacy);
+    }, [userId])
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -73,6 +85,32 @@ export default function SettingsScreen() {
                 <Text style={styles.rowLabel}>Trusted Friends</Text>
                 <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 1 }}>Auto-accept gallery invites from trusted friends</Text>
               </View>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={[styles.section, { marginTop: 16 }]}>
+        <View style={styles.card}>
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => navigation.navigate('DefaultGalleryPrivacy' as never)}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>Default Gallery Privacy</Text>
+              <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 1, textTransform: 'capitalize' }}>{defaultPrivacy}</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+          <View style={styles.separator} />
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => navigation.navigate('NotificationSettings' as never)}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>Notifications</Text>
+              <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 1 }}>Manage what you get notified about</Text>
             </View>
             <Text style={styles.chevron}>›</Text>
           </Pressable>

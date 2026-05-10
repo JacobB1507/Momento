@@ -2,10 +2,18 @@ import { supabase } from './supabase';
 
 export type Conversation = {
   id: string;
-  participants: string[];
+  participant_1: string;
+  participant_2: string;
   last_message: string | null;
   last_message_at: string | null;
   unread_count: number;
+  pinned_at_1: string | null;
+  pinned_at_2: string | null;
+  is_pinned: boolean;
+  pinned_at: string | null;
+  cleared_by_1?: boolean;
+  cleared_by_2?: boolean;
+  [key: string]: any;
 };
 
 export type Message = {
@@ -20,16 +28,35 @@ export async function fetchConversations(userId: string): Promise<Conversation[]
   const { data, error } = await supabase
     .from('conversations')
     .select('*')
-    .or(`participant_1.eq.${userId},participant_2.eq.${userId}`)
-    .order('last_message_at', { ascending: false });
+    .or(`participant_1.eq.${userId},participant_2.eq.${userId}`);
 
   if (error) throw error;
-  const filtered = (data ?? []).filter(c => {
-    if (c.participant_1 === userId && c.cleared_by_1) return false;
-    if (c.participant_2 === userId && c.cleared_by_2) return false;
-    return true;
+  return (data ?? [])
+    .filter(c => {
+      if (c.participant_1 === userId && c.cleared_by_1) return false;
+      if (c.participant_2 === userId && c.cleared_by_2) return false;
+      return true;
+    })
+    .map(c => ({
+      ...c,
+      is_pinned: c.participant_1 === userId ? !!c.pinned_at_1 : !!c.pinned_at_2,
+      pinned_at: c.participant_1 === userId ? c.pinned_at_1 ?? null : c.pinned_at_2 ?? null,
+    }))
+    .sort((a, b) => {
+      if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+      if (a.is_pinned && b.is_pinned) {
+        return new Date(b.pinned_at ?? 0).getTime() - new Date(a.pinned_at ?? 0).getTime();
+      }
+      return new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime();
+    });
+}
+
+export async function setConversationPinned(conversationId: string, pinned: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_conversation_pinned', {
+    p_conversation_id: conversationId,
+    p_pinned: pinned,
   });
-  return filtered;
+  if (error) throw error;
 }
 
 export async function fetchMessages(conversationId: string): Promise<Message[]> {

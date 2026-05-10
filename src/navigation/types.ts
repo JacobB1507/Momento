@@ -38,6 +38,8 @@ export type RootStackParamList = {
   PrivacyPolicy: undefined;
   GalleryInviteNew: { galleryId?: string; galleryTitle: string; privacy?: string; pendingCreate?: boolean };
   TrustedFriends: undefined;
+  DefaultGalleryPrivacy: undefined;
+  NotificationSettings: undefined;
 };
 
 export type MainTabParamList = {

@@ -140,3 +140,53 @@ export async function deleteNotification(notificationId: string): Promise<boolea
 
   return !error;
 }
+
+export type NotificationPreferences = {
+  friend_request: boolean;
+  friend_accepted: boolean;
+  gallery_invite: boolean;
+  gallery_photo_added: boolean;
+  comment: boolean;
+  comment_reply: boolean;
+  removal_request: boolean;
+  removal_vote: boolean;
+  message: boolean;
+  message_request: boolean;
+};
+
+const DEFAULT_PREFS: NotificationPreferences = {
+  friend_request: true,
+  friend_accepted: true,
+  gallery_invite: true,
+  gallery_photo_added: true,
+  comment: true,
+  comment_reply: true,
+  removal_request: true,
+  removal_vote: true,
+  message: true,
+  message_request: true,
+};
+
+export async function getNotificationPreferences(userId: string): Promise<NotificationPreferences> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('notification_preferences')
+    .eq('id', userId)
+    .single();
+  if (error || !data?.notification_preferences) return DEFAULT_PREFS;
+  return { ...DEFAULT_PREFS, ...data.notification_preferences };
+}
+
+export async function updateNotificationPreference(
+  userId: string,
+  key: keyof NotificationPreferences,
+  value: boolean
+): Promise<void> {
+  const current = await getNotificationPreferences(userId);
+  const next = { ...current, [key]: value };
+  const { error } = await supabase
+    .from('profiles')
+    .update({ notification_preferences: next })
+    .eq('id', userId);
+  if (error) throw error;
+}

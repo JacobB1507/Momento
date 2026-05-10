@@ -18,6 +18,7 @@ type ConversationItem = {
   last_message: string | null;
   last_message_at: string | null;
   unread_count: number;
+  is_pinned?: boolean;
 };
 
 type Props = {
@@ -73,7 +74,7 @@ export default function ConversationRow({ conversation, currentUserId, onPress, 
         </Text>
       </View>
       <View style={styles.right}>
-        {isPinned && <Ionicons name="pin" size={14} color="#FF6B6B" />}
+        {conversation.is_pinned && <Ionicons name="pin" size={14} color="#FF6B6B" />}
         <Text style={styles.time}>{formatTime(conversation.last_message_at)}</Text>
         {!customPreview && conversation.unread_count > 0 && (
           <View style={styles.badge}>

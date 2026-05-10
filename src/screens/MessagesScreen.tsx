@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity, RefreshControl, TextInput, Pressable, Image } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Swipeable } from 'react-native-gesture-handler';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { fetchConversations, fetchMessageRequests, respondToMessageRequest, clearConversationForUser } from '../lib/messages';
+import { fetchConversations, fetchMessageRequests, respondToMessageRequest, clearConversationForUser, setConversationPinned } from '../lib/messages';
 import ConversationRow from '../components/ConversationRow';
 
 export default function MessagesScreen() {
@@ -21,14 +20,6 @@ export default function MessagesScreen() {
   const [messageRequests, setMessageRequests] = useState<any[]>([]);
   const [requestsExpanded, setRequestsExpanded] = useState(false);
   const [pendingSentIds, setPendingSentIds] = useState<Set<string>>(new Set());
-  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    AsyncStorage.getItem(`momento_pinned_convs_${user.id}`).then(stored => {
-      if (stored) setPinnedIds(JSON.parse(stored));
-    });
-  }, [user?.id]);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -93,19 +84,25 @@ export default function MessagesScreen() {
     navigation.navigate('Chat', { conversationId: convo.id, otherUserId: r.requester_id, otherUsername: name, isPendingRequest: true });
   };
 
-  const togglePin = async (otherId: string) => {
-    if (pinnedIds.includes(otherId)) {
-      const updated = pinnedIds.filter(id => id !== otherId);
-      setPinnedIds(updated);
-      await AsyncStorage.setItem(`momento_pinned_convs_${user!.id}`, JSON.stringify(updated));
-    } else {
-      if (pinnedIds.length >= 3) {
-        Alert.alert('Maximum pins reached', 'You can only pin up to 3 conversations.');
-        return;
-      }
-      const updated = [otherId, ...pinnedIds];
-      setPinnedIds(updated);
-      await AsyncStorage.setItem(`momento_pinned_convs_${user!.id}`, JSON.stringify(updated));
+  const sortConvos = (convos: any[]) => [...convos].sort((a, b) => {
+    if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+    if (a.is_pinned && b.is_pinned) {
+      return new Date(b.pinned_at ?? 0).getTime() - new Date(a.pinned_at ?? 0).getTime();
+    }
+    return new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime();
+  });
+
+  const handlePin = async (conversation: any) => {
+    const newPinned = !conversation.is_pinned;
+    const now = new Date().toISOString();
+    setConversations(prev => sortConvos(prev.map(c =>
+      c.id === conversation.id ? { ...c, is_pinned: newPinned, pinned_at: newPinned ? now : null } : c
+    )));
+    try {
+      await setConversationPinned(conversation.id, newPinned);
+    } catch {
+      setConversations(prev => sortConvos(prev.map(c => c.id === conversation.id ? conversation : c)));
+      Alert.alert('Error', 'Could not update pin. Please try again.');
     }
   };
 
@@ -129,16 +126,7 @@ export default function MessagesScreen() {
   };
 
   const filteredConversations = conversations
-    .filter(item => (item.otherUsername ?? '').toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => {
-      const aOtherId = a.participant_1 === user?.id ? a.participant_2 : a.participant_1;
-      const bOtherId = b.participant_1 === user?.id ? b.participant_2 : b.participant_1;
-      const aPinned = pinnedIds.includes(aOtherId);
-      const bPinned = pinnedIds.includes(bOtherId);
-      if (aPinned && !bPinned) return -1;
-      if (!aPinned && bPinned) return 1;
-      return 0;
-    });
+    .filter(item => (item.otherUsername ?? '').toLowerCase().includes(searchQuery.toLowerCase()));
 
   const RequestsHeader = messageRequests.length > 0 ? (
     <View>
@@ -228,28 +216,24 @@ export default function MessagesScreen() {
                 </Pressable>
               )}
             >
-              <Pressable
+              <ConversationRow
+                conversation={item}
+                currentUserId={user!.id}
+                customPreview={isPendingSent ? 'Waiting for them to accept your message request...' : undefined}
+                isPinned={item.is_pinned}
+                onPress={() => navigation.navigate('Chat', { conversationId: item.id, otherUserId: otherId, otherUsername: item.otherUsername ?? '' })}
                 onLongPress={() => {
-                  const alreadyPinned = pinnedIds.includes(otherId);
                   Alert.alert(
-                    alreadyPinned ? 'Unpin conversation' : 'Pin conversation',
+                    item.otherUsername ?? 'Conversation',
                     undefined,
                     [
-                      { text: alreadyPinned ? 'Unpin' : 'Pin', onPress: () => togglePin(otherId) },
+                      { text: item.is_pinned ? 'Unpin Conversation' : 'Pin Conversation', onPress: () => handlePin(item) },
+                      { text: 'Clear', style: 'destructive', onPress: () => handleClearConversation(item) },
                       { text: 'Cancel', style: 'cancel' },
                     ]
                   );
                 }}
-                delayLongPress={400}
-              >
-                <ConversationRow
-                  conversation={item}
-                  currentUserId={user!.id}
-                  customPreview={isPendingSent ? 'Waiting for them to accept your message request...' : undefined}
-                  isPinned={pinnedIds.includes(otherId)}
-                  onPress={() => navigation.navigate('Chat', { conversationId: item.id, otherUserId: otherId, otherUsername: item.otherUsername ?? '' })}
-                />
-              </Pressable>
+              />
             </Swipeable>
           );
         }}

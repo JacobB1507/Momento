@@ -67,7 +67,7 @@ export default function TabNavigator() {
         options={{
           tabBarIcon: ({ focused }) => <CreateTabIcon focused={focused} />,
           tabBarLabel: ({ color }) => (
-            <Text style={{ color, fontSize: 10, textAlign: 'center', flexShrink: 0, marginTop: 8 }}>
+            <Text style={{ color, fontSize: 10, textAlign: 'center', flexShrink: 0, marginTop: 12 }}>
               Create
             </Text>
           ),

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import type { MainTabParamList } from '../navigation/types';
 import type { GalleryPrivacy } from '../types/database';
 import { getDraft, setDraft } from '../lib/createGalleryDraft';
+import { getDefaultGalleryPrivacy } from '../lib/galleries';
 
 const PRIVACY_OPTIONS: { value: GalleryPrivacy; label: string; description: string }[] = [
   { value: 'private', label: 'Private', description: 'Only members' },
@@ -33,11 +34,26 @@ export default function CreateScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (getDraft().privacy === null && session?.user.id) {
+      getDefaultGalleryPrivacy(session.user.id).then((pref) => {
+        if (getDraft().privacy === null) {
+          setPrivacy(pref);
+          setDraft({ privacy: pref });
+        }
+      });
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       const draft = getDraft();
       setTitle(draft.title);
-      setPrivacy(draft.privacy ?? 'friends');
+      if (draft.privacy !== null) {
+        setPrivacy(draft.privacy);
+      } else if (session?.user.id) {
+        getDefaultGalleryPrivacy(session.user.id).then((pref) => setPrivacy(pref));
+      }
     }, [])
   );
   const handleCreate = () => {

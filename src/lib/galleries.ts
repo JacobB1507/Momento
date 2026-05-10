@@ -179,3 +179,21 @@ export async function getProfile(userId: string) {
   if (error) return null;
   return data;
 }
+
+export async function getDefaultGalleryPrivacy(userId: string): Promise<'private' | 'friends' | 'public'> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('default_gallery_privacy')
+    .eq('id', userId)
+    .single();
+  if (error || !data?.default_gallery_privacy) return 'friends';
+  return data.default_gallery_privacy as 'private' | 'friends' | 'public';
+}
+
+export async function setDefaultGalleryPrivacy(userId: string, privacy: 'private' | 'friends' | 'public'): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ default_gallery_privacy: privacy })
+    .eq('id', userId);
+  if (error) throw error;
+}
