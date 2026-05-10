@@ -16,7 +16,10 @@
       "Bash(node *)",
       "Bash(Get-Content \"C:\\\\Users\\\\jbatt\\\\my-app\\\\Momento\\\\src\\\\screens\\\\FriendProfileScreen.tsx\")",
       "Bash(Measure-Object -Line)",
-      "PowerShell(Get-Content *)"
+      "PowerShell(Get-Content *)",
+      "Bash(grep -r \"eyJ[A-Za-z0-9_-]\\\\{20,\\\\}\" --include=\"*.json\" --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.js\" --include=\"*.md\" .)",
+      "Bash(grep -rn \"supabase.co\\\\|supabase\\\\\\\\.io\" --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.js\" .)",
+      "Bash(python3 *)"
     ]
   }
 }
