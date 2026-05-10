@@ -15,6 +15,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
+import { checkRateLimit } from '../../lib/rateLimit';
+import { userFacingError, reportError } from '../../lib/errorReport';
 import type { SignUpNavigationProp } from '../../navigation/types';
 
 type Props = { navigation: SignUpNavigationProp };
@@ -32,6 +34,11 @@ export default function SignUpScreen({ navigation }: Props) {
   const [policyError, setPolicyError] = useState('');
 
   const handleSignUp = async () => {
+    const allowed = await checkRateLimit('signup_attempt');
+    if (!allowed) {
+      Alert.alert('Slow down', 'Please wait a few minutes before trying again.');
+      return;
+    }
     setEmailError('');
     setPasswordError('');
     setGeneralError('');
@@ -48,8 +55,8 @@ export default function SignUpScreen({ navigation }: Props) {
       Alert.alert('Passwords do not match', 'Please make sure both passwords are the same.');
       return;
     }
-    if (password.length < 6) {
-      setPasswordError('Password must be at least 6 characters.');
+    if (password.length < 8) {
+      setPasswordError('Password must be at least 8 characters.');
       return;
     }
     setLoading(true);
@@ -72,12 +79,9 @@ export default function SignUpScreen({ navigation }: Props) {
       password,
     });
     setLoading(false);
-    if (error?.message?.toLowerCase().includes('already registered')) {
-      setEmailError('An account with this email already exists.');
-    } else if (error?.message?.toLowerCase().includes('password')) {
-      setPasswordError('Password must be at least 6 characters.');
-    } else if (error) {
-      setGeneralError(error.message);
+    if (error) {
+      Alert.alert('Sign up failed', userFacingError(error));
+      reportError('SignUpScreen.signUp', error);
     } else {
       setSent(true);
     }

@@ -1,4 +1,6 @@
 import { supabase } from './supabase';
+import { checkRateLimit, RateLimitError } from './rateLimit';
+import { validateComment, sanitizeText } from './sanitize';
 
 export const REPLY_LIMIT = 10; // Easy to change
 
@@ -21,9 +23,16 @@ export async function fetchComments(galleryId: string): Promise<any[]> {
 }
 
 export async function addComment(galleryId: string, userId: string, content: string, parentId?: string): Promise<any> {
+  const allowed = await checkRateLimit('comment_send');
+  if (!allowed) throw new RateLimitError('comment_send');
+
+  const clean = sanitizeText(content);
+  const validation = validateComment(clean);
+  if (!validation.ok) throw new Error(validation.error!);
+
   const { data, error } = await supabase
     .from('comments')
-    .insert({ gallery_id: galleryId, user_id: userId, content, parent_id: parentId ?? null })
+    .insert({ gallery_id: galleryId, user_id: userId, content: clean, parent_id: parentId ?? null })
     .select('*')
     .single();
   if (error) throw error;

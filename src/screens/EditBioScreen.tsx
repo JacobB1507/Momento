@@ -15,6 +15,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { getProfile } from '../lib/galleries';
+import { validateBio, sanitizeText } from '../lib/sanitize';
+import { userFacingError, reportError } from '../lib/errorReport';
 
 const BIO_LIMIT = 150;
 
@@ -34,15 +36,22 @@ export default function EditBioScreen() {
   }, [userId]);
 
   const handleSave = async () => {
+    const clean = sanitizeText(bio);
+    const validation = validateBio(clean);
+    if (!validation.ok) {
+      Alert.alert('Invalid bio', validation.error!);
+      return;
+    }
     setLoading(true);
     const { error } = await supabase
       .from('profiles')
-      .update({ bio })
+      .update({ bio: clean })
       .eq('id', userId);
     setLoading(false);
 
     if (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Error', userFacingError(error));
+      reportError('EditBioScreen.save', error);
       return;
     }
     Alert.alert('Bio updated!', '', [{ text: 'OK', onPress: () => navigation.goBack() }]);

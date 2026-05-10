@@ -15,6 +15,8 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { validateUsername, sanitizeText } from '../lib/sanitize';
+import { userFacingError, reportError } from '../lib/errorReport';
 
 const DAYS_LOCK = 30;
 
@@ -54,9 +56,10 @@ export default function ChangeUsernameScreen() {
   })();
 
   const handleSave = async () => {
-    const trimmed = username.trim();
-    if (!trimmed) {
-      Alert.alert('Invalid username', 'Username cannot be empty.');
+    const clean = sanitizeText(username);
+    const validation = validateUsername(clean);
+    if (!validation.ok) {
+      Alert.alert('Invalid username', validation.error!);
       return;
     }
 
@@ -73,12 +76,13 @@ export default function ChangeUsernameScreen() {
     setSaving(true);
     const { error } = await supabase
       .from('profiles')
-      .update({ username: trimmed, last_username_change: new Date().toISOString() })
+      .update({ username: clean, last_username_change: new Date().toISOString() })
       .eq('id', userId);
     setSaving(false);
 
     if (error) {
-      Alert.alert('Error', 'Could not update username. Please try again.');
+      Alert.alert('Error', userFacingError(error));
+      reportError('ChangeUsernameScreen.save', error);
       return;
     }
 

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -19,6 +20,8 @@ import type { MainTabParamList } from '../navigation/types';
 import type { GalleryPrivacy } from '../types/database';
 import { getDraft, setDraft } from '../lib/createGalleryDraft';
 import { getDefaultGalleryPrivacy } from '../lib/galleries';
+import { checkRateLimit } from '../lib/rateLimit';
+import { validateGalleryTitle, sanitizeText } from '../lib/sanitize';
 
 const PRIVACY_OPTIONS: { value: GalleryPrivacy; label: string; description: string }[] = [
   { value: 'private', label: 'Private', description: 'Only members' },
@@ -56,13 +59,22 @@ export default function CreateScreen() {
       }
     }, [])
   );
-  const handleCreate = () => {
-    const trimmed = title.trim();
-    if (!trimmed) return;
+  const handleCreate = async () => {
+    const allowed = await checkRateLimit('gallery_create');
+    if (!allowed) {
+      Alert.alert('Slow down', 'Please wait a few minutes before trying again.');
+      return;
+    }
+    const clean = sanitizeText(title);
+    const validation = validateGalleryTitle(clean);
+    if (!validation.ok) {
+      Alert.alert('Invalid title', validation.error!);
+      return;
+    }
 
     Keyboard.dismiss();
     (navigation as any).navigate('GalleryInviteNew', {
-      galleryTitle: trimmed,
+      galleryTitle: clean,
       privacy,
       pendingCreate: true,
     });

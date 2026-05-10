@@ -22,6 +22,8 @@ import { useAuth } from '../context/AuthContext';
 import { useTutorial } from '../context/TutorialContext';
 import { createInviteLink } from '../lib/friends';
 import { searchUsers } from '../lib/search';
+import { checkRateLimit } from '../lib/rateLimit';
+import { userFacingError, reportError } from '../lib/errorReport';
 import { SearchPersonRow } from '../components/SearchPersonRow';
 import SuggestedFriendsSection from '../components/SuggestedFriendsSection';
 
@@ -62,6 +64,11 @@ export default function AddFriendScreen() {
   };
 
   const handleShare = async (type: ShareType) => {
+    const allowed = await checkRateLimit('friend_request');
+    if (!allowed) {
+      Alert.alert('Slow down', 'Please wait a few minutes before trying again.');
+      return;
+    }
     setSharingType(type);
     const link = await createInviteLink(currentUserId);
     setSharingType(null);
@@ -74,7 +81,10 @@ export default function AddFriendScreen() {
         case 'email':    await Linking.openURL(`mailto:?subject=${encodeURIComponent('Join me on Momento')}&body=${encodeURIComponent(msg)}`); break;
         case 'more':     await Share.share({ message: msg }); break;
       }
-    } catch { Alert.alert('Error', 'Could not open share. Please try again.'); }
+    } catch (err) {
+      Alert.alert('Error', userFacingError(err));
+      reportError('AddFriendScreen.share', err);
+    }
   };
 
   const listHeader = (

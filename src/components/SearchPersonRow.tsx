@@ -1,9 +1,11 @@
 import React, { useCallback, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../lib/supabase';
 import { sendFriendRequest } from '../lib/friends';
+import { checkRateLimit } from '../lib/rateLimit';
+import { userFacingError, reportError } from '../lib/errorReport';
 import type { RootStackParamList } from '../navigation/types';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -51,12 +53,23 @@ export function SearchPersonRow({ user, currentUserId, onPress }: Props) {
   );
 
   const handleAddFriend = async () => {
+    const allowed = await checkRateLimit('friend_request');
+    if (!allowed) {
+      Alert.alert('Slow down', 'Please wait before sending more friend requests.');
+      return;
+    }
     if (!user.username) return;
     setLoading(true);
-    const result = await sendFriendRequest(currentUserId, user.username);
-    if (result === 'sent') setStatus('pending');
-    else if (result === 'already_friends') setStatus('friends');
-    setLoading(false);
+    try {
+      const result = await sendFriendRequest(currentUserId, user.username);
+      if (result === 'sent') setStatus('pending');
+      else if (result === 'already_friends') setStatus('friends');
+    } catch (err) {
+      Alert.alert('Friend request failed', userFacingError(err));
+      reportError('SearchPersonRow.sendFriendRequest', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const letter = (user.username ?? '?').charAt(0).toUpperCase();

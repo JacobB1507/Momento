@@ -1,4 +1,6 @@
 import { supabase } from './supabase';
+import { checkRateLimit, RateLimitError } from './rateLimit';
+import { validateMessage, sanitizeText } from './sanitize';
 
 export type Conversation = {
   id: string;
@@ -75,9 +77,16 @@ export async function sendMessage(
   senderId: string,
   content: string,
 ): Promise<Message> {
+  const allowed = await checkRateLimit('message_send');
+  if (!allowed) throw new RateLimitError('message_send');
+
+  const clean = sanitizeText(content);
+  const validation = validateMessage(clean);
+  if (!validation.ok) throw new Error(validation.error!);
+
   const { data: message, error: insertError } = await supabase
     .from('messages')
-    .insert({ conversation_id: conversationId, sender_id: senderId, content })
+    .insert({ conversation_id: conversationId, sender_id: senderId, content: clean })
     .select('id, conversation_id, sender_id, content, created_at')
     .single();
 
@@ -85,7 +94,7 @@ export async function sendMessage(
 
   const { error: updateError } = await supabase
     .from('conversations')
-    .update({ last_message: content, last_message_at: message.created_at })
+    .update({ last_message: clean, last_message_at: message.created_at })
     .eq('id', conversationId);
 
   if (updateError) throw updateError;

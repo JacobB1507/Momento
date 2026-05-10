@@ -14,6 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { validateDisplayName, sanitizeText } from '../lib/sanitize';
+import { userFacingError, reportError } from '../lib/errorReport';
 
 export default function EditDisplayNameScreen() {
   const navigation = useNavigation();
@@ -38,16 +40,22 @@ export default function EditDisplayNameScreen() {
   }, [userId]);
 
   const handleSave = async () => {
-    const trimmed = displayName.trim();
+    const clean = sanitizeText(displayName);
+    const validation = validateDisplayName(clean);
+    if (!validation.ok) {
+      Alert.alert('Invalid display name', validation.error!);
+      return;
+    }
     setSaving(true);
     const { error } = await supabase
       .from('profiles')
-      .update({ display_name: trimmed || null })
+      .update({ display_name: clean })
       .eq('id', userId);
     setSaving(false);
 
     if (error) {
-      Alert.alert('Error', 'Could not update display name. Please try again.');
+      Alert.alert('Error', userFacingError(error));
+      reportError('EditDisplayNameScreen.save', error);
       return;
     }
 
