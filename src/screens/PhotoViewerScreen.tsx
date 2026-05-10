@@ -3,8 +3,6 @@ import {
   View,
   Text,
   Pressable,
-  FlatList,
-  Dimensions,
   StatusBar,
   StyleSheet,
 } from 'react-native';
@@ -13,10 +11,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
-import { supabase } from '../lib/supabase';
+import ImageViewer from 'react-native-image-zoom-viewer';
 import type { RootStackParamList } from '../navigation/types';
-
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+import { supabase } from '../lib/supabase';
 
 type Uploader = { id: string; username: string; display_name: string | null; avatar_url: string | null };
 
@@ -28,6 +25,7 @@ export default function PhotoViewerScreen() {
   const [currentIndex, setCurrentIndex] = useState(initialIndex ?? 0);
   const [uploaderMap, setUploaderMap] = useState<Map<string, Uploader>>(new Map());
 
+  // Preload all uploader profiles at once to prevent flash on swipe
   useEffect(() => {
     const uniqueIds = [...new Set(photos.map((p: any) => p.uploaded_by).filter(Boolean))];
     if (uniqueIds.length === 0) return;
@@ -48,36 +46,26 @@ export default function PhotoViewerScreen() {
     return photo ? uploaderMap.get(photo.uploaded_by) ?? null : null;
   }, [currentIndex, photos, uploaderMap]);
 
+  const imageUrls = useMemo(
+    () => photos.map((p: any) => ({ url: p.url })),
+    [photos]
+  );
+
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" />
 
-      <FlatList
-        data={photos}
-        keyExtractor={(item: any, idx) => `${item.id ?? idx}`}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        initialScrollIndex={initialIndex}
-        getItemLayout={(_, index) => ({
-          length: SCREEN_W,
-          offset: SCREEN_W * index,
-          index,
-        })}
-        onMomentumScrollEnd={(e) => {
-          const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
-          setCurrentIndex(idx);
+      <ImageViewer
+        imageUrls={imageUrls}
+        index={currentIndex}
+        onChange={(idx) => {
+          if (typeof idx === 'number') setCurrentIndex(idx);
         }}
-        renderItem={({ item }: any) => (
-          <View style={styles.imageWrap}>
-            <Image
-              source={{ uri: item.url }}
-              style={styles.image}
-              contentFit="contain"
-              transition={150}
-            />
-          </View>
-        )}
+        onSwipeDown={() => navigation.goBack()}
+        enableSwipeDown={true}
+        saveToLocalByLongPress={false}
+        renderIndicator={() => null as any}
+        backgroundColor="#000"
       />
 
       {/* Header overlay */}
@@ -124,8 +112,6 @@ export default function PhotoViewerScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
-  imageWrap: { width: SCREEN_W, height: SCREEN_H, justifyContent: 'center', alignItems: 'center' },
-  image: { width: SCREEN_W, height: SCREEN_H },
   headerWrap: { position: 'absolute', top: 0, left: 0, right: 0 },
   header: {
     flexDirection: 'row',

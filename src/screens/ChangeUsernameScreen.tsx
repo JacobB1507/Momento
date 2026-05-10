@@ -12,8 +12,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+
+const DAYS_LOCK = 30;
 
 export default function ChangeUsernameScreen() {
   const navigation = useNavigation();
@@ -38,6 +41,17 @@ export default function ChangeUsernameScreen() {
         setLoading(false);
       });
   }, [userId]);
+
+  const lastChangeMs = lastChange ? new Date(lastChange).getTime() : null;
+  const daysSinceChange = lastChangeMs !== null ? Math.floor((Date.now() - lastChangeMs) / 86400000) : null;
+  const isLocked = daysSinceChange !== null && daysSinceChange < DAYS_LOCK;
+  const daysRemaining = isLocked ? DAYS_LOCK - daysSinceChange! : 0;
+  const lastChangedText = daysSinceChange === null ? '' : (() => {
+    const base = daysSinceChange === 0 ? 'Last changed today'
+      : daysSinceChange === 1 ? 'Last changed yesterday'
+      : `Last changed ${daysSinceChange} days ago`;
+    return isLocked ? `${base} · unlocks in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}` : base;
+  })();
 
   const handleSave = async () => {
     const trimmed = username.trim();
@@ -85,10 +99,7 @@ export default function ChangeUsernameScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.header}>
           <Pressable onPress={() => navigation.goBack()} style={styles.cancelButton}>
             <Text style={styles.cancelText}>Cancel</Text>
@@ -97,9 +108,17 @@ export default function ChangeUsernameScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>Username</Text>
+          <View style={styles.warningRow}>
+            <Ionicons name="information-circle-outline" size={16} color="#9CA3AF" />
+            <Text style={styles.warningText}>You can only change your username once every 30 days.</Text>
+          </View>
+
+          <View style={styles.labelRow}>
+            <Text style={styles.label}>Username</Text>
+            {isLocked && <Ionicons name="lock-closed" size={14} color="#9CA3AF" />}
+          </View>
           <TextInput
-            style={styles.input}
+            style={[styles.input, isLocked && styles.inputLocked]}
             value={username}
             onChangeText={setUsername}
             autoCapitalize="none"
@@ -108,19 +127,27 @@ export default function ChangeUsernameScreen() {
             placeholderTextColor="#9CA3AF"
             returnKeyType="done"
             onSubmitEditing={handleSave}
+            editable={!isLocked}
           />
+          {lastChange && daysSinceChange !== null && (
+            <Text style={styles.lastChanged}>{lastChangedText}</Text>
+          )}
         </View>
 
         <View style={styles.footer}>
           <Pressable
-            style={({ pressed }) => [styles.saveButton, pressed && { opacity: 0.75 }, saving && styles.saveButtonDisabled]}
+            style={({ pressed }) => [
+              styles.saveButton,
+              (isLocked || saving) && styles.saveButtonDisabled,
+              !isLocked && !saving && pressed && { opacity: 0.75 },
+            ]}
             onPress={handleSave}
-            disabled={saving}
+            disabled={isLocked || saving}
           >
             {saving ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.saveText}>Save</Text>
+              <Text style={styles.saveText}>{isLocked ? 'Locked' : 'Save'}</Text>
             )}
           </Pressable>
         </View>
@@ -133,14 +160,15 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F9FAFB' },
   flex: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-
   header: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
   cancelButton: { alignSelf: 'flex-start', paddingVertical: 6, marginBottom: 4 },
   cancelText: { fontSize: 16, color: '#FF6B6B', fontWeight: '500' },
   headerTitle: { fontSize: 28, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
-
   section: { paddingHorizontal: 16 },
-  label: { fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  warningRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12 },
+  warningText: { fontSize: 13, color: '#9CA3AF', flex: 1 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  label: { fontSize: 13, fontWeight: '600', color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.5 },
   input: {
     backgroundColor: '#fff',
     borderRadius: 14,
@@ -154,7 +182,8 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-
+  inputLocked: { opacity: 0.5, backgroundColor: '#F3F4F6' },
+  lastChanged: { fontSize: 12, color: '#9CA3AF', marginTop: 6 },
   footer: { paddingHorizontal: 16, marginTop: 24 },
   saveButton: {
     backgroundColor: '#FF6B6B',

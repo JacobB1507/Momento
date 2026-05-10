@@ -1,11 +1,37 @@
 import React, { useCallback, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { getDefaultGalleryPrivacy } from '../lib/galleries';
+
+function Row({ label, subtitle, icon, onPress }: {
+  label: string; subtitle?: string; icon?: React.ReactNode; onPress: () => void;
+}) {
+  return (
+    <Pressable style={({ pressed }) => [styles.row, pressed && styles.rowPressed]} onPress={onPress}>
+      {icon ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+          {icon}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowLabel}>{label}</Text>
+            {subtitle && <Text style={styles.rowSub}>{subtitle}</Text>}
+          </View>
+        </View>
+      ) : (
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowLabel}>{label}</Text>
+          {subtitle && <Text style={styles.rowSub}>{subtitle}</Text>}
+        </View>
+      )}
+      <Text style={styles.chevron}>›</Text>
+    </Pressable>
+  );
+}
+
+const Sep = () => <View style={styles.separator} />;
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
@@ -20,6 +46,9 @@ export default function SettingsScreen() {
     }, [userId])
   );
 
+  const go = (screen: string) => () => navigation.navigate(screen as never);
+  const privacyLabel = defaultPrivacy.charAt(0).toUpperCase() + defaultPrivacy.slice(1);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
@@ -29,139 +58,88 @@ export default function SettingsScreen() {
         <Text style={styles.headerTitle}>Settings</Text>
       </View>
 
-      <View style={styles.section}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.sectionLabel}>PROFILE</Text>
         <View style={styles.card}>
+          <Row label="Change Username" onPress={go('ChangeUsername')} />
+          <Sep />
+          <Row label="Change Email" onPress={go('ChangeEmail')} />
+          <Sep />
+          <Row label="Change Password" onPress={go('ChangePassword')} />
+          <Sep />
+          <Row label="Edit Display Name" onPress={go('EditDisplayName')} />
+          <Sep />
+          <Row label="Edit Bio" onPress={go('EditBio')} />
+        </View>
+
+        <Text style={styles.sectionLabel}>GALLERIES</Text>
+        <View style={styles.card}>
+          <Row label="Default Gallery Privacy" subtitle={privacyLabel} onPress={go('DefaultGalleryPrivacy')} />
+          <Sep />
+          <Row
+            label="Trusted Friends"
+            subtitle="Auto-accept gallery invites from trusted friends"
+            icon={<Ionicons name="star-outline" size={18} color="#111827" />}
+            onPress={go('TrustedFriends')}
+          />
+        </View>
+
+        <Text style={styles.sectionLabel}>OTHER</Text>
+        <View style={styles.card}>
+          <Row label="Notifications" subtitle="Manage what you get notified about" onPress={go('NotificationSettings')} />
+        </View>
+
+        <View style={styles.signOutSection}>
           <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => navigation.navigate('ChangeUsername' as never)}
+            style={({ pressed }) => [styles.signOutButton, pressed && { opacity: 0.7 }]}
+            onPress={() => supabase.auth.signOut()}
           >
-            <Text style={styles.rowLabel}>Change Username</Text>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
-          <View style={styles.separator} />
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => navigation.navigate('ChangeEmail' as never)}
-          >
-            <Text style={styles.rowLabel}>Change Email</Text>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
-          <View style={styles.separator} />
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => navigation.navigate('ChangePassword' as never)}
-          >
-            <Text style={styles.rowLabel}>Change Password</Text>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
-          <View style={styles.separator} />
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => navigation.navigate('EditBio' as never)}
-          >
-            <Text style={styles.rowLabel}>Edit Bio</Text>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
-          <View style={styles.separator} />
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => navigation.navigate('EditDisplayName' as never)}
-          >
-            <Text style={styles.rowLabel}>Edit Display Name</Text>
-            <Text style={styles.chevron}>›</Text>
+            <Text style={styles.signOutText}>Sign Out</Text>
           </Pressable>
         </View>
-      </View>
 
-      <View style={[styles.section, { marginTop: 16 }]}>
-        <View style={styles.card}>
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => navigation.navigate('TrustedFriends' as never)}
+        <View style={styles.deleteSection}>
+          <View style={styles.deleteDivider} />
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() =>
+              Alert.alert(
+                'Delete Account',
+                'This will permanently delete your account and all your data. This cannot be undone.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Continue', style: 'destructive', onPress: () => navigation.navigate('DeleteAccount' as never) },
+                ],
+              )
+            }
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-              <Ionicons name="star-outline" size={18} color="#111827" />
-              <View>
-                <Text style={styles.rowLabel}>Trusted Friends</Text>
-                <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 1 }}>Auto-accept gallery invites from trusted friends</Text>
-              </View>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
+            <Text style={styles.deleteText}>Delete Account</Text>
+          </TouchableOpacity>
         </View>
-      </View>
-
-      <View style={[styles.section, { marginTop: 16 }]}>
-        <View style={styles.card}>
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => navigation.navigate('DefaultGalleryPrivacy' as never)}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowLabel}>Default Gallery Privacy</Text>
-              <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 1, textTransform: 'capitalize' }}>{defaultPrivacy}</Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
-          <View style={styles.separator} />
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => navigation.navigate('NotificationSettings' as never)}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowLabel}>Notifications</Text>
-              <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 1 }}>Manage what you get notified about</Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.signOutSection}>
-        <Pressable
-          style={({ pressed }) => [styles.signOutButton, pressed && { opacity: 0.7 }]}
-          onPress={() => supabase.auth.signOut()}
-        >
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </Pressable>
-      </View>
-
-      <View style={{ marginTop: 60, marginHorizontal: 16 }}>
-        <View style={{ height: 1, backgroundColor: '#333' }} />
-        <TouchableOpacity
-          style={{ marginTop: 40, alignItems: 'center' }}
-          onPress={() =>
-            Alert.alert(
-              'Delete Account',
-              'This will permanently delete your account and all your data. This cannot be undone.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Continue',
-                  style: 'destructive',
-                  onPress: () => navigation.navigate('DeleteAccount' as never),
-                },
-              ],
-            )
-          }
-        >
-          <Text style={{ color: '#EF4444', fontSize: 16, fontWeight: '600' }}>Delete Account</Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F9FAFB' },
-
   header: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
   backButton: { alignSelf: 'flex-start', paddingVertical: 6, marginBottom: 4 },
   backText: { fontSize: 16, color: '#FF6B6B', fontWeight: '500' },
   headerTitle: { fontSize: 28, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
-
-  section: { paddingHorizontal: 16 },
+  scrollContent: { paddingBottom: 40 },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 6,
+  },
   card: {
+    marginHorizontal: 16,
     backgroundColor: '#fff',
     borderRadius: 14,
     overflow: 'hidden',
@@ -171,7 +149,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -181,9 +158,9 @@ const styles = StyleSheet.create({
   },
   rowPressed: { backgroundColor: '#F3F4F6' },
   rowLabel: { fontSize: 16, color: '#111827' },
+  rowSub: { fontSize: 12, color: '#9CA3AF', marginTop: 1 },
   chevron: { fontSize: 20, color: '#C7C7CC', lineHeight: 24 },
   separator: { height: 1, backgroundColor: '#F3F4F6', marginLeft: 16 },
-
   signOutSection: { paddingHorizontal: 16, marginTop: 24 },
   signOutButton: {
     borderRadius: 14,
@@ -197,4 +174,8 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   signOutText: { fontSize: 16, fontWeight: '600', color: '#EF4444' },
+  deleteSection: { marginTop: 60, marginHorizontal: 16 },
+  deleteDivider: { height: 1, backgroundColor: '#333' },
+  deleteButton: { marginTop: 40, alignItems: 'center' },
+  deleteText: { color: '#EF4444', fontSize: 16, fontWeight: '600' },
 });
