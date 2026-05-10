@@ -20,7 +20,9 @@
       "Bash(grep -r \"eyJ[A-Za-z0-9_-]\\\\{20,\\\\}\" --include=\"*.json\" --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.js\" --include=\"*.md\" .)",
       "Bash(grep -rn \"supabase.co\\\\|supabase\\\\\\\\.io\" --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.js\" .)",
       "Bash(python3 *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(Get-Content \"C:\\\\Users\\\\jbatt\\\\my-app\\\\Momento\\\\src\\\\screens\\\\auth\\\\SignUpScreen.tsx\")",
+      "Bash(Select-Object -ExpandProperty Lines)"
     ]
   }
 }

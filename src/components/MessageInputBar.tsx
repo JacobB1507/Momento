@@ -48,6 +48,9 @@ export default function MessageInputBar({ onSend, onSendImage, editingMessage, o
           placeholder="Message..."
           placeholderTextColor="#9CA3AF"
           multiline
+          autoCorrect={true}
+          spellCheck={true}
+          autoCapitalize="sentences"
           returnKeyType="default"
         />
         <Pressable

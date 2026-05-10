@@ -184,6 +184,9 @@ export default function CommentsSheet({ galleryId, visible, onClose, highlightUs
                 placeholder="Add a comment..."
                 placeholderTextColor="#9CA3AF"
                 multiline
+                autoCorrect={true}
+                spellCheck={true}
+                autoCapitalize="sentences"
                 returnKeyType="default"
               />
               <Pressable

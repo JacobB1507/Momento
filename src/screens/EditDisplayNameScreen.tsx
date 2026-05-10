@@ -94,7 +94,9 @@ export default function EditDisplayNameScreen() {
               style={styles.input}
               value={displayName}
               onChangeText={setDisplayName}
-              autoCorrect={false}
+              autoCorrect={true}
+              spellCheck={true}
+              autoCapitalize="words"
               placeholder="Enter display name"
               placeholderTextColor="#9CA3AF"
               returnKeyType="done"

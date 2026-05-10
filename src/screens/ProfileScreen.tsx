@@ -367,6 +367,7 @@ export default function ProfileScreen() {
                 gallery={item}
                 onPress={() => navigation.navigate('GalleryDetail', { galleryId: item.id, galleryTitle: item.title })}
                 onLongPress={() => handleGalleryLongPress(item)}
+                onCommentSheetClose={loadGalleries}
                 currentUserId={user?.id}
                 friendIds={friendIds}
               />

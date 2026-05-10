@@ -32,6 +32,7 @@ export default function SignUpScreen({ navigation }: Props) {
   const [sent, setSent] = useState(false);
   const [acceptedPolicy, setAcceptedPolicy] = useState(false);
   const [policyError, setPolicyError] = useState('');
+  const [accountExistsForEmail, setAccountExistsForEmail] = useState<string | null>(null);
 
   const handleSignUp = async () => {
     const allowed = await checkRateLimit('signup_attempt');
@@ -71,7 +72,7 @@ export default function SignUpScreen({ navigation }: Props) {
       return;
     } else {
       setLoading(false);
-      setEmailError('An account with this email already exists.');
+      setAccountExistsForEmail(email.trim());
       return;
     }
     const { error } = await supabase.auth.signUp({
@@ -80,6 +81,15 @@ export default function SignUpScreen({ navigation }: Props) {
     });
     setLoading(false);
     if (error) {
+      const errorMessage = error.message?.toLowerCase() ?? '';
+      const isExistingAccount =
+        errorMessage.includes('already registered') ||
+        errorMessage.includes('already been registered') ||
+        errorMessage.includes('user already exists');
+      if (isExistingAccount) {
+        setAccountExistsForEmail(email.trim());
+        return;
+      }
       Alert.alert('Sign up failed', userFacingError(error));
       reportError('SignUpScreen.signUp', error);
     } else {
@@ -123,7 +133,7 @@ export default function SignUpScreen({ navigation }: Props) {
                     placeholder="you@example.com"
                     placeholderTextColor="#9CA3AF"
                     value={email}
-                    onChangeText={v => { setEmail(v); setEmailError(''); }}
+                    onChangeText={v => { setEmail(v); setEmailError(''); if (accountExistsForEmail !== null) setAccountExistsForEmail(null); }}
                     autoCapitalize="none"
                     autoCorrect={false}
                     keyboardType="email-address"
@@ -131,6 +141,22 @@ export default function SignUpScreen({ navigation }: Props) {
                     returnKeyType="next"
                   />
                 </View>
+
+                {accountExistsForEmail && (
+                  <View style={styles.existingAccountBanner}>
+                    <Text style={styles.existingAccountText}>
+                      An account with this email already exists.{' '}
+                      <Text
+                        style={styles.existingAccountLink}
+                        onPress={() => {
+                          (navigation as any).navigate('Login', { prefilledEmail: accountExistsForEmail });
+                        }}
+                      >
+                        Log in
+                      </Text>
+                    </Text>
+                  </View>
+                )}
 
                 <View style={styles.field}>
                   <Text style={styles.label}>Password</Text>
@@ -346,5 +372,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
     textAlign: 'center',
+  },
+
+  existingAccountBanner: {
+    marginTop: -12,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  existingAccountText: {
+    fontSize: 14,
+    color: '#D32F2F',
+    lineHeight: 20,
+  },
+  existingAccountLink: {
+    color: '#FF6B6B',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });

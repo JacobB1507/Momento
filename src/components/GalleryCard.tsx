@@ -46,6 +46,7 @@ export function GalleryCard({
   onPress,
   onLongPress,
   onCommentPress,
+  onCommentSheetClose,
   currentUserId,
   friendIds = [],
   refreshKey,
@@ -54,6 +55,7 @@ export function GalleryCard({
   onPress: () => void;
   onLongPress?: () => void;
   onCommentPress?: () => void;
+  onCommentSheetClose?: () => void;
   currentUserId?: string;
   friendIds?: string[];
   refreshKey?: number;
@@ -218,7 +220,7 @@ export function GalleryCard({
         </Pressable>
       </View>
     </Pressable>
-    <CommentsSheet galleryId={gallery.id} visible={showComments} onClose={() => setShowComments(false)} />
+    <CommentsSheet galleryId={gallery.id} visible={showComments} onClose={() => { setShowComments(false); onCommentSheetClose?.(); }} />
   </>
   );
 }

@@ -263,7 +263,7 @@ export default function GalleryDetailScreen() {
         </Text>
       </Pressable>
 
-      <CommentsSheet galleryId={galleryId} visible={showComments} onClose={() => setShowComments(false)} highlightUserId={route.params?.highlightUserId} />
+      <CommentsSheet galleryId={galleryId} visible={showComments} onClose={() => { setShowComments(false); loadGalleryMeta(); }} highlightUserId={route.params?.highlightUserId} />
 
       <RemovalRequestsModal
         visible={showRemovalRequests}

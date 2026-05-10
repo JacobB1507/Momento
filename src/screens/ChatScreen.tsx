@@ -112,7 +112,10 @@ export default function ChatScreen() {
         { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setMessages((prev) => [...prev, payload.new as Message]);
+            setMessages((prev) => {
+              const all = [...prev, payload.new as Message];
+              return Array.from(new Map(all.map(m => [m.id, m])).values());
+            });
             setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
           } else if (payload.eventType === 'UPDATE') {
             setMessages((prev) => prev.map((m) => (m.id === payload.new.id ? (payload.new as Message) : m)));

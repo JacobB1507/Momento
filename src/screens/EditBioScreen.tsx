@@ -81,6 +81,9 @@ export default function EditBioScreen() {
             multiline
             maxLength={BIO_LIMIT}
             autoFocus
+            autoCorrect={true}
+            spellCheck={true}
+            autoCapitalize="sentences"
             textAlignVertical="top"
           />
           <Text style={styles.counter}>{bio.length}/{BIO_LIMIT}</Text>

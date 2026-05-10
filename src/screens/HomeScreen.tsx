@@ -137,6 +137,7 @@ export default function HomeScreen() {
             <GalleryCard
               gallery={item as unknown as Gallery}
               onPress={() => navigateToGallery(item.id, item.title)}
+              onCommentSheetClose={loadFriendGalleries}
               currentUserId={userId}
               friendIds={friendIds}
             />
@@ -158,6 +159,7 @@ export default function HomeScreen() {
             <GalleryCard
               gallery={item}
               onPress={() => navigateToGallery(item.id, item.title)}
+              onCommentSheetClose={loadDiscover}
               currentUserId={userId}
               friendIds={friendIds}
             />
