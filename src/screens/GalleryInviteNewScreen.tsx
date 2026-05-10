@@ -20,6 +20,7 @@ import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../lib/supabase';
 import type { RootStackParamList } from '../navigation/types';
 import { clearDraft } from '../lib/createGalleryDraft';
+import { userFacingError, reportError } from '../lib/errorReport';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'GalleryInviteNew'>;
@@ -162,10 +163,13 @@ export default function GalleryInviteNewScreen() {
       if (!user) return null;
       const { data, error } = await supabase
         .from('galleries')
-        .insert({ title: galleryTitle, owner_id: user.id, privacy: privacy ?? 'friends' })
+        .insert({ title: galleryTitle, created_by: user.id, privacy: privacy ?? 'friends' })
         .select('id')
         .single();
-      if (error) throw error;
+      if (error) {
+        console.error('[createGallery] DB error:', error.message, error.code, error.details);
+        throw error;
+      }
       setCreatedGalleryId(data.id);
       await init(data.id);
       return data.id;
@@ -188,10 +192,18 @@ export default function GalleryInviteNewScreen() {
   };
 
   const handleInvite = async (userId: string) => {
-    const gid = await createGallery();
-    if (!gid) return;
-    await supabase.from('gallery_members').insert({ gallery_id: gid, user_id: userId, role: 'member', status: 'pending' });
-    setInvitedIds(prev => new Set([...prev, userId]));
+    try {
+      const gid = await createGallery();
+      if (!gid) {
+        Alert.alert('Could not create gallery', 'Something went wrong. Please try again.');
+        return;
+      }
+      await supabase.from('gallery_members').insert({ gallery_id: gid, user_id: userId, role: 'member', status: 'pending' });
+      setInvitedIds(prev => new Set([...prev, userId]));
+    } catch (err) {
+      Alert.alert('Could not create gallery', userFacingError(err));
+      reportError('GalleryInviteNewScreen.handleInvite', err);
+    }
   };
 
   const handleCopy = async () => {
@@ -252,10 +264,18 @@ export default function GalleryInviteNewScreen() {
         <Text style={styles.headerTitle}>Invite Friends</Text>
         <Pressable
           onPress={async () => {
-            const gid = createdGalleryId ?? await createGallery();
-            if (!gid) { navigation.goBack(); return; }
-            clearDraft();
-            navigation.replace('GalleryDetail', { galleryId: gid });
+            try {
+              const gid = createdGalleryId ?? await createGallery();
+              if (!gid) {
+                Alert.alert('Could not create gallery', 'Something went wrong. Please try again.');
+                return;
+              }
+              clearDraft();
+              navigation.replace('GalleryDetail', { galleryId: gid });
+            } catch (err) {
+              Alert.alert('Could not create gallery', userFacingError(err));
+              reportError('GalleryInviteNewScreen.handleDone', err);
+            }
           }}
           style={[styles.headerSide, styles.headerSideRight]}
           hitSlop={12}

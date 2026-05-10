@@ -137,7 +137,7 @@ export default function SignUpScreen({ navigation }: Props) {
                   {!!passwordError && <Text style={styles.fieldError}>{passwordError}</Text>}
                   <TextInput
                     style={styles.input}
-                    placeholder="At least 6 characters"
+                    placeholder="At least 8 characters"
                     placeholderTextColor="#9CA3AF"
                     value={password}
                     onChangeText={v => { setPassword(v); setPasswordError(''); }}

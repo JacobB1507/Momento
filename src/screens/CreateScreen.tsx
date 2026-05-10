@@ -101,7 +101,9 @@ export default function CreateScreen() {
           placeholderTextColor="#9CA3AF"
           value={title}
           onChangeText={(text) => { setTitle(text); setDraft({ title: text }); }}
-          autoCapitalize="words"
+          autoCapitalize="sentences"
+          autoCorrect={true}
+          spellCheck={true}
           returnKeyType="done"
           onSubmitEditing={handleCreate}
           maxLength={60}
