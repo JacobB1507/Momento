@@ -19,7 +19,8 @@
       "PowerShell(Get-Content *)",
       "Bash(grep -r \"eyJ[A-Za-z0-9_-]\\\\{20,\\\\}\" --include=\"*.json\" --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.js\" --include=\"*.md\" .)",
       "Bash(grep -rn \"supabase.co\\\\|supabase\\\\\\\\.io\" --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.js\" .)",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(git *)"
     ]
   }
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,6 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
+import { checkRateLimit } from '../../lib/rateLimit';
+import { userFacingError, reportError } from '../../lib/errorReport';
 import type { LoginNavigationProp, RootStackParamList } from '../../navigation/types';
 
 type Props = { navigation: LoginNavigationProp };
@@ -29,6 +32,14 @@ export default function LoginScreen({ navigation }: Props) {
   const clearErrors = () => { setEmailError(''); setPasswordError(''); };
 
   const handleLogin = async () => {
+    const allowed = await checkRateLimit('login_attempt');
+    if (!allowed) {
+      Alert.alert(
+        'Too many attempts',
+        'Please wait 15 minutes before trying again.'
+      );
+      return;
+    }
     clearErrors();
     if (!email.trim() || !password) {
       if (!email.trim()) setEmailError('Please enter your email address.');
@@ -42,20 +53,8 @@ export default function LoginScreen({ navigation }: Props) {
     });
     setLoading(false);
     if (error) {
-      if (error.code === 'invalid_credentials' || error.message?.toLowerCase().includes('invalid login credentials')) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', email.trim())
-          .maybeSingle();
-        if (!profile) {
-          setEmailError('No account found with this email.');
-        } else {
-          setPasswordError('Incorrect password.');
-        }
-      } else {
-        setEmailError(error.message);
-      }
+      Alert.alert('Sign in failed', userFacingError(error));
+      reportError('LoginScreen.signIn', error);
     }
   };
 
