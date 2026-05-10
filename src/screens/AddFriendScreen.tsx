@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Entypo from '@expo/vector-icons/Entypo';
 import { useAuth } from '../context/AuthContext';
+import { useTutorial } from '../context/TutorialContext';
 import { createInviteLink } from '../lib/friends';
 import { searchUsers } from '../lib/search';
 import { SearchPersonRow } from '../components/SearchPersonRow';
@@ -36,7 +37,15 @@ const SHARE_BUTTONS: { type: ShareType; icon: React.ReactNode; label: string }[]
 export default function AddFriendScreen() {
   const navigation = useNavigation<any>();
   const { session } = useAuth();
+  const tutorial = useTutorial();
+  const tutorialActive = tutorial.active;
   const currentUserId = session?.user.id ?? '';
+
+  useEffect(() => {
+    if (tutorial.active && tutorial.currentStep?.id === 'nav_add_friend') {
+      setTimeout(() => tutorial.nextStep(), 300);
+    }
+  }, [tutorial.active, tutorial.currentStep?.id]);
 
   const [query, setQuery] = useState('');
   const [people, setPeople] = useState<any[]>([]);
@@ -78,7 +87,7 @@ export default function AddFriendScreen() {
           onChangeText={(text) => { setQuery(text); runSearch(text); }}
           autoCapitalize="none"
           autoCorrect={false}
-          autoFocus
+          autoFocus={!tutorialActive}
           placeholder="Search people..."
           placeholderTextColor="#9CA3AF"
           returnKeyType="search"

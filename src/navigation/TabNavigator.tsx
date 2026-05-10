@@ -8,6 +8,8 @@ import SearchScreen from '../screens/SearchScreen';
 import CreateScreen from '../screens/CreateScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import MessagesScreen from '../screens/MessagesScreen';
+import { useTutorial } from '../context/TutorialContext';
+import TabBarIcon from '../components/TabBarIcon';
 
 const Tab = createBottomTabNavigator();
 
@@ -20,6 +22,7 @@ function CreateTabIcon({ focused }: { focused: boolean }) {
 }
 
 export default function TabNavigator() {
+  const tutorial = useTutorial();
   return (
     <Tab.Navigator
       screenOptions={{
@@ -34,10 +37,21 @@ export default function TabNavigator() {
       <Tab.Screen
         name="Home"
         component={HomeScreen}
-        listeners={{ focus: () => clearDraft() }}
+        listeners={{
+          focus: () => clearDraft(),
+          tabPress: (e) => {
+            if (tutorial.active && tutorial.currentStep?.targetTab && tutorial.currentStep.targetTab !== 'Home') {
+              e.preventDefault();
+            } else if (tutorial.active && tutorial.currentStep?.targetTab === 'Home') {
+              if (tutorial.currentStep?.kind === 'navigate') setTimeout(() => tutorial.nextStep(), 350);
+            }
+          },
+        }}
         options={{
           tabBarIcon: ({ focused, color }: { focused: boolean; color: string; size: number }) => (
-            <Ionicons name={focused ? 'home' : 'home-outline'} size={26} color={color} />
+            <TabBarIcon tabKey="home">
+              <Ionicons name={focused ? 'home' : 'home-outline'} size={26} color={color} />
+            </TabBarIcon>
           ),
           tabBarLabel: ({ color }) => (
             <Text allowFontScaling={false} style={{ color, fontSize: 10, textAlign: 'center', flexShrink: 0 }}>
@@ -49,10 +63,21 @@ export default function TabNavigator() {
       <Tab.Screen
         name="Search"
         component={SearchScreen}
-        listeners={{ focus: () => clearDraft() }}
+        listeners={{
+          focus: () => clearDraft(),
+          tabPress: (e) => {
+            if (tutorial.active && tutorial.currentStep?.targetTab && tutorial.currentStep.targetTab !== 'Search') {
+              e.preventDefault();
+            } else if (tutorial.active && tutorial.currentStep?.targetTab === 'Search') {
+              if (tutorial.currentStep?.kind === 'navigate') setTimeout(() => tutorial.nextStep(), 350);
+            }
+          },
+        }}
         options={{
           tabBarIcon: ({ focused, color }: { focused: boolean; color: string; size: number }) => (
-            <Ionicons name={focused ? 'search' : 'search-outline'} size={26} color={color} />
+            <TabBarIcon tabKey="search">
+              <Ionicons name={focused ? 'search' : 'search-outline'} size={26} color={color} />
+            </TabBarIcon>
           ),
           tabBarLabel: ({ color }) => (
             <Text allowFontScaling={false} style={{ color, fontSize: 10, textAlign: 'center', flexShrink: 0 }}>
@@ -64,8 +89,17 @@ export default function TabNavigator() {
       <Tab.Screen
         name="Create"
         component={CreateScreen}
+        listeners={{
+          tabPress: (e) => {
+            if (tutorial.active && tutorial.currentStep?.targetTab && tutorial.currentStep.targetTab !== 'Create') {
+              e.preventDefault();
+            } else if (tutorial.active && tutorial.currentStep?.targetTab === 'Create') {
+              if (tutorial.currentStep?.kind === 'navigate') setTimeout(() => tutorial.nextStep(), 350);
+            }
+          },
+        }}
         options={{
-          tabBarIcon: ({ focused }) => <CreateTabIcon focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabBarIcon tabKey="create"><CreateTabIcon focused={focused} /></TabBarIcon>,
           tabBarLabel: ({ color }) => (
             <Text style={{ color, fontSize: 10, textAlign: 'center', flexShrink: 0, marginTop: 12 }}>
               Create
@@ -76,10 +110,21 @@ export default function TabNavigator() {
       <Tab.Screen
         name="Messages"
         component={MessagesScreen}
-        listeners={{ focus: () => clearDraft() }}
+        listeners={{
+          focus: () => clearDraft(),
+          tabPress: (e) => {
+            if (tutorial.active && tutorial.currentStep?.targetTab && tutorial.currentStep.targetTab !== 'Messages') {
+              e.preventDefault();
+            } else if (tutorial.active && tutorial.currentStep?.targetTab === 'Messages') {
+              if (tutorial.currentStep?.kind === 'navigate') setTimeout(() => tutorial.nextStep(), 350);
+            }
+          },
+        }}
         options={{
           tabBarIcon: ({ focused, color }: { focused: boolean; color: string; size: number }) => (
-            <Ionicons name={focused ? 'paper-plane' : 'paper-plane-outline'} size={26} color={color} />
+            <TabBarIcon tabKey="messages">
+              <Ionicons name={focused ? 'paper-plane' : 'paper-plane-outline'} size={26} color={color} />
+            </TabBarIcon>
           ),
           tabBarLabel: ({ color }) => (
             <Text allowFontScaling={false} style={{ color, fontSize: 10, textAlign: 'center', flexShrink: 0 }}>
@@ -91,10 +136,21 @@ export default function TabNavigator() {
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
-        listeners={{ focus: () => clearDraft() }}
+        listeners={{
+          focus: () => clearDraft(),
+          tabPress: (e) => {
+            if (tutorial.active && tutorial.currentStep?.targetTab && tutorial.currentStep.targetTab !== 'Profile') {
+              e.preventDefault();
+            } else if (tutorial.active && tutorial.currentStep?.targetTab === 'Profile') {
+              if (tutorial.currentStep?.kind === 'navigate') setTimeout(() => tutorial.nextStep(), 350);
+            }
+          },
+        }}
         options={{
           tabBarIcon: ({ focused, color }: { focused: boolean; color: string; size: number }) => (
-            <Ionicons name={focused ? 'person' : 'person-outline'} size={26} color={color} />
+            <TabBarIcon tabKey="profile">
+              <Ionicons name={focused ? 'person' : 'person-outline'} size={26} color={color} />
+            </TabBarIcon>
           ),
           tabBarLabel: ({ color }) => (
             <Text allowFontScaling={false} style={{ color, fontSize: 10, textAlign: 'center', flexShrink: 0 }}>

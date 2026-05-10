@@ -5,6 +5,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { useTutorial } from '../context/TutorialContext';
 import { getDefaultGalleryPrivacy } from '../lib/galleries';
 
 function Row({ label, subtitle, icon, onPress }: {
@@ -46,8 +47,19 @@ export default function SettingsScreen() {
     }, [userId])
   );
 
+  const { startTutorial } = useTutorial();
   const go = (screen: string) => () => navigation.navigate(screen as never);
   const privacyLabel = defaultPrivacy.charAt(0).toUpperCase() + defaultPrivacy.slice(1);
+
+  const handleReplayTutorial = async () => {
+    try {
+      await supabase.from('profiles').update({ tutorial_completed: false }).eq('id', userId);
+      navigation.goBack();
+      startTutorial();
+    } catch {
+      Alert.alert('Error', 'Could not reset tutorial.');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -88,6 +100,15 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <Row label="Notifications" subtitle="Manage what you get notified about" onPress={go('NotificationSettings')} />
         </View>
+
+        {__DEV__ && (
+          <>
+            <Text style={styles.sectionLabel}>DEVELOPER</Text>
+            <View style={styles.card}>
+              <Row label="Replay Tutorial" onPress={handleReplayTutorial} />
+            </View>
+          </>
+        )}
 
         <View style={styles.signOutSection}>
           <Pressable

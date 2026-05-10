@@ -17,6 +17,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../context/AuthContext';
+import { useTutorial } from '../context/TutorialContext';
 import { supabase } from '../lib/supabase';
 import {
   getFriends,
@@ -37,9 +38,25 @@ export default function FriendsScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'Friends'>>();
   const { session } = useAuth();
   const userId = session?.user.id ?? '';
+  const tutorial = useTutorial();
+  const addFriendButtonRef = useRef(null);
   const listRef = useRef<FlatList>(null);
   const scrollRef = useRef<ScrollView>(null);
   const highlightConsumed = useRef(false);
+
+  useEffect(() => {
+    tutorial.registerRef('addFriendButton', addFriendButtonRef);
+    return () => tutorial.unregisterRef('addFriendButton');
+  }, []);
+
+  const advancedRef = useRef(false);
+  useEffect(() => {
+    if (advancedRef.current) return;
+    if (tutorial.active && tutorial.currentStep?.id === 'nav_friends_icon' && !tutorial.goingBack.current) {
+      advancedRef.current = true;
+      setTimeout(() => tutorial.nextStep(), 300);
+    }
+  }, []);
 
   const [friends, setFriends] = useState<FriendItem[]>([]);
   const [pending, setPending] = useState<PendingItem[]>([]);
@@ -151,6 +168,7 @@ export default function FriendsScreen() {
         <View style={styles.headerRow}>
           <Text style={styles.headerTitle}>Friends</Text>
           <Pressable
+            ref={addFriendButtonRef}
             onPress={() => navigation.navigate('AddFriend' as never)}
             style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.7 }]}
           >

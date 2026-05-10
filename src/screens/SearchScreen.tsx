@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
+import { useTutorial } from '../context/TutorialContext';
 import { supabase } from '../lib/supabase';
 import { searchUsers, searchGalleries } from '../lib/search';
 import { PeopleSearchResults } from '../components/PeopleSearchResults';
@@ -30,6 +31,7 @@ type Tab = 'people' | 'galleries';
 
 export default function SearchScreen() {
   const { session } = useAuth();
+  const { active: tutorialActive } = useTutorial();
   const navigation = useNavigation<NavProp>();
   const currentUserId = session?.user.id ?? '';
 
@@ -189,7 +191,7 @@ export default function SearchScreen() {
           value={query}
           onChangeText={handleChangeText}
           onSubmitEditing={handleSubmit}
-          autoFocus
+          autoFocus={!tutorialActive}
           autoCapitalize="none"
           autoCorrect={false}
           clearButtonMode="while-editing"

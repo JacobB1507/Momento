@@ -39,6 +39,9 @@ import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
 import { supabase } from '../lib/supabase';
 import { resolveInviteCode } from '../lib/friends';
 import type { RootStackParamList } from './types';
+import { TutorialProvider } from '../context/TutorialContext';
+import TutorialOverlay from '../components/TutorialOverlay';
+import TutorialBootstrap from '../components/TutorialBootstrap';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -113,7 +116,9 @@ export default function RootNavigator() {
   }
 
   return (
+    <TutorialProvider userId={session?.user.id}>
     <NavigationContainer>
+      <>
       <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
         {session ? (
           <>
@@ -229,6 +234,10 @@ export default function RootNavigator() {
           </>
         )}
       </Stack.Navigator>
+      <TutorialBootstrap />
+      <TutorialOverlay />
+      </>
     </NavigationContainer>
+    </TutorialProvider>
   );
 }

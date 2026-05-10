@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAuth } from '../context/AuthContext';
+import { useTutorial } from '../context/TutorialContext';
 import type { RootStackParamList } from '../navigation/types';
 import type { Gallery } from '../types/database';
 import { supabase } from '../lib/supabase';
@@ -47,6 +48,14 @@ export default function ProfileScreen() {
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [showFriendsList, setShowFriendsList] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+
+  const tutorial = useTutorial();
+  const friendsIconRef = useRef(null);
+
+  useEffect(() => {
+    tutorial.registerRef('friendsIcon', friendsIconRef);
+    return () => tutorial.unregisterRef('friendsIcon');
+  }, []);
 
   const loadFriendCount = async () => {
     if (!user?.id) return;
@@ -266,6 +275,7 @@ export default function ProfileScreen() {
           <Text style={styles.topBarTitle}>Profile</Text>
           <View style={styles.topBarIcons}>
             <Pressable
+              ref={friendsIconRef}
               style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.6 }]}
               onPress={() => navigation.navigate('Friends')}
             >

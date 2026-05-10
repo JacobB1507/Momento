@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { supabase } from '../lib/supabase';
 
 function formatTime(iso: string | null): string {
@@ -66,15 +66,23 @@ export default function ConversationRow({ conversation, currentUserId, onPress, 
         </View>
       )}
       <View style={styles.center}>
-        <Text style={styles.username} numberOfLines={1}>
-          {profile?.display_name || profile?.username || '…'}
-        </Text>
+        <View style={styles.nameRow}>
+          {profile === null ? (
+            <View style={styles.nameSkeleton} />
+          ) : (
+            <Text style={styles.username} numberOfLines={1} ellipsizeMode="tail">
+              {profile.display_name || profile.username || ''}
+            </Text>
+          )}
+          {(isPinned || conversation.is_pinned) && (
+            <MaterialCommunityIcons name="pin" size={18} color="#9CA3AF" style={{ marginLeft: 4 }} />
+          )}
+        </View>
         <Text style={[styles.preview, customPreview ? { fontStyle: 'italic', color: '#9ca3af' } : {}]} numberOfLines={1}>
           {customPreview ?? conversation.last_message ?? 'No messages yet'}
         </Text>
       </View>
       <View style={styles.right}>
-        {conversation.is_pinned && <Ionicons name="pin" size={14} color="#FF6B6B" />}
         <Text style={styles.time}>{formatTime(conversation.last_message_at)}</Text>
         {!customPreview && conversation.unread_count > 0 && (
           <View style={styles.badge}>
@@ -107,7 +115,9 @@ const styles = StyleSheet.create({
   },
   avatarLetter: { color: '#fff', fontSize: 18, fontWeight: '700' },
   center: { flex: 1 },
-  username: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 2 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
+  nameSkeleton: { width: 80, height: 12, borderRadius: 4, backgroundColor: '#E5E7EB' },
+  username: { fontSize: 15, fontWeight: '700', color: '#111827', flexShrink: 1 },
   preview: { fontSize: 13, color: '#6b7280' },
   right: { alignItems: 'flex-end', gap: 4 },
   time: { fontSize: 11, color: '#9CA3AF' },
