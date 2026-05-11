@@ -19,7 +19,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Entypo from '@expo/vector-icons/Entypo';
 import { useAuth } from '../context/AuthContext';
-import { useTutorial } from '../context/TutorialContext';
+import { useTutorial } from '../tutorial/TutorialContext';
 import { createInviteLink } from '../lib/friends';
 import { searchUsers } from '../lib/search';
 import { checkRateLimit } from '../lib/rateLimit';

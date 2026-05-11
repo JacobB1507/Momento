@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Alert } from 'react-native';
 import SplashScreen from '../screens/SplashScreen';
 import UsernameSetupScreen from '../screens/UsernameSetupScreen';
@@ -40,38 +40,25 @@ import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
 import { supabase } from '../lib/supabase';
 import { resolveInviteCode } from '../lib/friends';
 import type { RootStackParamList } from './types';
-import { TutorialProvider } from '../context/TutorialContext';
-import TutorialOverlay from '../components/TutorialOverlay';
-import TutorialBootstrap from '../components/TutorialBootstrap';
+import { TutorialProvider } from '../tutorial/TutorialContext';
+import TutorialOverlay from '../tutorial/TutorialOverlay';
+import TutorialBootstrap from '../tutorial/TutorialBootstrap';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
-  const { session, loading } = useAuth();
-  const [profileReady, setProfileReady] = useState(false);
-  const [hasUsername, setHasUsername] = useState(false);
-  const [hasDisplayName, setHasDisplayName] = useState(false);
-  const [hasWelcomeSeen, setHasWelcomeSeen] = useState(false);
+  const { session, loading, restoringSession, profile, profileReady } = useAuth();
 
-  useEffect(() => {
-    if (loading) return;
-    if (!session) { setProfileReady(true); return; }
-    setProfileReady(false);
-    supabase.from('profiles').select('username, display_name, welcome_seen').eq('id', session.user.id).single()
-      .then(({ data, error }) => {
-        if (error) {
-          console.warn('[RootNavigator] profile fetch failed, falling back to MainTabs:', error.message);
-          setHasUsername(true);
-          setHasDisplayName(true);
-          setHasWelcomeSeen(true);
-          return;
-        }
-        setHasUsername(!!data?.username);
-        setHasDisplayName(!!data?.display_name);
-        setHasWelcomeSeen(!!data?.welcome_seen);
-      })
-      .finally(() => setProfileReady(true));
-  }, [loading, session]);
+  const hasUsername = !!profile?.username;
+  const hasDisplayName = !!profile?.display_name;
+  const hasWelcomeSeen = !!profile?.welcome_seen;
+  const hasProfilePhoto = !!profile?.avatar_url || !!profile?.skipped_avatar_setup;
+
+  const onboardingStage =
+    !hasUsername || !hasDisplayName ? 'setup' :
+    !hasProfilePhoto ? 'photo' :
+    !hasWelcomeSeen ? 'welcome' :
+    'main';
 
   useEffect(() => {
     if (!session) return;
@@ -121,7 +108,7 @@ export default function RootNavigator() {
     return () => sub.remove();
   }, []);
 
-  if (loading || !profileReady) {
+  if (loading || restoringSession || (session && !profileReady)) {
     return <SplashScreen />;
   }
 
@@ -129,23 +116,19 @@ export default function RootNavigator() {
     <TutorialProvider userId={session?.user.id}>
     <NavigationContainer>
       <>
-      <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
+      <Stack.Navigator key={onboardingStage} screenOptions={{ headerShown: false, animation: 'fade' }}>
         {session ? (
           <>
-            {/* Initial screen: welcome beta → setup profile → main app */}
-            {!hasWelcomeSeen ? (
-              <Stack.Screen
-                name="WelcomeBeta"
-                component={WelcomeBetaScreen}
-                initialParams={{ onDismissed: () => setHasWelcomeSeen(true) }}
-              />
-            ) : (!hasUsername || !hasDisplayName) ? (
+            {/* Initial screen: setup profile → profile photo → welcome beta → main app */}
+            {(!hasUsername || !hasDisplayName) ? (
               <Stack.Screen name="SetupProfile" component={SetupProfileScreen} />
+            ) : !hasProfilePhoto ? (
+              <Stack.Screen name="ProfilePhotoSetup" component={ProfilePhotoSetupScreen} options={{ headerShown: false }} />
+            ) : !hasWelcomeSeen ? (
+              <Stack.Screen name="WelcomeBeta" component={WelcomeBetaScreen} />
             ) : (
               <Stack.Screen name="MainTabs" component={TabNavigator} />
             )}
-            {(hasUsername && hasDisplayName) && <Stack.Screen name="SetupProfile" component={SetupProfileScreen} />}
-            {(!hasUsername || !hasDisplayName) && <Stack.Screen name="MainTabs" component={TabNavigator} />}
             <Stack.Screen name="UsernameSetup" component={UsernameSetupScreen} />
             <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
 
@@ -217,7 +200,6 @@ export default function RootNavigator() {
             <Stack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />
             <Stack.Screen name="NewMessage" component={NewMessageScreen} options={{ headerShown: false }} />
             <Stack.Screen name="MessageRequests" component={MessageRequestsScreen} options={{ headerShown: false }} />
-            <Stack.Screen name="ProfilePhotoSetup" component={ProfilePhotoSetupScreen} options={{ headerShown: false }} />
             <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} options={{ headerShown: false }} />
             <Stack.Screen
               name="GalleryInviteNew"

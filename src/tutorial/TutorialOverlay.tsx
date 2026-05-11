@@ -3,8 +3,9 @@ import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { TUTORIAL_STEPS, useTutorial } from '../context/TutorialContext';
-import styles from '../styles/tutorialStyles';
+import { TUTORIAL_ENABLED } from './config';
+import { TUTORIAL_STEPS, useTutorial } from './TutorialContext';
+import styles from './tutorialStyles';
 
 type Rect = { x: number; y: number; w: number; h: number };
 const PAD = 8;
@@ -24,7 +25,7 @@ export default function TutorialOverlay() {
   const [refCutout, setRefCutout] = useState<Rect | null>(null);
 
   useEffect(() => {
-    if (!tutorial.active || !tutorial.currentStep?.targetRef) {
+    if (!TUTORIAL_ENABLED || !tutorial.active || !tutorial.currentStep?.targetRef) {
       setRefCutout(null);
       return;
     }
@@ -41,6 +42,7 @@ export default function TutorialOverlay() {
 
   // Re-measure on navigation state changes so stale cutout clears when ref unmounts
   useEffect(() => {
+    if (!TUTORIAL_ENABLED) return;
     const targetRef = tutorial.currentStep?.targetRef;
     const unsubscribe = (navigation as any).addListener('state', () => {
       if (!targetRef) { setRefCutout(null); return; }
@@ -55,7 +57,7 @@ export default function TutorialOverlay() {
   }, [navigation, tutorial.currentStep?.targetRef]);
 
   useEffect(() => {
-    if (!tutorial.active || !tutorial.currentStep) return;
+    if (!TUTORIAL_ENABLED || !tutorial.active || !tutorial.currentStep) return;
     const step = tutorial.currentStep;
 
     // Step 9: navigate to Profile tab so the friends icon is visible to highlight

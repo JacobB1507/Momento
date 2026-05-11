@@ -18,7 +18,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { MainTabParamList } from '../navigation/types';
 import type { GalleryPrivacy } from '../types/database';
-import { getDraft, setDraft } from '../lib/createGalleryDraft';
+import { getDraft, setDraft, clearDraft } from '../lib/createGalleryDraft';
 import { getDefaultGalleryPrivacy } from '../lib/galleries';
 import { checkRateLimit } from '../lib/rateLimit';
 import { validateGalleryTitle, sanitizeText } from '../lib/sanitize';
@@ -73,11 +73,25 @@ export default function CreateScreen() {
     }
 
     Keyboard.dismiss();
-    (navigation as any).navigate('GalleryInviteNew', {
-      galleryTitle: clean,
-      privacy,
-      pendingCreate: true,
-    });
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+      const { data, error: dbError } = await supabase
+        .from('galleries')
+        .insert({ title: clean, created_by: user.id, privacy })
+        .select('id')
+        .single();
+      if (dbError) throw dbError;
+      clearDraft();
+      setTitle('');
+      (navigation as any).navigate('GalleryDetail', { galleryId: data.id });
+    } catch (err: any) {
+      setError(err.message ?? 'Could not create gallery. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

@@ -7,13 +7,14 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import PasswordInput from '../components/PasswordInput';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { validatePassword } from '../lib/validation';
 
 export default function ChangePasswordScreen() {
   const navigation = useNavigation();
@@ -21,9 +22,16 @@ export default function ChangePasswordScreen() {
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
   const handleSend = async () => {
+    const pwErr = validatePassword(newPassword);
+    if (pwErr) {
+      setPasswordError(pwErr);
+      return;
+    }
+
     const email = session?.user.email;
     if (!email) {
       Alert.alert('Error', 'Could not determine your email address.');
@@ -61,28 +69,26 @@ export default function ChangePasswordScreen() {
 
         <View style={styles.section}>
           <Text style={styles.label}>New Password</Text>
-          <TextInput
-            style={styles.input}
+          <PasswordInput
+            style={[styles.input, passwordError ? { borderColor: '#FF3B30', borderWidth: 1 } : null]}
             value={newPassword}
-            onChangeText={setNewPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="Enter new password"
+            onChangeText={v => { setNewPassword(v); setPasswordError(null); }}
+            onBlur={() => setPasswordError(validatePassword(newPassword))}
+            placeholder="At least 8 characters"
             placeholderTextColor="#9CA3AF"
             returnKeyType="next"
           />
+          {passwordError && (
+            <Text style={styles.fieldError}>{passwordError}</Text>
+          )}
         </View>
 
         <View style={[styles.section, styles.sectionSpaced]}>
           <Text style={styles.label}>Confirm Password</Text>
-          <TextInput
+          <PasswordInput
             style={styles.input}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
             placeholder="Confirm new password"
             placeholderTextColor="#9CA3AF"
             returnKeyType="done"
@@ -147,6 +153,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+  fieldError: { color: '#FF3B30', fontSize: 13, marginTop: 6, marginLeft: 4 },
 
   footer: { paddingHorizontal: 16, marginTop: 24 },
   sendButton: {

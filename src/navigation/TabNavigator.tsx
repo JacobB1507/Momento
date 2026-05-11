@@ -8,7 +8,7 @@ import SearchScreen from '../screens/SearchScreen';
 import CreateScreen from '../screens/CreateScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import MessagesScreen from '../screens/MessagesScreen';
-import { useTutorial } from '../context/TutorialContext';
+import { useTutorial } from '../tutorial/TutorialContext';
 import TabBarIcon from '../components/TabBarIcon';
 
 const Tab = createBottomTabNavigator();

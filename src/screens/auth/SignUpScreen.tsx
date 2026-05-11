@@ -16,8 +16,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { checkRateLimit } from '../../lib/rateLimit';
+import { validatePassword } from '../../lib/validation';
 import { userFacingError, reportError } from '../../lib/errorReport';
 import type { SignUpNavigationProp } from '../../navigation/types';
+import PasswordInput from '../../components/PasswordInput';
 
 type Props = { navigation: SignUpNavigationProp };
 
@@ -27,7 +29,7 @@ export default function SignUpScreen({ navigation }: Props) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [generalError, setGeneralError] = useState('');
   const [sent, setSent] = useState(false);
   const [acceptedPolicy, setAcceptedPolicy] = useState(false);
@@ -64,7 +66,7 @@ export default function SignUpScreen({ navigation }: Props) {
       return;
     }
     setEmailError('');
-    setPasswordError('');
+    setPasswordError(null);
     setGeneralError('');
     setPolicyError('');
     if (!acceptedPolicy) {
@@ -79,8 +81,9 @@ export default function SignUpScreen({ navigation }: Props) {
       Alert.alert('Passwords do not match', 'Please make sure both passwords are the same.');
       return;
     }
-    if (password.length < 8) {
-      setPasswordError('Password must be at least 8 characters.');
+    const pwErr = validatePassword(password);
+    if (pwErr) {
+      setPasswordError(pwErr);
       return;
     }
     setLoading(true);
@@ -221,30 +224,33 @@ export default function SignUpScreen({ navigation }: Props) {
 
                 <View style={styles.field}>
                   <Text style={styles.label}>Password</Text>
-                  {!!passwordError && <Text style={styles.fieldError}>{passwordError}</Text>}
-                  <TextInput
-                    style={styles.input}
+                  <PasswordInput
+                    style={[styles.input, passwordError && { borderColor: '#FF3B30', borderWidth: 1 }]}
                     placeholder="At least 8 characters"
                     placeholderTextColor="#9CA3AF"
                     value={password}
-                    onChangeText={v => { setPassword(v); setPasswordError(''); }}
-                    secureTextEntry
+                    onChangeText={v => { setPassword(v); setPasswordError(null); }}
+                    onBlur={() => setPasswordError(validatePassword(password))}
                     autoComplete="off"
                     textContentType="oneTimeCode"
                     passwordRules=""
                     returnKeyType="next"
                   />
+                  {passwordError && (
+                    <Text style={{ color: '#FF3B30', fontSize: 13, marginTop: 6, marginLeft: 4 }}>
+                      {passwordError}
+                    </Text>
+                  )}
                 </View>
 
                 <View style={styles.field}>
                   <Text style={styles.label}>Confirm Password</Text>
-                  <TextInput
+                  <PasswordInput
                     style={styles.input}
                     placeholder="••••••••"
                     placeholderTextColor="#9CA3AF"
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
-                    secureTextEntry
                     autoComplete="new-password"
                     returnKeyType="done"
                     onSubmitEditing={handleSignUp}

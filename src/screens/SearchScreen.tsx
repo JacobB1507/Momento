@@ -13,7 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
-import { useTutorial } from '../context/TutorialContext';
+import { useTutorial } from '../tutorial/TutorialContext';
 import { supabase } from '../lib/supabase';
 import { searchUsers, searchGalleries } from '../lib/search';
 import { PeopleSearchResults } from '../components/PeopleSearchResults';

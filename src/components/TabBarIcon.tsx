@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View } from 'react-native';
-import { useTutorial } from '../context/TutorialContext';
+import { useTutorial } from '../tutorial/TutorialContext';
 
 type Props = { tabKey: string; children: React.ReactNode };
 

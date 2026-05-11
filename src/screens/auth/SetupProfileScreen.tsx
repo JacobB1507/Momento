@@ -11,13 +11,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
-import type { RootStackParamList } from '../../navigation/types';
+import { useAuth } from '../../context/AuthContext';
 
-type Props = { navigation: NativeStackNavigationProp<RootStackParamList, 'SetupProfile'> };
-
-export default function SetupProfileScreen({ navigation }: Props) {
+export default function SetupProfileScreen() {
+  const { refreshProfile } = useAuth();
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
   const [displayNameError, setDisplayNameError] = useState('');
@@ -66,7 +64,7 @@ export default function SetupProfileScreen({ navigation }: Props) {
       return;
     }
 
-    navigation.navigate('ProfilePhotoSetup');
+    await refreshProfile();
   };
 
   return (
@@ -103,6 +101,7 @@ export default function SetupProfileScreen({ navigation }: Props) {
                 placeholderTextColor="#9CA3AF"
                 value={displayName}
                 onChangeText={v => { setDisplayName(v); setDisplayNameError(''); }}
+                autoCapitalize="words"
                 autoCorrect={false}
                 returnKeyType="next"
               />

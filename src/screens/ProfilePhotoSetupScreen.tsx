@@ -1,21 +1,16 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import type { RootStackParamList } from '../navigation/types';
-import styles, { AVATAR_SIZE } from '../styles/profilePhotoSetupStyles';
-
-type NavProp = NativeStackNavigationProp<RootStackParamList>;
+import styles from '../styles/profilePhotoSetupStyles';
 
 export default function ProfilePhotoSetupScreen() {
-  const navigation = useNavigation<NavProp>();
-  const { session } = useAuth();
+  const { session, refreshProfile } = useAuth();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [skipping, setSkipping] = useState(false);
 
   const handleChoosePhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -57,12 +52,22 @@ export default function ProfilePhotoSetupScreen() {
         .update({ avatar_url: urlData.publicUrl })
         .eq('id', user.id);
 
-      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+      await refreshProfile();
     } catch (err: any) {
       Alert.alert('Upload failed', err.message || 'Could not upload your photo. Please try again.');
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleSkip = async () => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+    setSkipping(true);
+    const { error } = await supabase.from('profiles').update({ skipped_avatar_setup: true }).eq('id', userId);
+    setSkipping(false);
+    if (error) { Alert.alert('Error', 'Could not skip setup. Please try again.'); return; }
+    await refreshProfile();
   };
 
   return (
@@ -109,10 +114,13 @@ export default function ProfilePhotoSetupScreen() {
           }
         </Pressable>
         <TouchableOpacity
-          onPress={() => navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] })}
+          onPress={handleSkip}
+          disabled={skipping}
           style={{ paddingVertical: 12, alignItems: 'center' }}
         >
-          <Text style={{ fontSize: 14, color: '#9CA3AF' }}>Skip for now</Text>
+          {skipping
+            ? <ActivityIndicator size="small" color="#9CA3AF" />
+            : <Text style={{ fontSize: 14, color: '#9CA3AF' }}>Skip for now</Text>}
         </TouchableOpacity>
       </View>
     </SafeAreaView>

@@ -19,6 +19,7 @@ import { supabase } from '../../lib/supabase';
 import { checkRateLimit } from '../../lib/rateLimit';
 import { userFacingError, reportError } from '../../lib/errorReport';
 import type { LoginNavigationProp, RootStackParamList } from '../../navigation/types';
+import PasswordInput from '../../components/PasswordInput';
 
 type Props = { navigation: LoginNavigationProp };
 
@@ -107,13 +108,12 @@ export default function LoginScreen({ navigation }: Props) {
             <View style={styles.field}>
               <Text style={styles.label}>Password</Text>
               {!!passwordError && <Text style={styles.fieldError}>{passwordError}</Text>}
-              <TextInput
+              <PasswordInput
                 style={styles.input}
                 placeholder="••••••••"
                 placeholderTextColor="#9CA3AF"
                 value={password}
                 onChangeText={v => { setPassword(v); clearErrors(); }}
-                secureTextEntry
                 autoComplete="current-password"
                 returnKeyType="done"
                 onSubmitEditing={handleLogin}

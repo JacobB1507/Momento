@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
+import { TUTORIAL_ENABLED } from './config';
 import { useAuth } from '../context/AuthContext';
-import { useTutorial } from '../context/TutorialContext';
-import { fetchTutorialCompleted } from '../lib/tutorial';
+import { useTutorial } from './TutorialContext';
+import { fetchTutorialCompleted } from './tutorial';
 
 export default function TutorialBootstrap({ welcomeSeen }: { welcomeSeen: boolean }) {
   const { session } = useAuth();
@@ -9,10 +10,9 @@ export default function TutorialBootstrap({ welcomeSeen }: { welcomeSeen: boolea
   const hasRun = useRef(false);
 
   useEffect(() => {
+    if (!TUTORIAL_ENABLED) return;
     const userId = session?.user?.id;
     if (!userId || hasRun.current) return;
-    // Don't start (or lock hasRun) until welcome has been dismissed.
-    // When welcomeSeen flips to true this effect re-fires and proceeds.
     if (!welcomeSeen) return;
     hasRun.current = true;
     fetchTutorialCompleted(userId).then((completed) => {

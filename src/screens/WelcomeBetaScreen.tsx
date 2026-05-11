@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { userFacingError, reportError } from '../lib/errorReport';
 
 export default function WelcomeBetaScreen() {
-  const { session } = useAuth();
-  const route = useRoute();
+  const { session, refreshProfile } = useAuth();
   const [loading, setLoading] = useState(false);
 
   const handleGetStarted = async () => {
@@ -21,8 +19,7 @@ export default function WelcomeBetaScreen() {
         .update({ welcome_seen: true })
         .eq('id', userId);
       if (error) throw error;
-      // Tell RootNavigator to flip hasWelcomeSeen — it re-renders to the next screen
-      (route.params as any)?.onDismissed?.();
+      await refreshProfile();
     } catch (err) {
       Alert.alert('Something went wrong', userFacingError(err as any));
       reportError('WelcomeBetaScreen.completeWelcome', err as any);

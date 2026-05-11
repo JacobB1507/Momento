@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
-import { markTutorialComplete } from '../lib/tutorial';
+import { TUTORIAL_ENABLED } from './config';
+import { markTutorialComplete } from './tutorial';
 
 export type TutorialStepKind = 'navigate' | 'explore' | 'done';
 
@@ -62,6 +63,10 @@ type TutorialContextValue = {
 const TutorialContext = createContext<TutorialContextValue | null>(null);
 
 export function TutorialProvider({ children, userId }: { children: React.ReactNode; userId?: string }) {
+  if (!TUTORIAL_ENABLED) {
+    return <>{children}</>;
+  }
+
   const [active, setActive] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [tabLayouts, setTabLayoutsState] = useState<Record<string, TabLayout>>({});
@@ -135,6 +140,25 @@ export function TutorialProvider({ children, userId }: { children: React.ReactNo
 
 export function useTutorial(): TutorialContextValue {
   const ctx = useContext(TutorialContext);
-  if (!ctx) throw new Error('useTutorial must be used within a TutorialProvider');
+  if (!ctx) {
+    // TUTORIAL_ENABLED is false — provider is a passthrough, context is null.
+    // Return a no-op shape so all call sites work without changes.
+    return {
+      active: false,
+      currentStepIndex: 0,
+      currentStep: TUTORIAL_STEPS[0] as TutorialStep,
+      targetRefs: new Map<string, React.RefObject<any>>(),
+      tabLayouts: {},
+      startTutorial: () => {},
+      nextStep: () => {},
+      prevStep: () => {},
+      skipTutorial: () => {},
+      completeTutorial: () => {},
+      registerRef: () => {},
+      unregisterRef: () => {},
+      setTabLayout: () => {},
+      goingBack: { current: false },
+    };
+  }
   return ctx;
 }
