@@ -15,6 +15,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { acceptGalleryInvite, declineGalleryInvite } from '../lib/galleries';
 import { markOneRead } from '../lib/notifications';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -35,6 +36,7 @@ export default function GalleryInviteScreen() {
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
+  const [declining, setDeclining] = useState(false);
 
   useEffect(() => {
     supabase
@@ -51,42 +53,29 @@ export default function GalleryInviteScreen() {
       });
   }, [galleryId]);
 
-  const handleJoin = async () => {
+  const handleAccept = async () => {
     setJoining(true);
-
-    const { data: existing } = await supabase
-      .from('gallery_members')
-      .select('user_id')
-      .eq('gallery_id', galleryId)
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    let error;
-    if (existing) {
-      ({ error } = await supabase
-        .from('gallery_members')
-        .update({ status: 'accepted' })
-        .eq('gallery_id', galleryId)
-        .eq('user_id', userId));
-    } else {
-      ({ error } = await supabase
-        .from('gallery_members')
-        .insert({ gallery_id: galleryId, user_id: userId, role: 'member', status: 'accepted' }));
-    }
-
+    const { error } = await acceptGalleryInvite(galleryId, userId);
     if (error) {
       setJoining(false);
-      Alert.alert('Error', error.message);
+      Alert.alert('Error', error.message ?? 'Could not accept invite.');
       return;
     }
-
     await markOneRead(notificationId);
     setJoining(false);
     navigation.navigate('GalleryDetail', { galleryId, galleryTitle: title });
   };
 
   const handleDecline = async () => {
+    setDeclining(true);
+    const { error } = await declineGalleryInvite(galleryId, userId);
+    if (error) {
+      setDeclining(false);
+      Alert.alert('Error', error.message ?? 'Could not decline invite.');
+      return;
+    }
     await markOneRead(notificationId);
+    setDeclining(false);
     navigation.goBack();
   };
 
@@ -128,23 +117,27 @@ export default function GalleryInviteScreen() {
         <Text style={styles.subtitle}>You've been invited to join this gallery</Text>
 
         <Pressable
-          style={({ pressed }) => [styles.joinButton, pressed && { opacity: 0.8 }, joining && styles.buttonDisabled]}
-          onPress={handleJoin}
-          disabled={joining}
+          style={({ pressed }) => [styles.joinButton, pressed && { opacity: 0.8 }, (joining || declining) && styles.buttonDisabled]}
+          onPress={handleAccept}
+          disabled={joining || declining}
         >
           {joining ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.joinText}>Join Gallery</Text>
+            <Text style={styles.joinText}>Accept Invite</Text>
           )}
         </Pressable>
 
         <Pressable
-          style={({ pressed }) => [styles.declineButton, pressed && { opacity: 0.8 }]}
+          style={({ pressed }) => [styles.declineButton, pressed && { opacity: 0.8 }, declining && styles.buttonDisabled]}
           onPress={handleDecline}
-          disabled={joining}
+          disabled={joining || declining}
         >
-          <Text style={styles.declineText}>Decline</Text>
+          {declining ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.declineText}>Decline</Text>
+          )}
         </Pressable>
       </View>
     </SafeAreaView>

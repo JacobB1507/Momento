@@ -104,8 +104,9 @@ export default function NotificationRow({ notification, senderProfileMap, coverM
   const parts = body.split(' ');
   const parsedUsername = parts[0]?.toLowerCase();
   const rest = parts.slice(1).join(' ');
+  const isSystemNotification = !notification.sender_id;
   const senderProfile = senderProfileMap[notification.sender_id ?? ''];
-  const displayLabel = senderProfile?.display_name || senderProfile?.username || parsedUsername;
+  const displayLabel = isSystemNotification ? 'Momento' : (senderProfile?.display_name || senderProfile?.username || parsedUsername);
   const icon = typeIcon(type);
 
   const swipeableRef = useRef<any>(null);
@@ -141,7 +142,11 @@ export default function NotificationRow({ notification, senderProfileMap, coverM
         onPress={onPress}
       >
         <View style={styles.avatarWrap}>
-          {imageUrl ? (
+          {isSystemNotification ? (
+            <View style={[styles.avatar, styles.momentoAvatar]}>
+              <Text style={styles.momentoAvatarLetter}>M</Text>
+            </View>
+          ) : imageUrl ? (
             <Image source={{ uri: imageUrl }} style={styles.avatar} />
           ) : type === 'gallery_invite' ? (
             <View style={[styles.avatar, styles.avatarFallback]}>
@@ -161,6 +166,11 @@ export default function NotificationRow({ notification, senderProfileMap, coverM
             <Text style={styles.body}>
               {'You\'ve been invited to join '}
               <Text style={{ fontWeight: '600' }}>{notification.gallery_title ?? 'a gallery'}</Text>
+            </Text>
+          ) : isSystemNotification ? (
+            <Text style={styles.body}>
+              <Text style={styles.username}>Momento </Text>
+              {body}
             </Text>
           ) : (
             <Text style={styles.body}>
@@ -295,6 +305,9 @@ export default function NotificationRow({ notification, senderProfileMap, coverM
             </Pressable>
           )}
         </View>
+        {type === 'trusted_friend' && (
+          <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+        )}
       </Pressable>
     </Swipeable>
   );
@@ -321,4 +334,6 @@ const styles = StyleSheet.create({
   trustedBtn: { alignSelf: 'flex-start', marginTop: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#E91E8C' },
   trustedBtnAdded: { backgroundColor: '#9CA3AF' },
   trustedBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  momentoAvatar: { backgroundColor: '#FF6B6B', alignItems: 'center', justifyContent: 'center' },
+  momentoAvatarLetter: { fontSize: 18, fontWeight: '800', color: '#fff' },
 });

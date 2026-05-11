@@ -8,6 +8,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { useNotifications } from '../hooks/useNotifications';
 import { NotificationsHeader } from '../components/NotificationsHeader';
 import NotificationRow from '../components/NotificationRow';
+import { markOneRead } from '../lib/notifications';
 
 export default function NotificationsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -60,7 +61,15 @@ export default function NotificationsScreen() {
             notification={item}
             senderProfileMap={senderProfileMap}
             coverMap={coverMap}
-            onPress={() => handleNotificationPress(item)}
+            onPress={() => {
+              if (item.type === 'trusted_friend') {
+                markOneRead(item.id);
+                setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, read: true } : n));
+                navigation.navigate('TrustedFriends');
+              } else {
+                handleNotificationPress(item);
+              }
+            }}
             onMarkUnread={async () => {
               await markNotificationUnread(item.id);
               setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, read: false } : n));

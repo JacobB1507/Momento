@@ -37,6 +37,7 @@ import GalleryInviteNewScreen from '../screens/GalleryInviteNewScreen';
 import TrustedFriendsScreen from '../screens/TrustedFriendsScreen';
 import DefaultGalleryPrivacyScreen from '../screens/DefaultGalleryPrivacyScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
+import TransferOwnershipScreen from '../screens/TransferOwnershipScreen';
 import { supabase } from '../lib/supabase';
 import { resolveInviteCode } from '../lib/friends';
 import type { RootStackParamList } from './types';
@@ -220,6 +221,11 @@ export default function RootNavigator() {
               name="NotificationSettings"
               component={NotificationSettingsScreen}
               options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="TransferOwnership"
+              component={TransferOwnershipScreen}
+              options={{ headerShown: false }}
             />
           </>
         ) : (

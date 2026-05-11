@@ -161,3 +161,25 @@ export async function getMutualFriends(currentUserId: string, otherUserId: strin
 
   return profiles ?? [];
 }
+
+export async function searchFriendsByName(currentUserId: string, query: string, limit = 20) {
+  const q = query.trim();
+  if (q.length === 0) return { data: [], error: null };
+  const { data: friends, error: friendsError } = await supabase
+    .from('friends')
+    .select('sender_id, receiver_id')
+    .eq('status', 'accepted')
+    .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
+  if (friendsError) return { data: [], error: friendsError };
+  const friendIds = (friends ?? [])
+    .map(f => f.sender_id === currentUserId ? f.receiver_id : f.sender_id)
+    .filter(Boolean);
+  if (friendIds.length === 0) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url')
+    .in('id', friendIds)
+    .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
+    .limit(limit);
+  return { data: data ?? [], error };
+}

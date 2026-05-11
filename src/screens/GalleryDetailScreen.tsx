@@ -171,25 +171,6 @@ export default function GalleryDetailScreen() {
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>{galleryMeta?.title ?? ''}</Text>
         <View style={styles.headerActions}>
-          {isOwner && (
-            <Pressable
-              style={({ pressed }) => [styles.settingsButton, pressed && { opacity: 0.7 }]}
-              onPress={() => setSettingsVisible(true)}
-              hitSlop={8}
-            >
-              <Ionicons name="settings-outline" size={16} color="#fff" />
-            </Pressable>
-          )}
-          {removalRequestCount > 0 && (
-            <Pressable
-              style={({ pressed }) => [styles.removalButton, pressed && { opacity: 0.7 }]}
-              onPress={() => setShowRemovalRequests(true)}
-              hitSlop={8}
-            >
-              <Ionicons name="flag-outline" size={16} color="#F59E0B" />
-              <View style={styles.removalDot} />
-            </Pressable>
-          )}
           <Pressable
             style={({ pressed }) => [styles.inviteButton, pressed && { opacity: 0.7 }]}
             onPress={() => setShowContributors(true)}
@@ -202,6 +183,25 @@ export default function GalleryDetailScreen() {
               </View>
             )}
           </Pressable>
+          {removalRequestCount > 0 && (
+            <Pressable
+              style={({ pressed }) => [styles.removalButton, pressed && { opacity: 0.7 }]}
+              onPress={() => setShowRemovalRequests(true)}
+              hitSlop={8}
+            >
+              <Ionicons name="flag-outline" size={16} color="#F59E0B" />
+              <View style={styles.removalDot} />
+            </Pressable>
+          )}
+          {isOwner && (
+            <Pressable
+              style={({ pressed }) => [styles.settingsButton, pressed && { opacity: 0.7 }]}
+              onPress={() => setSettingsVisible(true)}
+              hitSlop={8}
+            >
+              <Ionicons name="settings-outline" size={16} color="#fff" />
+            </Pressable>
+          )}
           {photos.length > 0 && !loading && (
             <View style={styles.countBadge}>
               <Ionicons name="apps-outline" size={13} color="#fff" />
@@ -284,6 +284,10 @@ export default function GalleryDetailScreen() {
         onClose={() => setSettingsVisible(false)}
         onPrivacySaved={(privacy) => setGalleryMeta(prev => prev ? { ...prev, privacy } : prev)}
         onGalleryDeleted={() => navigation.goBack()}
+        onTransferOwnership={() => {
+          setSettingsVisible(false);
+          navigation.navigate('TransferOwnership', { galleryId, galleryTitle: galleryMeta?.title ?? '' });
+        }}
       />
 
 

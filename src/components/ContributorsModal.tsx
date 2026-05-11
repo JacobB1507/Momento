@@ -15,6 +15,9 @@ import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { InviteViaSection } from './InviteViaSection';
+import { searchFriendsByName } from '../lib/friends';
+import { GalleryQRButton } from './GalleryQRButton';
+import { ContributorRow } from './ContributorRow';
 
 type Props = {
   visible: boolean;
@@ -24,9 +27,10 @@ type Props = {
   ownerId: string;
 };
 
-type Member = {
+export type Member = {
   user_id: string;
   role?: string;
+  status?: string;
   username: string | null;
   display_name: string | null;
   avatar_url: string | null;
@@ -43,6 +47,8 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
   const navigation = useNavigation<any>();
   const { session } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
+  const currentMember = members.find(m => m.user_id === session?.user.id);
+  const canInvite = isOwner || currentMember?.role === 'admin';
   const [memberSearch, setMemberSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [addingUser, setAddingUser] = useState(false);
@@ -52,9 +58,8 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
   const loadMembers = useCallback(async () => {
     const { data: memberRows } = await supabase
       .from('gallery_members')
-      .select('user_id, role')
-      .eq('gallery_id', galleryId)
-      .eq('status', 'accepted');
+      .select('user_id, role, status')
+      .eq('gallery_id', galleryId);
 
     const rows = memberRows ?? [];
     const userIds = rows.map((m: any) => m.user_id);
@@ -67,6 +72,7 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
     const merged: Member[] = rows.map((m: any) => ({
       user_id: m.user_id,
       role: m.role,
+      status: m.status,
       username: profiles?.find((p: any) => p.id === m.user_id)?.username ?? 'Unknown',
       display_name: profiles?.find((p: any) => p.id === m.user_id)?.display_name ?? null,
       avatar_url: profiles?.find((p: any) => p.id === m.user_id)?.avatar_url ?? null,
@@ -82,6 +88,7 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
       merged.unshift({
         user_id: ownerId,
         role: 'owner',
+        status: 'accepted',
         username: ownerProfile?.username ?? 'Unknown',
         display_name: ownerProfile?.display_name ?? null,
         avatar_url: ownerProfile?.avatar_url ?? null,
@@ -96,13 +103,11 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
     setAddSuccess('');
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     if (!text.trim()) { setSearchResults([]); return; }
+    const currentUserId = session?.user.id ?? '';
     searchTimeoutRef.current = setTimeout(async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, username, display_name, avatar_url')
-        .or(`username.ilike.%${text}%,display_name.ilike.%${text}%`)
-        .limit(5);
-      setSearchResults(data ?? []);
+      const { data } = await searchFriendsByName(currentUserId, text, 20);
+      const memberIds = new Set(members.map(m => m.user_id));
+      setSearchResults((data ?? []).filter(p => !memberIds.has(p.id)));
     }, 300);
   };
 
@@ -136,16 +141,6 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
     }
   };
 
-  const handleRemoveMember = async (userId: string) => {
-    const { error: removeError } = await supabase
-      .from('gallery_members')
-      .delete()
-      .eq('gallery_id', galleryId)
-      .eq('user_id', userId);
-    if (!removeError) loadMembers();
-    else Alert.alert('Error', 'Could not remove member.');
-  };
-
   useEffect(() => {
     if (visible) loadMembers();
   }, [visible, galleryId]);
@@ -175,18 +170,21 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-          {isOwner && (
+          {canInvite && (
             <>
-              <Text style={styles.sectionLabel}>Add Member</Text>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search by username..."
-                placeholderTextColor="#9CA3AF"
-                autoCapitalize="none"
-                autoCorrect={false}
-                value={memberSearch}
-                onChangeText={handleUsernameSearch}
-              />
+              <Text style={styles.sectionLabel}>Add Friend</Text>
+              <View style={styles.searchRow}>
+                <TextInput
+                  style={[styles.searchInput, { flex: 1, marginBottom: 0 }]}
+                  placeholder="Search friends..."
+                  placeholderTextColor="#9CA3AF"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={memberSearch}
+                  onChangeText={handleUsernameSearch}
+                />
+                <GalleryQRButton />
+              </View>
               {searchResults.length > 0 && (
                 <View style={styles.searchDropdown}>
                   {searchResults.map((profile) => (
@@ -218,48 +216,23 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
               <InviteViaSection senderId={session?.user.id ?? ''} visible={visible} />
             </>
           )}
-          <Text style={[styles.sectionLabel, { marginTop: isOwner ? 24 : 0 }]}>Members</Text>
+          <Text style={[styles.sectionLabel, { marginTop: canInvite ? 24 : 0 }]}>Members</Text>
           {members.length === 0 ? (
             <Text style={styles.modalEmpty}>No members yet.</Text>
           ) : (
             members.map((member) => (
-              <Pressable
+              <ContributorRow
                 key={member.user_id}
-                style={styles.memberRow}
-                onPress={() => {
+                member={member}
+                galleryId={galleryId}
+                isOwner={isOwner}
+                currentUserId={session?.user.id}
+                onNavigate={() => {
                   onClose();
                   navigation.navigate('FriendProfile', { userId: member.user_id, username: member.username ?? 'unknown' });
                 }}
-              >
-                {member.avatar_url ? (
-                  <Image source={{ uri: member.avatar_url }} style={styles.memberAvatar} />
-                ) : (
-                  <View style={styles.memberAvatarPlaceholder}>
-                    <Text style={styles.memberAvatarLetter}>
-                      {(member.username ?? '?').charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                )}
-                <Text style={styles.memberUsername}>
-                  {member.display_name || member.username || 'unknown'}
-                </Text>
-                {(() => {
-                  const isCurrentUser = member.user_id === session?.user.id;
-                  const isOwnerRole = member.role === 'owner';
-                  if (isCurrentUser && isOwnerRole) return <Text style={styles.memberLabel}>(Owner) (You)</Text>;
-                  if (isCurrentUser) return <Text style={styles.memberLabel}>(You)</Text>;
-                  if (isOwnerRole) return <Text style={styles.memberLabel}>(Owner)</Text>;
-                  return null;
-                })()}
-                {isOwner && member.user_id !== session?.user.id && (
-                  <Pressable
-                    style={({ pressed }) => [styles.removeButton, pressed && { opacity: 0.7 }]}
-                    onPress={() => handleRemoveMember(member.user_id)}
-                  >
-                    <Text style={styles.removeButtonText}>Remove</Text>
-                  </Pressable>
-                )}
-              </Pressable>
+                onRefetch={loadMembers}
+              />
             ))
           )}
         </ScrollView>
@@ -296,6 +269,12 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 4,
   },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
   searchDropdown: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -316,14 +295,6 @@ const styles = StyleSheet.create({
   searchResultUsername: { flex: 1, fontSize: 15, color: '#111827', fontWeight: '500' },
   searchResultAdd: { fontSize: 22, color: '#FF6B6B', fontWeight: '600', lineHeight: 24 },
   addSuccessText: { fontSize: 14, color: '#34C759', fontWeight: '600', marginBottom: 4 },
-  memberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
   memberAvatar: { width: 32, height: 32, borderRadius: 16 },
   memberAvatarPlaceholder: {
     width: 32,
@@ -334,8 +305,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   memberAvatarLetter: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  memberUsername: { fontSize: 15, color: '#111827', fontWeight: '500' },
-  memberLabel: { fontSize: 12, color: '#9CA3AF', marginLeft: 4 },
-  removeButton: { borderWidth: 1.5, borderColor: '#EF4444', borderRadius: 8, paddingVertical: 4, paddingHorizontal: 10 },
-  removeButtonText: { color: '#EF4444', fontSize: 13, fontWeight: '600' },
 });

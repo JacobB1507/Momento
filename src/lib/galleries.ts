@@ -127,7 +127,7 @@ export async function inviteUserToGallery(galleryId: string, email: string): Pro
 
   const { error: insertError } = await supabase
     .from('gallery_members')
-    .insert({ gallery_id: galleryId, user_id: data.id, role: 'member' });
+    .insert({ gallery_id: galleryId, user_id: data.id, role: 'member', status: 'pending' });
 
   if (insertError) {
     if (insertError.code === '23505') throw new Error('That person is already a member of this gallery.');
@@ -196,4 +196,89 @@ export async function setDefaultGalleryPrivacy(userId: string, privacy: 'private
     .update({ default_gallery_privacy: privacy })
     .eq('id', userId);
   if (error) throw error;
+}
+
+export async function promoteToAdmin(galleryId: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from('gallery_members')
+    .update({ role: 'admin' })
+    .eq('gallery_id', galleryId)
+    .eq('user_id', userId)
+    .neq('role', 'owner');
+  if (error) throw error;
+}
+
+export async function demoteToMember(galleryId: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from('gallery_members')
+    .update({ role: 'member' })
+    .eq('gallery_id', galleryId)
+    .eq('user_id', userId)
+    .neq('role', 'owner');
+  if (error) throw error;
+}
+
+export async function removeMember(galleryId: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from('gallery_members')
+    .delete()
+    .eq('gallery_id', galleryId)
+    .eq('user_id', userId)
+    .neq('role', 'owner');
+  if (error) throw error;
+}
+
+export async function getGalleryRole(
+  galleryId: string,
+  userId: string,
+): Promise<{ role: 'owner' | 'admin' | 'member' | null; error: any }> {
+  const { data, error } = await supabase
+    .from('gallery_members')
+    .select('role')
+    .eq('gallery_id', galleryId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) return { role: null, error };
+  return { role: (data?.role as 'owner' | 'admin' | 'member') ?? null, error: null };
+}
+
+export async function acceptGalleryInvite(galleryId: string, userId: string) {
+  const { error } = await supabase
+    .from('gallery_members')
+    .update({ status: 'accepted' })
+    .eq('gallery_id', galleryId)
+    .eq('user_id', userId)
+    .eq('status', 'pending');
+  return { error };
+}
+
+export async function declineGalleryInvite(galleryId: string, userId: string) {
+  const { error } = await supabase
+    .from('gallery_members')
+    .delete()
+    .eq('gallery_id', galleryId)
+    .eq('user_id', userId)
+    .eq('status', 'pending');
+  return { error };
+}
+
+export async function transferGalleryOwnership(galleryId: string, newOwnerId: string) {
+  const { error } = await supabase.rpc('transfer_gallery_ownership', {
+    p_gallery_id: galleryId,
+    p_new_owner_id: newOwnerId,
+  });
+  return { error };
+}
+
+export async function verifyCurrentUserPassword(password: string): Promise<{ valid: boolean; error: any }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user?.email) {
+    return { valid: false, error: new Error('No active session') };
+  }
+  const { error } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password,
+  });
+  if (error) return { valid: false, error };
+  return { valid: true, error: null };
 }

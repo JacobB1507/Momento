@@ -14,7 +14,8 @@ export interface Gallery {
 export interface GalleryMember {
   gallery_id: string;
   user_id: string;
-  role: string;
+  role: 'owner' | 'admin' | 'member';
+  status: string;
   invited_at: string;
 }
 

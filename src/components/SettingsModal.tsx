@@ -24,6 +24,7 @@ type Props = {
   onClose: () => void;
   onPrivacySaved: (privacy: GalleryPrivacy) => void;
   onGalleryDeleted: () => void;
+  onTransferOwnership?: () => void;
 };
 
 export function SettingsModal({
@@ -33,6 +34,7 @@ export function SettingsModal({
   onClose,
   onPrivacySaved,
   onGalleryDeleted,
+  onTransferOwnership,
 }: Props) {
   const [draftPrivacy, setDraftPrivacy] = useState<GalleryPrivacy>(currentPrivacy);
   const [saving, setSaving] = useState(false);
@@ -103,6 +105,11 @@ export function SettingsModal({
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
           </View>
+          {onTransferOwnership && (
+            <Pressable style={({ pressed }) => [styles.transferBtn, pressed && { opacity: 0.7 }]} onPress={onTransferOwnership}>
+              <Text style={styles.transferText}>Transfer Ownership</Text>
+            </Pressable>
+          )}
           <Pressable style={({ pressed }) => [styles.deleteBtn, pressed && { opacity: 0.7 }]} onPress={handleDelete}>
             <Text style={styles.deleteText}>Delete Gallery</Text>
           </Pressable>
@@ -138,6 +145,8 @@ const styles = StyleSheet.create({
   saveText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   cancel: { height: 52, borderRadius: 14, backgroundColor: '#f0f0f0', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   cancelText: { color: '#111827', fontSize: 16, fontWeight: '600' },
-  deleteBtn: { marginTop: 24, borderTopWidth: 1, borderTopColor: '#efefef', paddingTop: 16, alignItems: 'center' },
+  transferBtn: { marginTop: 16, alignItems: 'center' },
+  transferText: { fontSize: 13, fontWeight: '500', color: '#FF6B6B' },
+  deleteBtn: { marginTop: 16, borderTopWidth: 1, borderTopColor: '#efefef', paddingTop: 16, alignItems: 'center' },
   deleteText: { fontSize: 13, fontWeight: '400', color: '#999' },
 });
