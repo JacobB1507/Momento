@@ -17,45 +17,56 @@ import { useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { checkRateLimit } from '../../lib/rateLimit';
-import { userFacingError, reportError } from '../../lib/errorReport';
+import { reportError } from '../../lib/errorReport';
 import type { LoginNavigationProp, RootStackParamList } from '../../navigation/types';
 import PasswordInput from '../../components/PasswordInput';
+import { parseAuthIdentifier } from '../../lib/authIdentifier';
+import { formatPhone, looksLikePhone, stripPhone } from '../../lib/phoneFormat';
 
 type Props = { navigation: LoginNavigationProp };
 
 export default function LoginScreen({ navigation }: Props) {
   const route = useRoute<RouteProp<RootStackParamList, 'Login'>>();
-  const [email, setEmail] = useState((route.params as any)?.email ?? '');
+  const [identifier, setIdentifier] = useState((() => {
+    const params = (route.params as any) ?? {};
+    const phone = params.prefilledPhone;
+    if (phone) return formatPhone(phone);
+    const email = params.email;
+    if (email) return email;
+    return '';
+  })());
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [emailError, setEmailError] = useState('');
+  const [identifierError, setIdentifierError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [authError, setAuthError] = useState(false);
 
-  const clearErrors = () => { setEmailError(''); setPasswordError(''); };
+  const clearErrors = () => { setIdentifierError(''); setPasswordError(''); setAuthError(false); };
 
   const handleLogin = async () => {
     const allowed = await checkRateLimit('login_attempt');
     if (!allowed) {
-      Alert.alert(
-        'Too many attempts',
-        'Please wait 15 minutes before trying again.'
-      );
+      Alert.alert('Too many attempts', 'Please wait 15 minutes before trying again.');
       return;
     }
     clearErrors();
-    if (!email.trim() || !password) {
-      if (!email.trim()) setEmailError('Please enter your email address.');
-      else setPasswordError('Please enter your password.');
+    if (!password) {
+      setPasswordError('Please enter your password.');
+      return;
+    }
+    const parsed = parseAuthIdentifier(identifier);
+    if (parsed.type === 'invalid') {
+      setIdentifierError(parsed.reason);
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    const credentials = parsed.type === 'email'
+      ? { email: parsed.email, password }
+      : { phone: parsed.phone, password };
+    const { error } = await supabase.auth.signInWithPassword(credentials);
     setLoading(false);
     if (error) {
-      Alert.alert('Sign in failed', userFacingError(error));
+      setAuthError(true);
       reportError('LoginScreen.signIn', error);
     }
   };
@@ -89,18 +100,27 @@ export default function LoginScreen({ navigation }: Props) {
             <Text style={styles.cardTitle}>Welcome back</Text>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Email</Text>
-              {!!emailError && <Text style={styles.fieldError}>{emailError}</Text>}
+              <Text style={styles.label}>Email or phone</Text>
+              {!!identifierError && <Text style={styles.fieldError}>{identifierError}</Text>}
               <TextInput
                 style={styles.input}
-                placeholder="you@example.com"
+                placeholder="Email or phone"
                 placeholderTextColor="#9CA3AF"
-                value={email}
-                onChangeText={v => { setEmail(v); clearErrors(); }}
+                value={identifier}
+                onChangeText={v => {
+                  if (looksLikePhone(v)) {
+                    setIdentifier(formatPhone(stripPhone(v)));
+                  } else {
+                    setIdentifier(v);
+                  }
+                  clearErrors();
+                }}
                 autoCapitalize="none"
                 autoCorrect={false}
-                keyboardType="email-address"
-                autoComplete="email"
+                keyboardType={looksLikePhone(identifier) ? 'phone-pad' : 'email-address'}
+                autoComplete={looksLikePhone(identifier) ? 'tel' : 'email'}
+                textContentType={looksLikePhone(identifier) ? 'telephoneNumber' : 'emailAddress'}
+                maxLength={looksLikePhone(identifier) ? 14 : 254}
                 returnKeyType="next"
               />
             </View>
@@ -131,6 +151,18 @@ export default function LoginScreen({ navigation }: Props) {
                 <Text style={styles.buttonText}>Log In</Text>
               )}
             </Pressable>
+
+            {authError && (
+              <View style={styles.authErrorBlock}>
+                <Text style={styles.fieldError}>Incorrect email or password.</Text>
+                <View style={styles.authErrorRow}>
+                  <Text style={styles.switchText}>New to Momento? </Text>
+                  <Pressable onPress={() => navigation.navigate('SignUp')}>
+                    <Text style={styles.link}>Sign up</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
 
             <Pressable onPress={() => navigation.navigate('ForgotPassword')} style={{ alignItems: 'center', marginTop: 16 }}>
               <Text style={styles.link}>Forgot password?</Text>
@@ -240,6 +272,8 @@ const styles = StyleSheet.create({
   switchText: { color: '#6B7280', fontSize: 15 },
   link: { color: '#FF6B6B', fontSize: 15, fontWeight: '600' },
   fieldError: { color: '#FF3B30', fontSize: 13, marginBottom: 6 },
+  authErrorBlock: { marginTop: 14, alignItems: 'center' },
+  authErrorRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 6 },
 
   privateBetaPill: {
     alignSelf: 'center',

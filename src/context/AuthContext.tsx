@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { registerPushNotifications, unregisterPushNotifications } from '../lib/pushNotifications';
 
 const projectRef = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').replace('https://', '').split('.')[0];
 const AUTH_STORAGE_KEY = `sb-${projectRef}-auth-token`;
@@ -13,6 +14,8 @@ type AuthContextType = {
   profile: Record<string, any> | null;
   profileReady: boolean;
   refreshProfile: () => Promise<void>;
+  passwordRecoveryRequested: boolean;
+  phoneVerificationRequired: boolean;
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -22,6 +25,8 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   profileReady: false,
   refreshProfile: async () => {},
+  passwordRecoveryRequested: false,
+  phoneVerificationRequired: false,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -30,6 +35,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [restoringSession, setRestoringSession] = useState(true);
   const [profile, setProfile] = useState<Record<string, any> | null>(null);
   const [profileReady, setProfileReady] = useState(false);
+  const [passwordRecoveryRequested, setPasswordRecoveryRequested] = useState(false);
+  const [phoneVerificationRequired, setPhoneVerificationRequired] = useState(false);
+  const lastUserIdRef = useRef<string | null>(null);
 
   // Public API for screens (e.g. WelcomeBeta, ProfilePhotoSetup) to trigger a re-evaluation
   // of the onboarding gate after writing to the profiles table.
@@ -45,13 +53,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .from('profiles')
       // .eq() is defense-in-depth: RLS already enforces id = auth.uid(), but
       // explicit scoping ensures we never accidentally fetch another user's row.
-      .select('id, username, display_name, avatar_url, welcome_seen, skipped_avatar_setup, bio')
+      .select('id, username, display_name, avatar_url, welcome_seen, skipped_avatar_setup, bio, phone_verified_at')
       .eq('id', uid)
       .maybeSingle();
     if (error) {
       console.error('[AuthContext] refreshProfile failed:', error);
     } else {
       setProfile(data);
+      setPhoneVerificationRequired(false); // BETA BYPASS — re-enable before public launch
     }
     setProfileReady(true);
   };
@@ -71,10 +80,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const fetchProfile = async (userId: string) => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, username, display_name, avatar_url, welcome_seen, skipped_avatar_setup, bio')
+        .select('id, username, display_name, avatar_url, welcome_seen, skipped_avatar_setup, bio, phone_verified_at')
         .eq('id', userId)
         .maybeSingle();
-      if (!error) setProfile(data);
+      if (!error) {
+        setProfile(data);
+        setPhoneVerificationRequired(false); // BETA BYPASS — re-enable before public launch
+      }
       setProfileReady(true);
     };
 
@@ -109,20 +121,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfileReady(true);
         resolveRestore();
       }, 3000);
+    }).catch((err: any) => {
+      const isStaleToken =
+        err?.message?.includes('Refresh Token Not Found') ||
+        err?.code === 'refresh_token_not_found';
+      if (!isStaleToken) {
+        console.error('[AuthContext] getSession error:', err);
+      }
+      setSession(null);
+      setProfile(null);
+      setProfileReady(true);
+      resolveRestore();
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      if (_event === 'PASSWORD_RECOVERY') {
+        setPasswordRecoveryRequested(true);
+        return;
+      }
       setSession(newSession);
       setLoading(false); // idempotent — whichever path resolves first clears loading
       if (newSession) {
+        lastUserIdRef.current = newSession.user.id;
         resolveRestore(); // valid session arrived — cancel grace period
         fetchProfile(newSession.user.id);
+        registerPushNotifications(newSession.user.id).catch(err => console.warn('Push registration failed:', err));
       } else if (_event === 'SIGNED_OUT') {
+        const previousUserId = lastUserIdRef.current;
+        if (previousUserId) {
+          unregisterPushNotifications(previousUserId).catch(err => console.warn('Push unregister failed:', err));
+          lastUserIdRef.current = null;
+        }
         // Only clear profile on actual sign-out, not on transient null-session pulses
         setProfile(null);
         setProfileReady(true);
+        setPasswordRecoveryRequested(false);
+        setPhoneVerificationRequired(false);
       }
     });
 
@@ -134,7 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, loading, restoringSession, profile, profileReady, refreshProfile }}>
+    <AuthContext.Provider value={{ session, loading, restoringSession, profile, profileReady, refreshProfile, passwordRecoveryRequested, phoneVerificationRequired }}>
       {children}
     </AuthContext.Provider>
   );

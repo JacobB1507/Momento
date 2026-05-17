@@ -22,6 +22,7 @@ import AddFriendScreen from '../screens/AddFriendScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import ChangeEmailScreen from '../screens/ChangeEmailScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+import ChangePhoneScreen from '../screens/ChangePhoneScreen';
 import GalleryInviteScreen from '../screens/GalleryInviteScreen';
 import EditBioScreen from '../screens/EditBioScreen';
 import EditDisplayNameScreen from '../screens/EditDisplayNameScreen';
@@ -33,11 +34,15 @@ import MessageRequestsScreen from '../screens/MessageRequestsScreen';
 import ProfilePhotoSetupScreen from '../screens/ProfilePhotoSetupScreen';
 import DeleteAccountScreen from '../screens/DeleteAccountScreen';
 import PrivacyPolicyScreen from '../screens/auth/PrivacyPolicyScreen';
+import TermsOfServiceScreen from '../screens/auth/TermsOfServiceScreen';
 import GalleryInviteNewScreen from '../screens/GalleryInviteNewScreen';
 import TrustedFriendsScreen from '../screens/TrustedFriendsScreen';
 import DefaultGalleryPrivacyScreen from '../screens/DefaultGalleryPrivacyScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
 import TransferOwnershipScreen from '../screens/TransferOwnershipScreen';
+import ResetPasswordScreen from '../screens/ResetPasswordScreen';
+import BlockedUsersScreen from '../screens/BlockedUsersScreen';
+import PhoneVerificationScreen from '../screens/auth/PhoneVerificationScreen';
 import { supabase } from '../lib/supabase';
 import { resolveInviteCode } from '../lib/friends';
 import type { RootStackParamList } from './types';
@@ -48,7 +53,7 @@ import TutorialBootstrap from '../tutorial/TutorialBootstrap';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
-  const { session, loading, restoringSession, profile, profileReady } = useAuth();
+  const { session, loading, restoringSession, profile, profileReady, passwordRecoveryRequested, phoneVerificationRequired } = useAuth();
 
   const hasUsername = !!profile?.username;
   const hasDisplayName = !!profile?.display_name;
@@ -56,6 +61,7 @@ export default function RootNavigator() {
   const hasProfilePhoto = !!profile?.avatar_url || !!profile?.skipped_avatar_setup;
 
   const onboardingStage =
+    phoneVerificationRequired ? 'phone-verification' :
     !hasUsername || !hasDisplayName ? 'setup' :
     !hasProfilePhoto ? 'photo' :
     !hasWelcomeSeen ? 'welcome' :
@@ -95,6 +101,17 @@ export default function RootNavigator() {
 
   useEffect(() => {
     const handleVerificationUrl = async (url: string) => {
+      if (url.includes('#')) {
+        const fragment = url.split('#')[1];
+        const params = new URLSearchParams(fragment);
+        const access_token = params.get('access_token');
+        const refresh_token = params.get('refresh_token');
+        const type = params.get('type');
+        if (access_token && refresh_token && type === 'recovery') {
+          await supabase.auth.setSession({ access_token, refresh_token });
+          return;
+        }
+      }
       if (!url.includes('token_hash')) return;
       const parsed = new URL(url);
       const token_hash = parsed.searchParams.get('token_hash') ?? parsed.hash.match(/token_hash=([^&]+)/)?.[1];
@@ -113,6 +130,16 @@ export default function RootNavigator() {
     return <SplashScreen />;
   }
 
+  if (passwordRecoveryRequested) {
+    return (
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ gestureEnabled: false }} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    );
+  }
+
   return (
     <TutorialProvider userId={session?.user.id}>
     <NavigationContainer>
@@ -120,8 +147,10 @@ export default function RootNavigator() {
       <Stack.Navigator key={onboardingStage} screenOptions={{ headerShown: false, animation: 'fade' }}>
         {session ? (
           <>
-            {/* Initial screen: setup profile → profile photo → welcome beta → main app */}
-            {(!hasUsername || !hasDisplayName) ? (
+            {/* Onboarding gate: phone verification → profile setup → profile photo → welcome → main app */}
+            {phoneVerificationRequired ? (
+              <Stack.Screen name="PhoneVerification" component={PhoneVerificationScreen} options={{ gestureEnabled: false }} />
+            ) : (!hasUsername || !hasDisplayName) ? (
               <Stack.Screen name="SetupProfile" component={SetupProfileScreen} />
             ) : !hasProfilePhoto ? (
               <Stack.Screen name="ProfilePhotoSetup" component={ProfilePhotoSetupScreen} options={{ headerShown: false }} />
@@ -169,9 +198,24 @@ export default function RootNavigator() {
               options={{ animation: 'slide_from_right' }}
             />
             <Stack.Screen
+              name="ChangePhone"
+              component={ChangePhoneScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
               name="ChangePassword"
               component={ChangePasswordScreen}
               options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="ResetPassword"
+              component={ResetPasswordScreen}
+              options={{ headerShown: false, gestureEnabled: false }}
+            />
+            <Stack.Screen
+              name="BlockedUsers"
+              component={BlockedUsersScreen}
+              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="GalleryInvite"
@@ -235,6 +279,7 @@ export default function RootNavigator() {
             <Stack.Screen name="SignUp" component={SignUpScreen} options={{ animation: 'slide_from_right', gestureEnabled: true }} />
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ animation: 'slide_from_right', gestureEnabled: true }} />
             <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ animation: 'slide_from_right', gestureEnabled: true }} />
+            <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} options={{ animation: 'slide_from_right', gestureEnabled: true }} />
           </>
         )}
       </Stack.Navigator>
