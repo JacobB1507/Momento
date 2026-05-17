@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { canEditOrDelete } from '../lib/messages';
 
@@ -28,6 +29,7 @@ function formatTime(iso: string) {
 }
 
 export default function MessageBubble({ message, currentUserId, onEdit, onDelete, isLast, activeMessageId, setActiveMessageId }: Props) {
+  const navigation = useNavigation<any>();
   const isOwn = message.sender_id === currentUserId;
   const isMenuOpen = activeMessageId === message.id;
   const [within2Mins, setWithin2Mins] = useState(false);
@@ -41,7 +43,25 @@ export default function MessageBubble({ message, currentUserId, onEdit, onDelete
 
   return (
     <View style={[styles.wrapper, isOwn ? styles.wrapperOwn : styles.wrapperOther]}>
-      <Pressable onLongPress={isOwn && !message.deleted ? handleLongPress : undefined} style={{ position: 'relative' }}>
+      <Pressable
+        onPress={
+          message.image_url != null && message.image_url !== '' && !message.deleted
+            ? () => navigation.navigate('PhotoViewer', {
+                photos: [{
+                  id: message.id,
+                  url: message.image_url,
+                  uploaded_by: message.sender_id,
+                  created_at: message.created_at,
+                }],
+                initialIndex: 0,
+                galleryTitle: undefined,
+              })
+            : undefined
+        }
+        onLongPress={isOwn && !message.deleted ? handleLongPress : undefined}
+        delayLongPress={300}
+        style={{ position: 'relative' }}
+      >
         {isMenuOpen && (
           <>
             <TouchableOpacity
@@ -91,7 +111,7 @@ const styles = StyleSheet.create({
   wrapperOwn: { alignItems: 'flex-end' },
   wrapperOther: { alignItems: 'flex-start' },
   overlay: { position: 'absolute', top: -9999, left: -9999, right: -9999, bottom: -9999, zIndex: 998, backgroundColor: 'transparent' },
-  menu: { position: 'absolute', bottom: '100%', right: 0, backgroundColor: '#1a1a1a', borderRadius: 12, paddingVertical: 4, zIndex: 1000, minWidth: 160, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8 },
+  menu: { position: 'absolute', top: '100%', right: 0, backgroundColor: '#1a1a1a', borderRadius: 12, paddingVertical: 4, zIndex: 1000, minWidth: 160, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8 },
   menuRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10 },
   menuTextWhite: { color: '#fff', fontSize: 14, fontWeight: '500' },
   menuTextRed: { color: '#ef4444', fontSize: 14, fontWeight: '500' },

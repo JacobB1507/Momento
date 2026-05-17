@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { sendFriendRequest, getMutualFriends, removeFriend } from '../lib/friends';
 import { isTrustedFriend, addTrustedFriend, removeTrustedFriend } from '../lib/trustedFriends';
+import { blockUser, isBlocked, unblockUser } from '../lib/blocks';
 import { createConversation, requestMessagePermission, getOrCreateConversation } from '../lib/messages';
 import { GalleryCard } from '../components/GalleryCard';
 import ProfileActionButtons from '../components/ProfileActionButtons';
@@ -50,60 +51,64 @@ export default function FriendProfileScreen() {
   const [showMenu, setShowMenu] = useState(false);
   const [isTrusted, setIsTrusted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [blocked, setBlocked] = useState(false);
+
+  const load = useCallback(async () => {
+    const [profileRes, ownedRes, membershipsRes, statusRes, myFriendsRes] =
+      await Promise.all([
+        supabase.from('profiles').select('username, avatar_url, bio, display_name').eq('id', userId).single(),
+        supabase.from('galleries').select('*').eq('created_by', userId).order('created_at', { ascending: false }),
+        supabase.from('gallery_members').select('gallery_id').eq('user_id', userId),
+        supabase.from('friends').select('id, status, sender_id')
+          .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUserId})`)
+          .maybeSingle(),
+        supabase.from('friends').select('sender_id, receiver_id')
+          .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
+          .eq('status', 'accepted'),
+      ]);
+
+    if (profileRes.data) {
+      setProfileUsername(profileRes.data.username ?? username);
+      setDisplayName(profileRes.data.display_name ?? null);
+      setAvatarUrl(profileRes.data.avatar_url ?? null);
+      setBio(profileRes.data.bio ?? null);
+    }
+
+    const memberIds = (membershipsRes.data ?? []).map((m: any) => m.gallery_id);
+    const { data: collab } = memberIds.length > 0
+      ? await supabase.from('galleries').select('*').in('id', memberIds).neq('created_by', userId)
+      : { data: [] };
+    const all = [...(ownedRes.data ?? []), ...(collab ?? [])];
+    setGalleries(all.filter((g, i, arr) => arr.findIndex((x: any) => x.id === g.id) === i));
+
+    const fr = statusRes.data;
+    if (fr) {
+      setIsFriend(fr.status === 'accepted');
+      setHasPendingRequest(fr.status === 'pending' && fr.sender_id === currentUserId);
+    }
+    const { count: friendsCount } = await supabase
+      .from('friends')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'accepted')
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
+    setFriendCount(friendsCount ?? 0);
+    setFriendIds(
+      (myFriendsRes.data ?? []).map((r: any) =>
+        r.sender_id === currentUserId ? r.receiver_id : r.sender_id
+      )
+    );
+    const m = await getMutualFriends(currentUserId, userId);
+    setMutuals(m);
+    const trusted = await isTrustedFriend(supabase, userId);
+    setIsTrusted(trusted);
+    const blockedStatus = await isBlocked(userId);
+    setBlocked(blockedStatus);
+    setLoading(false);
+  }, [userId, currentUserId]);
 
   useEffect(() => {
-    const load = async () => {
-      const [profileRes, ownedRes, membershipsRes, statusRes, myFriendsRes] =
-        await Promise.all([
-          supabase.from('profiles').select('username, avatar_url, bio, display_name').eq('id', userId).single(),
-          supabase.from('galleries').select('*').eq('created_by', userId).order('created_at', { ascending: false }),
-          supabase.from('gallery_members').select('gallery_id').eq('user_id', userId),
-          supabase.from('friends').select('id, status, sender_id')
-            .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUserId})`)
-            .maybeSingle(),
-          supabase.from('friends').select('sender_id, receiver_id')
-            .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
-            .eq('status', 'accepted'),
-        ]);
-
-      if (profileRes.data) {
-        setProfileUsername(profileRes.data.username ?? username);
-        setDisplayName(profileRes.data.display_name ?? null);
-        setAvatarUrl(profileRes.data.avatar_url ?? null);
-        setBio(profileRes.data.bio ?? null);
-      }
-
-      const memberIds = (membershipsRes.data ?? []).map((m: any) => m.gallery_id);
-      const { data: collab } = memberIds.length > 0
-        ? await supabase.from('galleries').select('*').in('id', memberIds).neq('created_by', userId)
-        : { data: [] };
-      const all = [...(ownedRes.data ?? []), ...(collab ?? [])];
-      setGalleries(all.filter((g, i, arr) => arr.findIndex((x: any) => x.id === g.id) === i));
-
-      const fr = statusRes.data;
-      if (fr) {
-        setIsFriend(fr.status === 'accepted');
-        setHasPendingRequest(fr.status === 'pending' && fr.sender_id === currentUserId);
-      }
-      const { count: friendsCount } = await supabase
-        .from('friends')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'accepted')
-        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
-      setFriendCount(friendsCount ?? 0);
-      setFriendIds(
-        (myFriendsRes.data ?? []).map((r: any) =>
-          r.sender_id === currentUserId ? r.receiver_id : r.sender_id
-        )
-      );
-      const m = await getMutualFriends(currentUserId, userId);
-      setMutuals(m);
-      const trusted = await isTrustedFriend(supabase, userId);
-      setIsTrusted(trusted);
-      setLoading(false);
-    };
     load();
-  }, [userId, currentUserId]);
+  }, [load]);
 
   const handleFriendPress = async () => {
     const result = await sendFriendRequest(currentUserId, profileUsername);
@@ -122,6 +127,39 @@ export default function FriendProfileScreen() {
       otherUsername: profileUsername,
       isPendingRequest: !isFriend,
     });
+  };
+
+  const handleBlock = async () => {
+    const { error } = await blockUser(userId);
+    if (error) {
+      Alert.alert('Could not block user', 'Please try again.');
+      return;
+    }
+    setBlocked(true);
+    load();
+  };
+
+  const handleUnblock = () => {
+    Alert.alert(
+      `Unblock ${displayName || profileUsername}?`,
+      'They will be able to see your public content, send you friend requests, and message you again.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unblock',
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await unblockUser(userId);
+            if (error) {
+              Alert.alert('Could not unblock user', 'Please try again.');
+              return;
+            }
+            setBlocked(false);
+            load();
+          },
+        },
+      ],
+    );
   };
 
   const letter = profileUsername.charAt(0).toUpperCase();
@@ -168,14 +206,22 @@ export default function FriendProfileScreen() {
           <Text style={styles.statLabel}>Mutual</Text>
         </Pressable>
       </View>
-      <ProfileActionButtons
-        userId={userId}
-        currentUserId={currentUserId}
-        isFriend={isFriend}
-        hasPendingRequest={hasPendingRequest}
-        onFriendPress={handleFriendPress}
-        onMessagePress={handleMessagePress}
-      />
+      {blocked ? (
+        <View style={{ flexDirection: 'row', marginTop: 12, gap: 12 }}>
+          <View style={{ flex: 1, paddingVertical: 11, borderRadius: 12, alignItems: 'center', backgroundColor: '#F3F4F6', borderWidth: 1.5, borderColor: '#E5E7EB' }}>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: '#9CA3AF' }}>Blocked</Text>
+          </View>
+        </View>
+      ) : (
+        <ProfileActionButtons
+          userId={userId}
+          currentUserId={currentUserId}
+          isFriend={isFriend}
+          hasPendingRequest={hasPendingRequest}
+          onFriendPress={handleFriendPress}
+          onMessagePress={handleMessagePress}
+        />
+      )}
       <View style={styles.galleriesSection}>
         <Text style={styles.galleriesSectionTitle}>Galleries</Text>
       </View>
@@ -197,57 +243,84 @@ export default function FriendProfileScreen() {
         <>
           <TouchableOpacity style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 998 }} onPress={() => setShowMenu(false)} activeOpacity={1} />
           <View style={{ position: 'absolute', top: 56, right: 16, backgroundColor: '#1a1a1a', borderRadius: 12, zIndex: 999, minWidth: 180, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8 }}>
-            {isFriend && (
+            {blocked ? (
               <Pressable
                 style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}
-                onPress={() => {
-                  setShowMenu(false);
-                  Alert.alert(
-                    'Remove Friend',
-                    `Remove ${displayName || profileUsername} as a friend?`,
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Remove',
-                        style: 'destructive',
-                        onPress: async () => {
-                          const { data: row } = await supabase
-                            .from('friends')
-                            .select('id')
-                            .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUserId})`)
-                            .eq('status', 'accepted')
-                            .maybeSingle();
-                          if (row) await removeFriend(row.id);
-                          setIsFriend(false);
-                          setShowMenu(false);
-                        },
-                      },
-                    ],
-                  );
-                }}
+                onPress={() => { setShowMenu(false); handleUnblock(); }}
               >
-                <Text style={{ color: '#ef4444', fontSize: 15, fontWeight: '500' }}>Remove Friend</Text>
+                <Text style={{ color: '#ef4444', fontSize: 15, fontWeight: '500' }}>Unblock</Text>
               </Pressable>
-            )}
-            {isFriend && (
-              <Pressable
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 }}
-                onPress={async () => {
-                  setShowMenu(false);
-                  if (isTrusted) {
-                    await removeTrustedFriend(supabase, userId);
-                    setIsTrusted(false);
-                  } else {
-                    await addTrustedFriend(supabase, userId);
-                    setIsTrusted(true);
-                  }
-                }}
-              >
-                <Ionicons name={isTrusted ? 'star' : 'star-outline'} size={18} color={isTrusted ? '#E91E8C' : '#9ca3af'} />
-                <Text style={{ color: isTrusted ? '#E91E8C' : '#ffffff', fontSize: 15, fontWeight: '500' }}>
-                  {isTrusted ? 'Remove from Trusted' : 'Add to Trusted'}
-                </Text>
-              </Pressable>
+            ) : (
+              <>
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}
+                  onPress={() => {
+                    setShowMenu(false);
+                    Alert.alert(
+                      `Block ${displayName || profileUsername}?`,
+                      "They won't be able to see your profile, send you messages, or comment on your galleries. You can unblock them later in Settings.",
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Block', style: 'destructive', onPress: handleBlock },
+                      ],
+                    );
+                  }}
+                >
+                  <Text style={{ color: '#ef4444', fontSize: 15, fontWeight: '500' }}>Block</Text>
+                </Pressable>
+                {isFriend && (
+                  <Pressable
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}
+                    onPress={() => {
+                      setShowMenu(false);
+                      Alert.alert(
+                        'Remove Friend',
+                        `Remove ${displayName || profileUsername} as a friend?`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Remove',
+                            style: 'destructive',
+                            onPress: async () => {
+                              const { data: row } = await supabase
+                                .from('friends')
+                                .select('id')
+                                .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${currentUserId})`)
+                                .eq('status', 'accepted')
+                                .maybeSingle();
+                              if (row) await removeFriend(row.id);
+                              setIsFriend(false);
+                              setShowMenu(false);
+                            },
+                          },
+                        ],
+                      );
+                    }}
+                  >
+                    <Text style={{ color: '#ef4444', fontSize: 15, fontWeight: '500' }}>Remove Friend</Text>
+                  </Pressable>
+                )}
+                {isFriend && (
+                  <Pressable
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 }}
+                    onPress={async () => {
+                      setShowMenu(false);
+                      if (isTrusted) {
+                        await removeTrustedFriend(supabase, userId);
+                        setIsTrusted(false);
+                      } else {
+                        await addTrustedFriend(supabase, userId);
+                        setIsTrusted(true);
+                      }
+                    }}
+                  >
+                    <Ionicons name={isTrusted ? 'star' : 'star-outline'} size={18} color={isTrusted ? '#E91E8C' : '#9ca3af'} />
+                    <Text style={{ color: isTrusted ? '#E91E8C' : '#ffffff', fontSize: 15, fontWeight: '500' }}>
+                      {isTrusted ? 'Remove from Trusted' : 'Add to Trusted'}
+                    </Text>
+                  </Pressable>
+                )}
+              </>
             )}
             <Pressable
               style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}

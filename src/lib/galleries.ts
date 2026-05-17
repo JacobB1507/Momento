@@ -1,4 +1,6 @@
+import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase } from './supabase';
+import { reportError } from './errorReport';
 import type { Gallery, Photo } from '../types/database';
 
 export async function fetchUserGalleries(userId: string): Promise<Gallery[]> {
@@ -61,58 +63,116 @@ export async function uploadGalleryPhoto({
   galleryId,
   uri,
   mimeType,
+  width,
+  height,
+  onProgress,
 }: {
   galleryId: string;
   uri: string;
   mimeType?: string;
+  width?: number;
+  height?: number;
+  onProgress?: (bytesUploaded: number, bytesTotal: number) => void;
 }): Promise<void> {
-  console.log('[upload] starting for gallery', galleryId, 'uri', uri);
+  if (mimeType && !mimeType.startsWith('image/')) throw new Error('Only image files are supported.');
 
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  console.log('[upload] session user id', session?.user.id, 'session error', sessionError);
-  if (!session) throw new Error('Not signed in');
-
-  const response = await fetch(uri);
-  const arrayBuffer = await response.arrayBuffer();
-  console.log('[upload] arrayBuffer byteLength', arrayBuffer.byteLength);
-
-  const contentType = mimeType || 'image/jpeg';
-  const ext = contentType.startsWith('image/') ? (contentType.split('/')[1] ?? 'jpg') : 'jpg';
-  const filename = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-  const storagePath = `${galleryId}/${filename}`;
-  console.log('[upload] storage path', storagePath, 'contentType', contentType);
+  const MAX_DIM = 2048;
+  const actions: Array<{ resize: { width?: number; height?: number } }> = [];
+  if (width && height) {
+    const longer = Math.max(width, height);
+    if (longer > MAX_DIM) {
+      const scale = MAX_DIM / longer;
+      actions.push({ resize: { width: Math.round(width * scale), height: Math.round(height * scale) } });
+    }
+  } else {
+    actions.push({ resize: { width: MAX_DIM } });
+  }
+  const compressed = await ImageManipulator.manipulateAsync(
+    uri, actions, { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+  );
 
   // StorageClient has no setAuth method in storage-js v2.x — use setHeader instead.
   // This also guards against the startup race where onAuthStateChange hasn't fired
   // yet to update the storage auth header from the anon key to the session token.
-  const { data: storageData, error: uploadError } = await supabase.storage
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not signed in');
+
+  const response = await fetch(compressed.uri);
+  const arrayBuffer = await response.arrayBuffer();
+
+  const storagePath = `${galleryId}/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+  const { error: uploadError } = await supabase.storage
     .setHeader('Authorization', `Bearer ${session.access_token}`)
     .from('gallery-photos')
-    .upload(storagePath, arrayBuffer, { contentType, upsert: false });
-  console.log('[upload] storage result data', storageData, 'error', uploadError);
+    .upload(storagePath, arrayBuffer, { contentType: 'image/jpeg', upsert: false });
+  if (uploadError) throw uploadError;
 
+  const { data: urlData } = supabase.storage.from('gallery-photos').getPublicUrl(storagePath);
+  const { error: dbError } = await supabase
+    .from('gallery_photos')
+    .insert({ gallery_id: galleryId, storage_path: storagePath, url: urlData.publicUrl, uploaded_by: session.user.id });
+  if (dbError) throw dbError;
+
+  onProgress?.(1, 1);
+
+  try {
+    const { data: galleryData } = await supabase
+      .from('galleries')
+      .select('cover_photo_url')
+      .eq('id', galleryId)
+      .single();
+    if (galleryData && galleryData.cover_photo_url === null) {
+      await supabase
+        .from('galleries')
+        .update({ cover_photo_url: urlData.publicUrl })
+        .eq('id', galleryId);
+    }
+  } catch (coverErr) {
+    reportError('uploadGalleryPhoto.autoSetCover', coverErr);
+  }
+}
+
+export async function uploadAvatarFile({ uri, mimeType }: {
+  uri: string;
+  mimeType?: string;
+}): Promise<{ publicUrl: string; displayUrl: string }> {
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!session) throw new Error('Not signed in');
+
+  const userId = session.user.id;
+
+  const response = await fetch(uri);
+  const arrayBuffer = await response.arrayBuffer();
+
+  const contentType = mimeType || 'image/jpeg';
+  const ext = contentType.startsWith('image/')
+    ? (contentType.split('/')[1] ?? 'jpg')
+    : 'jpg';
+  const storagePath = `${userId}/avatar.${ext === 'jpeg' ? 'jpg' : ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .setHeader('Authorization', `Bearer ${session.access_token}`)
+    .from('avatars')
+    .upload(storagePath, arrayBuffer, {
+      contentType,
+      upsert: true,
+    });
   if (uploadError) throw uploadError;
 
   const { data: urlData } = supabase.storage
-    .from('gallery-photos')
+    .from('avatars')
     .getPublicUrl(storagePath);
-  console.log('[upload] public url', urlData.publicUrl);
 
-  const insertPayload = {
-    gallery_id: galleryId,
-    storage_path: storagePath,
-    url: urlData.publicUrl,
-    uploaded_by: session.user.id,
-  };
-  console.log('[upload] inserting row', JSON.stringify(insertPayload));
+  return { publicUrl: urlData.publicUrl, displayUrl: `${urlData.publicUrl}?t=${Date.now()}` };
+}
 
-  const { data: insertData, error: dbError } = await supabase
-    .from('gallery_photos')
-    .insert(insertPayload)
-    .select();
-  console.log('[upload] insert result data', insertData, 'error', dbError);
-
-  if (dbError) throw dbError;
+export async function setProfileAvatarUrl(userId: string, publicUrlWithoutCacheBust: string) {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ avatar_url: publicUrlWithoutCacheBust })
+    .eq('id', userId);
+  if (error) throw error;
 }
 
 export async function inviteUserToGallery(galleryId: string, email: string): Promise<'ok' | 'no_account'> {

@@ -94,6 +94,21 @@ export async function getNotifications(userId: string): Promise<Notification[]> 
   });
 }
 
+export async function fetchUnreadNotificationCount(): Promise<number> {
+  const { data: { session }, error: sessionError } =
+    await supabase.auth.getSession();
+  if (sessionError || !session) return 0;
+
+  const { count, error } = await supabase
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', session.user.id)
+    .is('read_at', null);
+
+  if (error) return 0;
+  return count ?? 0;
+}
+
 export async function getUnreadCount(userId: string): Promise<number> {
   const { count, error } = await supabase
     .from('notifications')

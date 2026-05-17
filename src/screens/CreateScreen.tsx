@@ -14,11 +14,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { MainTabParamList } from '../navigation/types';
 import type { GalleryPrivacy } from '../types/database';
-import { getDraft, setDraft, clearDraft } from '../lib/createGalleryDraft';
+import { getDraft, setDraft } from '../lib/createGalleryDraft';
 import { getDefaultGalleryPrivacy } from '../lib/galleries';
 import { checkRateLimit } from '../lib/rateLimit';
 import { validateGalleryTitle, sanitizeText } from '../lib/sanitize';
@@ -35,7 +34,6 @@ export default function CreateScreen() {
   const [title, setTitle] = useState<string>(getDraft().title);
   const [privacy, setPrivacy] = useState<GalleryPrivacy>(getDraft().privacy ?? 'friends');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (getDraft().privacy === null && session?.user.id) {
@@ -60,35 +58,22 @@ export default function CreateScreen() {
     }, [])
   );
   const handleCreate = async () => {
-    const allowed = await checkRateLimit('gallery_create');
-    if (!allowed) {
-      Alert.alert('Slow down', 'Please wait a few minutes before trying again.');
-      return;
-    }
     const clean = sanitizeText(title);
     const validation = validateGalleryTitle(clean);
     if (!validation.ok) {
       Alert.alert('Invalid title', validation.error!);
       return;
     }
-
-    Keyboard.dismiss();
     setLoading(true);
-    setError(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-      const { data, error: dbError } = await supabase
-        .from('galleries')
-        .insert({ title: clean, created_by: user.id, privacy })
-        .select('id')
-        .single();
-      if (dbError) throw dbError;
-      clearDraft();
-      setTitle('');
-      (navigation as any).navigate('GalleryDetail', { galleryId: data.id });
-    } catch (err: any) {
-      setError(err.message ?? 'Could not create gallery. Please try again.');
+      const allowed = await checkRateLimit('gallery_create');
+      if (!allowed) {
+        Alert.alert('Slow down', 'Please wait a few minutes before trying again.');
+        return;
+      }
+      Keyboard.dismiss();
+      setDraft({ title: clean, privacy });
+      (navigation as any).navigate('GalleryInviteNew', { pendingCreate: true, galleryTitle: clean, privacy });
     } finally {
       setLoading(false);
     }
@@ -147,8 +132,6 @@ export default function CreateScreen() {
             );
           })}
         </View>
-
-        {error && <Text style={styles.errorText}>{error}</Text>}
 
         <Pressable
           style={({ pressed }) => [

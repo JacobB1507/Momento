@@ -21,10 +21,11 @@ import { useTutorial } from '../tutorial/TutorialContext';
 import type { RootStackParamList } from '../navigation/types';
 import type { Gallery } from '../types/database';
 import { supabase } from '../lib/supabase';
-import { getProfile, uploadAvatar } from '../lib/galleries';
+import { getProfile, uploadAvatarFile, setProfileAvatarUrl } from '../lib/galleries';
 
 import { GalleryCard, CARD_GAP } from '../components/GalleryCard';
 import { FriendsListModal } from '../components/FriendsListModal';
+import { GalleryLongPressSheet } from '../components/GalleryLongPressSheet';
 
 const AVATAR_SIZE = 96;
 const BADGE_SIZE = 26;
@@ -48,6 +49,7 @@ export default function ProfileScreen() {
   const [galleries, setGalleries] = useState<Gallery[]>([]);
   const [showFriendsList, setShowFriendsList] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [longPressSheetGallery, setLongPressSheetGallery] = useState<Gallery | null>(null);
 
   const tutorial = useTutorial();
   const friendsIconRef = useRef(null);
@@ -138,60 +140,35 @@ export default function ProfileScreen() {
   };
 
   const handleGalleryLongPress = (gallery: Gallery) => {
+    setLongPressSheetGallery(gallery);
+  };
+
+  const handlePinToggle = async () => {
+    if (!longPressSheetGallery) return;
+    const gallery = longPressSheetGallery;
     const isPinned = !!gallery.pinned;
-    Alert.alert(gallery.title, undefined, [
-      {
-        text: isPinned ? 'Unpin' : 'Pin to Top',
-        onPress: async () => {
-          await supabase
-            .from('galleries')
-            .update({ pinned: !isPinned })
-            .eq('id', gallery.id);
-          loadGalleries();
+    await supabase.from('galleries').update({ pinned: !isPinned }).eq('id', gallery.id);
+    loadGalleries();
+  };
+
+  const handleDeleteGallery = () => {
+    if (!longPressSheetGallery) return;
+    const gallery = longPressSheetGallery;
+    Alert.alert(
+      'Delete Gallery',
+      `Delete "${gallery.title}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await supabase.from('galleries').delete().eq('id', gallery.id);
+            loadGalleries();
+          },
         },
-      },
-      {
-        text: 'Rename',
-        onPress: () => {
-          Alert.prompt(
-            'Rename Gallery',
-            'Enter a new name:',
-            async (newTitle) => {
-              if (!newTitle?.trim()) return;
-              await supabase
-                .from('galleries')
-                .update({ title: newTitle.trim() })
-                .eq('id', gallery.id);
-              loadGalleries();
-            },
-            'plain-text',
-            gallery.title,
-          );
-        },
-      },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          Alert.alert(
-            'Delete Gallery',
-            `Delete "${gallery.title}"? This cannot be undone.`,
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: async () => {
-                  await supabase.from('galleries').delete().eq('id', gallery.id);
-                  loadGalleries();
-                },
-              },
-            ],
-          );
-        },
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+      ],
+    );
   };
 
   const loadPhotoCount = async () => {
@@ -233,13 +210,17 @@ export default function ProfileScreen() {
 
     const uri = result.assets[0].uri;
     setUploading(true);
-    const url = await uploadAvatar(userId, uri);
-    setUploading(false);
-
-    if (url) {
-      setAvatarUrl(url);
-    } else {
+    try {
+      const { publicUrl, displayUrl } = await uploadAvatarFile({
+        uri,
+        mimeType: 'image/jpeg',
+      });
+      await setProfileAvatarUrl(session!.user.id, publicUrl);
+      setAvatarUrl(displayUrl);
+    } catch {
       Alert.alert('Upload failed', 'Could not update your avatar. Please try again.');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -381,6 +362,20 @@ export default function ProfileScreen() {
         onClose={() => setShowFriendsList(false)}
         userId={userId}
       />
+
+      {longPressSheetGallery && (
+        <GalleryLongPressSheet
+          visible={!!longPressSheetGallery}
+          onClose={() => setLongPressSheetGallery(null)}
+          gallery={longPressSheetGallery}
+          currentUserId={userId}
+          onPinToggled={handlePinToggle}
+          onRenamed={loadGalleries}
+          onPrivacyChanged={loadGalleries}
+          onCoverPhotoUpdated={loadGalleries}
+          onDeleted={handleDeleteGallery}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -488,4 +483,5 @@ const styles = StyleSheet.create({
   galleryGrid: { gap: CARD_GAP },
   galleryRow: { gap: CARD_GAP },
   galleryEmpty: { color: '#9CA3AF', fontSize: 14, textAlign: 'center', paddingVertical: 16 },
+
 });

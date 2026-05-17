@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -13,6 +13,7 @@ type Props = {
 
 export default function MessageInputBar({ onSend, onSendImage, editingMessage, onCancelEdit, disabled = false }: Props) {
   const [text, setText] = useState('');
+  const [pendingImageUri, setPendingImageUri] = useState<string | null>(null);
 
   useEffect(() => {
     setText(editingMessage ? (editingMessage.content ?? '') : '');
@@ -20,7 +21,7 @@ export default function MessageInputBar({ onSend, onSendImage, editingMessage, o
 
   const handlePickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
-    if (!result.canceled && result.assets[0]) onSendImage(result.assets[0].uri);
+    if (!result.canceled && result.assets[0]) setPendingImageUri(result.assets[0].uri);
   };
 
   const handleSend = () => {
@@ -31,6 +32,32 @@ export default function MessageInputBar({ onSend, onSendImage, editingMessage, o
 
   return (
     <View>
+      <Modal
+        visible={pendingImageUri !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPendingImageUri(null)}
+      >
+        <View style={styles.previewOverlay}>
+          <View style={styles.previewCard}>
+            {pendingImageUri && (
+              <Image source={{ uri: pendingImageUri }} style={styles.previewImage} />
+            )}
+            <Pressable
+              style={styles.previewSend}
+              onPress={() => {
+                if (pendingImageUri) onSendImage(pendingImageUri);
+                setPendingImageUri(null);
+              }}
+            >
+              <Text style={styles.previewSendText}>Send</Text>
+            </Pressable>
+            <Pressable style={styles.previewCancel} onPress={() => setPendingImageUri(null)}>
+              <Text style={styles.previewCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       {editingMessage && (
         <View style={styles.editBanner}>
           <Text style={styles.editLabel}>Editing message</Text>
@@ -75,4 +102,11 @@ const styles = StyleSheet.create({
   sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FF6B6B', alignItems: 'center', justifyContent: 'center' },
   sendBtnDisabled: { backgroundColor: '#F3F4F6' },
   sendIcon: { fontSize: 18, color: '#fff' },
+  previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
+  previewCard: { backgroundColor: '#fff', borderRadius: 16, padding: 20, alignItems: 'center', gap: 12 },
+  previewImage: { width: 240, height: 240, borderRadius: 12, resizeMode: 'cover' },
+  previewSend: { width: 240, height: 44, borderRadius: 12, backgroundColor: '#FF6B6B', alignItems: 'center', justifyContent: 'center' },
+  previewSendText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  previewCancel: { paddingVertical: 8 },
+  previewCancelText: { color: '#9CA3AF', fontSize: 15 },
 });

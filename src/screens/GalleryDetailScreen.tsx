@@ -24,6 +24,8 @@ import { ContributorsModal } from '../components/ContributorsModal';
 import { RemovalRequestsModal } from '../components/RemovalRequestsModal';
 import { SettingsModal } from '../components/SettingsModal';
 import { PhotoGrid } from '../components/PhotoGrid';
+import UploadProgressOverlay from '../components/UploadProgressOverlay';
+import { PhotoUploadReviewModal } from '../components/PhotoUploadReviewModal';
 import styles from '../styles/galleryDetailStyles';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'GalleryDetail'>;
@@ -38,6 +40,7 @@ export default function GalleryDetailScreen() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadState, setUploadState] = useState({ total: 0, completed: 0, failed: 0, currentIndex: 0, inProgress: false });
   const [error, setError] = useState<string | null>(null);
   const [showContributors, setShowContributors] = useState(false);
   const [contributorRefreshKey, setContributorRefreshKey] = useState(0);
@@ -47,6 +50,7 @@ export default function GalleryDetailScreen() {
   const [contributorCount, setContributorCount] = useState(0);
   const [galleryMeta, setGalleryMeta] = useState<{ title: string; created_by: string; privacy: GalleryPrivacy; comment_count?: number } | null>(null);
   const [showComments, setShowComments] = useState(false);
+  const [pendingReviewPhotos, setPendingReviewPhotos] = useState<any[] | null>(null);
   const [highlightedRequestId, setHighlightedRequestId] = useState<string | null>(null);
   const highlightConsumed = useRef(false);
 
@@ -137,6 +141,43 @@ export default function GalleryDetailScreen() {
     }
   };
 
+  const runUploadLoop = async (assets: any[]) => {
+    setPendingReviewPhotos(null);
+    if (assets.length === 0) return;
+
+    const total = assets.length;
+    let completed = 0;
+    let failed = 0;
+    setUploading(true);
+    setUploadState({ total, completed: 0, failed: 0, currentIndex: 0, inProgress: true });
+
+    for (let i = 0; i < assets.length; i++) {
+      const asset = assets[i];
+      setUploadState(prev => ({ ...prev, currentIndex: i + 1 }));
+      try {
+        await uploadGalleryPhoto({
+          galleryId,
+          uri: asset.uri,
+          mimeType: asset.mimeType ?? undefined,
+          width: asset.width ?? undefined,
+          height: asset.height ?? undefined,
+        });
+        completed++;
+        setUploadState(prev => ({ ...prev, completed }));
+      } catch {
+        failed++;
+        setUploadState(prev => ({ ...prev, failed }));
+      }
+    }
+
+    await load();
+    setUploading(false);
+    setUploadState(prev => ({ ...prev, inProgress: false }));
+    if (failed > 0) {
+      Alert.alert('Upload complete', `Uploaded ${completed} of ${total} photos. ${failed} failed.`);
+    }
+  };
+
   const handleUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -149,18 +190,8 @@ export default function GalleryDetailScreen() {
       selectionLimit: 100,
       quality: 0.85,
     });
-    if (result.canceled || !result.assets.length) return;
-    setUploading(true);
-    try {
-      await Promise.all(
-        result.assets.map(asset => uploadGalleryPhoto({ galleryId, uri: asset.uri, mimeType: asset.mimeType ?? undefined }))
-      );
-    } catch (e: any) {
-      Alert.alert('Upload failed', e?.message ?? 'Something went wrong. Please try again.');
-    } finally {
-      await load();
-      setUploading(false);
-    }
+    if (result.canceled || !result.assets || result.assets.length === 0) return;
+    setPendingReviewPhotos(result.assets);
   };
 
   return (
@@ -219,18 +250,26 @@ export default function GalleryDetailScreen() {
           <Pressable style={styles.retryButton} onPress={load}><Text style={styles.retryText}>Retry</Text></Pressable>
         </View>
       ) : photos.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.emptyIcon}>📷</Text>
-          <Text style={styles.emptyTitle}>No photos yet</Text>
-          <Text style={styles.emptySubtitle}>Tap the button below to add photos from your camera roll.</Text>
-          <Pressable
-            style={({ pressed }) => [styles.emptyButton, pressed && { opacity: 0.85 }]}
-            onPress={handleUpload}
-            disabled={uploading}
-          >
-            {uploading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.emptyButtonText}>Add Photos</Text>}
-          </Pressable>
-        </View>
+        (isOwner || isMember) ? (
+          <View style={styles.center}>
+            <Text style={styles.emptyIcon}>📷</Text>
+            <Text style={styles.emptyTitle}>No photos yet</Text>
+            <Text style={styles.emptySubtitle}>Tap the button below to add photos from your camera roll.</Text>
+            <Pressable
+              style={({ pressed }) => [styles.emptyButton, pressed && { opacity: 0.85 }]}
+              onPress={handleUpload}
+              disabled={uploading}
+            >
+              {uploading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.emptyButtonText}>Add Photos</Text>}
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.center}>
+            <Text style={styles.emptyIcon}>📷</Text>
+            <Text style={styles.emptyTitle}>No photos yet</Text>
+            <Text style={styles.emptySubtitle}>The contributors of this gallery haven't uploaded any photos yet.</Text>
+          </View>
+        )
       ) : (
         <PhotoGrid
           photos={photos}
@@ -284,14 +323,28 @@ export default function GalleryDetailScreen() {
         onClose={() => setSettingsVisible(false)}
         onPrivacySaved={(privacy) => setGalleryMeta(prev => prev ? { ...prev, privacy } : prev)}
         onGalleryDeleted={() => navigation.goBack()}
+        onCoverPhotoUpdated={() => loadGalleryMeta()}
         onTransferOwnership={() => {
           setSettingsVisible(false);
           navigation.navigate('TransferOwnership', { galleryId, galleryTitle: galleryMeta?.title ?? '' });
         }}
       />
+      <UploadProgressOverlay
+        visible={uploadState.inProgress}
+        totalCount={uploadState.total}
+        completedCount={uploadState.completed}
+        failedCount={uploadState.failed}
+        currentIndex={uploadState.currentIndex}
+      />
+      <PhotoUploadReviewModal
+        visible={pendingReviewPhotos !== null}
+        photos={pendingReviewPhotos ?? []}
+        onCancel={() => setPendingReviewPhotos(null)}
+        onConfirm={(finalPhotos) => runUploadLoop(finalPhotos)}
+      />
 
 
-      {photos.length > 0 && !loading && (
+      {photos.length > 0 && !loading && (isOwner || isMember) && (
         <Pressable
           style={({ pressed }) => [styles.fab, pressed && { opacity: 0.85 }, uploading && { opacity: 0.6 }]}
           onPress={handleUpload}

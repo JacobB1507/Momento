@@ -5,7 +5,6 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { useTutorial } from '../tutorial/TutorialContext';
 import { getDefaultGalleryPrivacy } from '../lib/galleries';
 
 function Row({ label, subtitle, icon, onPress }: {
@@ -47,19 +46,8 @@ export default function SettingsScreen() {
     }, [userId])
   );
 
-  const { startTutorial } = useTutorial();
   const go = (screen: string) => () => navigation.navigate(screen as never);
   const privacyLabel = defaultPrivacy.charAt(0).toUpperCase() + defaultPrivacy.slice(1);
-
-  const handleReplayTutorial = async () => {
-    try {
-      await supabase.from('profiles').update({ tutorial_completed: false }).eq('id', userId);
-      navigation.goBack();
-      startTutorial();
-    } catch {
-      Alert.alert('Error', 'Could not reset tutorial.');
-    }
-  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -76,6 +64,8 @@ export default function SettingsScreen() {
           <Row label="Change Username" onPress={go('ChangeUsername')} />
           <Sep />
           <Row label="Change Email" onPress={go('ChangeEmail')} />
+          <Sep />
+          <Row label="Change Phone Number" onPress={go('ChangePhone')} />
           <Sep />
           <Row label="Change Password" onPress={go('ChangePassword')} />
           <Sep />
@@ -99,16 +89,9 @@ export default function SettingsScreen() {
         <Text style={styles.sectionLabel}>OTHER</Text>
         <View style={styles.card}>
           <Row label="Notifications" subtitle="Manage what you get notified about" onPress={go('NotificationSettings')} />
+          <Sep />
+          <Row label="Blocked Users" subtitle="Manage who you've blocked" onPress={go('BlockedUsers')} />
         </View>
-
-        {__DEV__ && (
-          <>
-            <Text style={styles.sectionLabel}>DEVELOPER</Text>
-            <View style={styles.card}>
-              <Row label="Replay Tutorial" onPress={handleReplayTutorial} />
-            </View>
-          </>
-        )}
 
         <View style={styles.signOutSection}>
           <Pressable

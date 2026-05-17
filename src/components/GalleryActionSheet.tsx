@@ -15,10 +15,13 @@ import {
   View,
 } from 'react-native';
 import { fetchGalleryPhotos } from '../lib/galleries';
+import { supabase } from '../lib/supabase';
 import type { Gallery, GalleryPrivacy, Photo } from '../types/database';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const COVER_CELL = Math.floor((SCREEN_WIDTH - 48 - 4) / 3);
+const GRID_GAP = 8;
+const NUM_COLUMNS = 3;
+const COVER_CELL = Math.floor((SCREEN_WIDTH - 48 - GRID_GAP * (NUM_COLUMNS + 1)) / NUM_COLUMNS);
 
 const PRIVACY_OPTIONS: { value: GalleryPrivacy; label: string; description: string }[] = [
   { value: 'private', label: 'Private', description: 'Only members' },
@@ -35,6 +38,7 @@ type Props = {
   onSavePrivacy: (privacy: GalleryPrivacy) => Promise<void>;
   onSelectCover: (photoUrl: string) => Promise<void>;
   onDelete: () => void;
+  currentUserId?: string;
 };
 
 export function GalleryActionSheet({
@@ -44,6 +48,7 @@ export function GalleryActionSheet({
   onSavePrivacy,
   onSelectCover,
   onDelete,
+  currentUserId,
 }: Props) {
   const [mode, setMode] = useState<Mode>('actions');
   const [renameText, setRenameText] = useState('');
@@ -51,6 +56,11 @@ export function GalleryActionSheet({
   const [saving, setSaving] = useState(false);
   const [coverPhotos, setCoverPhotos] = useState<Photo[]>([]);
   const [coverPhotosLoading, setCoverPhotosLoading] = useState(false);
+  const [coverSaving, setCoverSaving] = useState(false);
+
+  const isOwner = !!currentUserId && !!gallery && (gallery as any).created_by === currentUserId;
+  const isAdmin = gallery?.role === 'admin';
+  const canManage = isOwner || isAdmin;
 
   useEffect(() => {
     if (gallery) {
@@ -87,6 +97,26 @@ export function GalleryActionSheet({
     }
   };
 
+  const handleCoverSelect = async (photoId: string) => {
+    if (!gallery || coverSaving) return;
+    setCoverSaving(true);
+    try {
+      const { data: photo, error: fetchError } = await supabase
+        .from('gallery_photos')
+        .select('url, gallery_id')
+        .eq('id', photoId)
+        .single();
+      if (fetchError || !photo || photo.gallery_id !== gallery.id) {
+        Alert.alert('Error', 'Could not update cover photo.');
+        return;
+      }
+      await onSelectCover(photo.url);
+      onClose();
+    } finally {
+      setCoverSaving(false);
+    }
+  };
+
   const handleDelete = () => {
     Alert.alert(
       'Delete gallery?',
@@ -113,7 +143,7 @@ export function GalleryActionSheet({
             {([
               { label: 'Rename', onPress: () => setMode('rename') },
               { label: 'Change Privacy', onPress: () => setMode('privacy') },
-              { label: 'Change Cover Photo', onPress: handleChangeCover },
+              ...(canManage ? [{ label: 'Change Cover Photo', onPress: handleChangeCover }] : []),
             ] as { label: string; onPress: () => void }[]).map(opt => (
               <Pressable
                 key={opt.label}
@@ -129,14 +159,16 @@ export function GalleryActionSheet({
             >
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </Pressable>
-            <View style={styles.deleteRow}>
-              <Pressable
-                style={({ pressed }) => [pressed && { opacity: 0.6 }]}
-                onPress={handleDelete}
-              >
-                <Text style={styles.deleteText}>Delete Gallery</Text>
-              </Pressable>
-            </View>
+            {canManage && (
+              <View style={styles.deleteRow}>
+                <Pressable
+                  style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+                  onPress={handleDelete}
+                >
+                  <Text style={styles.deleteText}>Delete Gallery</Text>
+                </Pressable>
+              </View>
+            )}
           </View>
         )}
 
@@ -173,14 +205,16 @@ export function GalleryActionSheet({
             >
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </Pressable>
-            <View style={styles.deleteRow}>
-              <Pressable
-                style={({ pressed }) => [pressed && { opacity: 0.6 }]}
-                onPress={handleDelete}
-              >
-                <Text style={styles.deleteText}>Delete Gallery</Text>
-              </Pressable>
-            </View>
+            {canManage && (
+              <View style={styles.deleteRow}>
+                <Pressable
+                  style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+                  onPress={handleDelete}
+                >
+                  <Text style={styles.deleteText}>Delete Gallery</Text>
+                </Pressable>
+              </View>
+            )}
           </View>
         )}
 
@@ -230,14 +264,16 @@ export function GalleryActionSheet({
             >
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </Pressable>
-            <View style={styles.deleteRow}>
-              <Pressable
-                style={({ pressed }) => [pressed && { opacity: 0.6 }]}
-                onPress={handleDelete}
-              >
-                <Text style={styles.deleteText}>Delete Gallery</Text>
-              </Pressable>
-            </View>
+            {canManage && (
+              <View style={styles.deleteRow}>
+                <Pressable
+                  style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+                  onPress={handleDelete}
+                >
+                  <Text style={styles.deleteText}>Delete Gallery</Text>
+                </Pressable>
+              </View>
+            )}
           </View>
         )}
 
@@ -253,21 +289,30 @@ export function GalleryActionSheet({
                 <Text style={styles.coverEmptyText}>No photos in this gallery yet.</Text>
               </View>
             ) : (
-              <FlatList
-                data={coverPhotos}
-                keyExtractor={p => p.id}
-                numColumns={3}
-                style={{ marginHorizontal: -4 }}
-                renderItem={({ item }) => (
-                  <Pressable
-                    style={({ pressed }) => [styles.coverCell, pressed && { opacity: 0.75 }]}
-                    onPress={() => onSelectCover(item.url)}
-                  >
-                    <Image source={{ uri: item.url }} style={styles.coverCellImage} resizeMode="cover" />
-                  </Pressable>
+              <View>
+                <FlatList
+                  data={coverPhotos}
+                  keyExtractor={p => p.id}
+                  numColumns={3}
+                  columnWrapperStyle={{ gap: GRID_GAP, marginBottom: GRID_GAP }}
+                  style={coverSaving ? { opacity: 0.5 } : undefined}
+                  renderItem={({ item }) => (
+                    <Pressable
+                      style={({ pressed }) => [styles.coverCell, pressed && { opacity: 0.75 }]}
+                      onPress={() => handleCoverSelect(item.id)}
+                      disabled={coverSaving}
+                    >
+                      <Image source={{ uri: item.url }} style={styles.coverCellImage} resizeMode="cover" />
+                    </Pressable>
+                  )}
+                  showsVerticalScrollIndicator={false}
+                />
+                {coverSaving && (
+                  <View style={styles.coverSavingOverlay}>
+                    <ActivityIndicator color="#FF6B6B" size="large" />
+                  </View>
                 )}
-                showsVerticalScrollIndicator={false}
-              />
+              </View>
             )}
             <Pressable
               style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.7 }]}
@@ -373,6 +418,7 @@ const styles = StyleSheet.create({
   privacyDescSelected: { color: '#FF6B6B' },
   coverEmpty: { alignItems: 'center', paddingVertical: 32 },
   coverEmptyText: { color: '#9CA3AF', fontSize: 14 },
-  coverCell: { width: COVER_CELL, height: COVER_CELL, margin: 1 },
+  coverCell: { width: COVER_CELL, height: COVER_CELL, borderRadius: 4, overflow: 'hidden' },
   coverCellImage: { width: COVER_CELL, height: COVER_CELL },
+  coverSavingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
 });

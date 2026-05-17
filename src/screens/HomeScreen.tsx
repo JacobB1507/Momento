@@ -12,7 +12,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useAuth } from '../context/AuthContext';
-import { getUnreadCount } from '../lib/notifications';
+import { getUnreadCount, fetchUnreadNotificationCount } from '../lib/notifications';
 import { getFeedGalleries } from '../lib/feed';
 import type { FeedGallery } from '../lib/feed';
 import { GalleryCard, CARD_GAP } from '../components/GalleryCard';
@@ -75,6 +75,25 @@ export default function HomeScreen() {
 
   useFocusEffect(useCallback(() => { loadAll(); }, [loadAll]));
 
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      const refresh = async () => {
+        const count = await fetchUnreadNotificationCount();
+        if (active) setUnreadCount(count);
+      };
+
+      refresh();
+      const interval = setInterval(refresh, 30000);
+
+      return () => {
+        active = false;
+        clearInterval(interval);
+      };
+    }, [])
+  );
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadAll();
@@ -97,11 +116,20 @@ export default function HomeScreen() {
           onPress={() => rootNav?.navigate('Notifications')}
           style={({ pressed }) => [styles.bellButton, pressed && { opacity: 0.7 }]}
         >
-          <MaterialCommunityIcons
-            name={unreadCount > 0 ? 'bell-badge' : 'bell'}
-            size={26}
-            color={unreadCount > 0 ? '#FF3B30' : '#333'}
-          />
+          <View style={{ position: 'relative' }}>
+            <MaterialCommunityIcons
+              name={unreadCount > 0 ? 'bell-badge' : 'bell'}
+              size={26}
+              color={unreadCount > 0 ? '#FF3B30' : '#333'}
+            />
+            {unreadCount > 0 && (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>
+                  {unreadCount > 9 ? '9+' : String(unreadCount)}
+                </Text>
+              </View>
+            )}
+          </View>
         </Pressable>
       </View>
 
@@ -206,4 +234,24 @@ const styles = StyleSheet.create({
   },
   galleryGrid: { paddingHorizontal: 16, paddingBottom: 24, gap: CARD_GAP },
   galleryRow: { gap: CARD_GAP },
+  bellBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#F9FAFB',
+  },
+  bellBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    lineHeight: 12,
+  },
 });

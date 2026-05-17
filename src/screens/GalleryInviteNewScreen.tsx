@@ -17,9 +17,11 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Clipboard from 'expo-clipboard';
+import QRCode from 'react-qr-code';
 import { supabase } from '../lib/supabase';
 import type { RootStackParamList } from '../navigation/types';
 import { clearDraft } from '../lib/createGalleryDraft';
+import { checkRateLimit } from '../lib/rateLimit';
 import { userFacingError, reportError } from '../lib/errorReport';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -35,25 +37,6 @@ type SmartSuggestion = {
   mutual_count: number;
 };
 
-function generateQRMatrix(text: string): boolean[][] {
-  const size = 21;
-  const matrix: boolean[][] = Array(size).fill(null).map(() => Array(size).fill(false));
-
-  const finder = (r: number, c: number) => {
-    for (let i = 0; i < 7; i++) for (let j = 0; j < 7; j++) {
-      if (i === 0 || i === 6 || j === 0 || j === 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4))
-        matrix[r+i][c+j] = true;
-    }
-  };
-  finder(0,0); finder(0,14); finder(14,0);
-
-  let hash = 0;
-  for (let i = 0; i < text.length; i++) hash = ((hash << 5) - hash) + text.charCodeAt(i);
-  for (let i = 8; i < size-8; i++) for (let j = 8; j < size; j++) {
-    if (!matrix[i][j]) matrix[i][j] = ((hash ^ (i * 31 + j * 17)) & 1) === 1;
-  }
-  return matrix;
-}
 
 function getInitials(name: string | null, username: string) {
   const src = name?.trim() || username;
@@ -159,6 +142,8 @@ export default function GalleryInviteNewScreen() {
     if (creatingRef.current) return null;
     creatingRef.current = true;
     try {
+      const allowed = await checkRateLimit('gallery_create');
+      if (!allowed) throw new Error('Rate limit exceeded. Please wait a few minutes before creating another gallery.');
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
       const { data, error } = await supabase
@@ -217,8 +202,6 @@ export default function GalleryInviteNewScreen() {
   };
 
   const inviteLink = `momento://invite/${inviteCode}`;
-  const qrMatrix = generateQRMatrix(inviteLink);
-  const cellSize = 8;
 
   const searchActive = searchText.trim().length > 0;
 
@@ -242,14 +225,18 @@ export default function GalleryInviteNewScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Pressable
-          onPress={() => {
-            if (createdGalleryId) {
+          onPress={async () => {
+            if (pendingCreate && createdGalleryId) {
               Alert.alert(
-                'Leave gallery?',
-                'Your gallery was created. Do you want to leave without inviting anyone?',
+                'Discard this gallery?',
+                'The gallery you created will be deleted.',
                 [
-                  { text: 'Stay', style: 'cancel' },
-                  { text: 'Leave', style: 'destructive', onPress: () => navigation.goBack() },
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Discard', style: 'destructive', onPress: async () => {
+                    await supabase.from('galleries').delete().eq('id', createdGalleryId);
+                    clearDraft();
+                    navigation.goBack();
+                  }},
                 ]
               );
             } else {
@@ -259,22 +246,36 @@ export default function GalleryInviteNewScreen() {
           style={styles.headerSide}
           hitSlop={12}
         >
-          <Text style={styles.headerBack}>✕</Text>
+          <Text style={styles.headerBack}>←</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>Invite Friends</Text>
+        <Text style={styles.headerTitle}>Invite friends to contribute</Text>
         <Pressable
           onPress={async () => {
-            try {
-              const gid = createdGalleryId ?? await createGallery();
-              if (!gid) {
-                Alert.alert('Could not create gallery', 'Something went wrong. Please try again.');
-                return;
+            const proceed = async () => {
+              try {
+                const gid = createdGalleryId ?? await createGallery();
+                if (!gid) {
+                  Alert.alert('Could not create gallery', 'Something went wrong. Please try again.');
+                  return;
+                }
+                clearDraft();
+                navigation.replace('GalleryDetail', { galleryId: gid });
+              } catch (err) {
+                Alert.alert('Could not create gallery', userFacingError(err));
+                reportError('GalleryInviteNewScreen.handleDone', err);
               }
-              clearDraft();
-              navigation.replace('GalleryDetail', { galleryId: gid });
-            } catch (err) {
-              Alert.alert('Could not create gallery', userFacingError(err));
-              reportError('GalleryInviteNewScreen.handleDone', err);
+            };
+            if (invitedIds.size === 0) {
+              Alert.alert(
+                'Create gallery without contributors?',
+                "You can always invite people later from the gallery's Contributors panel.",
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Create', onPress: proceed },
+                ]
+              );
+            } else {
+              await proceed();
             }
           }}
           style={[styles.headerSide, styles.headerSideRight]}
@@ -290,6 +291,8 @@ export default function GalleryInviteNewScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        <Text style={styles.subtitle}>Contributors can add photos to this gallery.</Text>
+
         {/* Search input */}
         <TextInput
           style={styles.searchInput}
@@ -395,16 +398,20 @@ export default function GalleryInviteNewScreen() {
           <View style={{ alignItems: 'center', padding: 16 }}>
             <View style={{ backgroundColor: '#000000', padding: 16, borderRadius: 12 }}>
               <View style={{ backgroundColor: 'white', padding: 8, borderRadius: 4 }}>
-              <View style={{ width: 21 * cellSize, height: 21 * cellSize }}>
-                {qrMatrix.map((row, i) => (
-                  <View key={i} style={{ flexDirection: 'row' }}>
-                    {row.map((cell, j) => (
-                      <View key={j} style={{ width: cellSize, height: cellSize, backgroundColor: cell ? 'black' : 'white' }} />
-                    ))}
+                {inviteCode ? (
+                  <QRCode
+                    value={inviteLink}
+                    size={180}
+                    bgColor="#FFFFFF"
+                    fgColor="#000000"
+                    level="M"
+                  />
+                ) : (
+                  <View style={{ width: 180, height: 180, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ color: '#9CA3AF', fontSize: 13 }}>Generating link...</Text>
                   </View>
-                ))}
+                )}
               </View>
-            </View>
             </View>
             <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 12, textAlign: 'center' }}>
               Scan with camera to join instantly
@@ -437,7 +444,7 @@ const styles = StyleSheet.create({
   headerDone: { fontSize: 16, fontWeight: '600', color: '#E91E8C' },
 
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8 },
 
   searchInput: {
     backgroundColor: '#F3F4F6',
@@ -531,4 +538,11 @@ const styles = StyleSheet.create({
   },
   linkBtnIcon: { fontSize: 16, color: '#E91E8C' },
   linkBtnText: { fontSize: 14, fontWeight: '600', color: '#E91E8C' },
+
+  subtitle: {
+    color: '#9ca3af',
+    fontSize: 14,
+    marginTop: 4,
+    marginBottom: 16,
+  },
 });

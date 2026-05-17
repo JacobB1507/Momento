@@ -10,13 +10,13 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import QRCode from 'react-qr-code';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { InviteViaSection } from './InviteViaSection';
-import { searchFriendsByName } from '../lib/friends';
-import { GalleryQRButton } from './GalleryQRButton';
+import { searchFriendsByName, createInviteLink } from '../lib/friends';
 import { ContributorRow } from './ContributorRow';
 
 type Props = {
@@ -53,6 +53,7 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [addingUser, setAddingUser] = useState(false);
   const [addSuccess, setAddSuccess] = useState('');
+  const [inviteLink, setInviteLink] = useState('');
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadMembers = useCallback(async () => {
@@ -145,6 +146,12 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
     if (visible) loadMembers();
   }, [visible, galleryId]);
 
+  useEffect(() => {
+    if (visible && canInvite && session?.user.id) {
+      createInviteLink(session.user.id).then((link) => setInviteLink(link ?? '')).catch(() => {});
+    }
+  }, [visible, canInvite, session?.user.id]);
+
   const handleClose = () => {
     onClose();
     setMemberSearch('');
@@ -183,7 +190,6 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
                   value={memberSearch}
                   onChangeText={handleUsernameSearch}
                 />
-                <GalleryQRButton />
               </View>
               {searchResults.length > 0 && (
                 <View style={styles.searchDropdown}>
@@ -214,9 +220,21 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
               )}
               {!!addSuccess && <Text style={styles.addSuccessText}>{addSuccess}</Text>}
               <InviteViaSection senderId={session?.user.id ?? ''} visible={visible} />
+              {inviteLink ? (
+                <View style={styles.qrWrap}>
+                  <QRCode
+                    value={inviteLink}
+                    size={160}
+                    bgColor="#FFFFFF"
+                    fgColor="#000000"
+                    level="M"
+                  />
+                  <Text style={styles.qrCaption}>Scan to join instantly</Text>
+                </View>
+              ) : null}
             </>
           )}
-          <Text style={[styles.sectionLabel, { marginTop: canInvite ? 24 : 0 }]}>Members</Text>
+          <Text style={[styles.sectionLabel, { marginTop: canInvite ? 24 : 0 }]}>Members ({members?.length ?? 0})</Text>
           {members.length === 0 ? (
             <Text style={styles.modalEmpty}>No members yet.</Text>
           ) : (
@@ -228,6 +246,7 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
                 isOwner={isOwner}
                 currentUserId={session?.user.id}
                 onNavigate={() => {
+                  if (member.user_id === session?.user.id) return;
                   onClose();
                   navigation.navigate('FriendProfile', { userId: member.user_id, username: member.username ?? 'unknown' });
                 }}
@@ -305,4 +324,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   memberAvatarLetter: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  qrWrap: { alignItems: 'center', marginTop: 20, paddingVertical: 16 },
+  qrCaption: { marginTop: 10, fontSize: 12, color: '#9CA3AF', textAlign: 'center' },
 });

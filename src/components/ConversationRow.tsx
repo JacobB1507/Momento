@@ -32,6 +32,15 @@ type Props = {
 
 type Profile = { username: string | null; display_name: string | null; avatar_url: string | null };
 
+function tintForId(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  }
+  const h = Math.abs(hash) % 360;
+  return `hsla(${h}, 60%, 50%, 0.08)`;
+}
+
 export default function ConversationRow({ conversation, currentUserId, onPress, onLongPress, customPreview, isPinned }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const otherId =
@@ -51,7 +60,11 @@ export default function ConversationRow({ conversation, currentUserId, onPress, 
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+      style={({ pressed }) => [
+        styles.row,
+        { backgroundColor: tintForId(conversation.id) },
+        pressed && { opacity: 0.7 },
+      ]}
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={400}

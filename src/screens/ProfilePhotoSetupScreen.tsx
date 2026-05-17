@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Image, Pressable, Text, TouchableOpacity, Vie
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../lib/supabase';
+import { uploadAvatarFile, setProfileAvatarUrl } from '../lib/galleries';
 import { useAuth } from '../context/AuthContext';
 import styles from '../styles/profilePhotoSetupStyles';
 
@@ -30,28 +31,13 @@ export default function ProfilePhotoSetupScreen() {
     if (!imageUri) return;
     setUploading(true);
     try {
+      const { publicUrl, displayUrl } = await uploadAvatarFile({
+        uri: imageUri,
+        mimeType: 'image/jpeg',
+      });
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-
-      const fileName = `${user.id}/avatar.jpg`;
-      const formData = new FormData();
-      formData.append('file', { uri: imageUri, name: 'avatar.jpg', type: 'image/jpeg' } as any);
-
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, formData, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName);
-
-      await supabase
-        .from('profiles')
-        .update({ avatar_url: urlData.publicUrl })
-        .eq('id', user.id);
-
+      await setProfileAvatarUrl(user.id, publicUrl);
       await refreshProfile();
     } catch (err: any) {
       Alert.alert('Upload failed', err.message || 'Could not upload your photo. Please try again.');
