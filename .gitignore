@@ -48,3 +48,5 @@ security_audit_secrets.md
 beta_invite_codes*.txt
 beta_codes*.txt
 invite_codes*.txt
+# Claude Code local settings
+.claude/settings.local.json
