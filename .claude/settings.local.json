@@ -22,7 +22,12 @@
       "Bash(python3 *)",
       "Bash(git *)",
       "Bash(Get-Content \"C:\\\\Users\\\\jbatt\\\\my-app\\\\Momento\\\\src\\\\screens\\\\auth\\\\SignUpScreen.tsx\")",
-      "Bash(Select-Object -ExpandProperty Lines)"
+      "Bash(Select-Object -ExpandProperty Lines)",
+      "Bash(xargs wc -l)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(Select-Object -ExpandProperty Name)",
+      "PowerShell(Get-ChildItem *)",
+      "Bash(Get-Content \"C:\\\\Users\\\\jbatt\\\\my-app\\\\Momento\\\\src\\\\components\\\\GalleryLongPressSheet.tsx\")"
     ]
   }
 }

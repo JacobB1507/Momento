@@ -15,16 +15,22 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.momento.app"
+      "bundleIdentifier": "app.momento",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.momento.app",
+      "package": "app.momento",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -35,7 +41,20 @@
         {
           "photosPermission": "Allow Momento to access your photos to upload to galleries."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#ffffff",
+          "sounds": []
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "36bec53d-4086-43bd-b9d1-5f39aafe0ada"
+      }
+    }
   }
 }
