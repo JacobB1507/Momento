@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Dimensions, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Photo } from '../types/database';
 import { supabase } from '../lib/supabase';
 import { deleteOwnPhoto } from '../lib/photoRemoval';
+import { Skeleton, SkeletonCircle } from './Skeleton';
 
 type UploaderProfile = { id: string; username: string | null; avatar_url: string | null };
 
@@ -26,6 +27,16 @@ type Props = {
 export function PhotoGrid({ photos, isOwner, isMember, currentUserId, onDeletePhoto, onRemovalRequest, onPhotoPress }: Props) {
   const [uploaderProfiles, setUploaderProfiles] = useState<Record<string, UploaderProfile>>({});
   const [hiddenPhotoIds, setHiddenPhotoIds] = useState<string[]>([]);
+  const [loadedPhotoIds, setLoadedPhotoIds] = useState<Set<string>>(new Set());
+
+  const markLoaded = useCallback((photoId: string) => {
+    setLoadedPhotoIds((prev) => {
+      if (prev.has(photoId)) return prev;
+      const next = new Set(prev);
+      next.add(photoId);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const uniqueIds = [...new Set(photos.map((p) => p.uploaded_by).filter(Boolean))];
@@ -100,20 +111,39 @@ export function PhotoGrid({ photos, isOwner, isMember, currentUserId, onDeletePh
             onLongPress={canInteract ? () => handleLongPress(item) : undefined}
             delayLongPress={400}
           >
-            <Image source={{ uri: item.url }} style={styles.photo} resizeMode="cover" />
-            {uploader && (
+            {!loadedPhotoIds.has(item.id) && (
+              <View style={StyleSheet.absoluteFill}>
+                <Skeleton
+                  width={PHOTO_SIZE}
+                  height={PHOTO_SIZE}
+                  borderRadius={0}
+                />
+              </View>
+            )}
+            <Image
+              source={{ uri: item.url }}
+              style={styles.photo}
+              resizeMode="cover"
+              onLoad={() => markLoaded(item.id)}
+              onError={() => markLoaded(item.id)}
+            />
+            {item.uploaded_by && (
               <View style={styles.avatarBadge}>
-                {uploader.avatar_url ? (
-                  <Image
-                    source={{ uri: uploader.avatar_url }}
-                    style={styles.avatarImage}
-                  />
+                {uploader ? (
+                  uploader.avatar_url ? (
+                    <Image
+                      source={{ uri: uploader.avatar_url }}
+                      style={styles.avatarImage}
+                    />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <Text style={styles.avatarLetter}>
+                        {(uploader.username ?? '?').charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )
                 ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <Text style={styles.avatarLetter}>
-                      {(uploader.username ?? '?').charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
+                  <SkeletonCircle size={AVATAR_BADGE} />
                 )}
               </View>
             )}

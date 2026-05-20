@@ -4,7 +4,7 @@ import SplashScreen from '../screens/SplashScreen';
 import UsernameSetupScreen from '../screens/UsernameSetupScreen';
 import ProfileSetupScreen from '../screens/ProfileSetupScreen';
 import { Linking } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
@@ -36,6 +36,7 @@ import DeleteAccountScreen from '../screens/DeleteAccountScreen';
 import PrivacyPolicyScreen from '../screens/auth/PrivacyPolicyScreen';
 import TermsOfServiceScreen from '../screens/auth/TermsOfServiceScreen';
 import GalleryInviteNewScreen from '../screens/GalleryInviteNewScreen';
+import GalleryInvitePromptScreen from '../screens/GalleryInvitePromptScreen';
 import TrustedFriendsScreen from '../screens/TrustedFriendsScreen';
 import DefaultGalleryPrivacyScreen from '../screens/DefaultGalleryPrivacyScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
@@ -54,6 +55,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
   const { session, loading, restoringSession, profile, profileReady, passwordRecoveryRequested, phoneVerificationRequired } = useAuth();
+  const navRef = useNavigationContainerRef<RootStackParamList>();
 
   const hasUsername = !!profile?.username;
   const hasDisplayName = !!profile?.display_name;
@@ -74,6 +76,42 @@ export default function RootNavigator() {
       const match = url.match(/^momento:\/\/invite\/(.+)$/);
       if (!match) return;
       const code = match[1];
+
+      if (!/^[a-zA-Z0-9]{4,32}$/.test(code)) return;
+
+      try {
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('redeem_gallery_invite_code', { p_code: code });
+
+        if (rpcError || !rpcResult) {
+          console.warn('[RootNavigator] redeem_gallery_invite_code failed');
+          return;
+        }
+
+        const validGalleryId = typeof rpcResult.gallery_id === 'string' && rpcResult.gallery_id.length === 36;
+
+        switch (rpcResult.status) {
+          case 'already_member':
+          case 'self_invite':
+            if (validGalleryId && navRef.isReady()) navRef.navigate('GalleryDetail', { galleryId: rpcResult.gallery_id } as any);
+            return;
+          case 'pending_created':
+          case 'pending_existing':
+            if (validGalleryId && navRef.isReady()) navRef.navigate('GalleryInvitePrompt', { galleryId: rpcResult.gallery_id } as any);
+            return;
+          case 'unauthenticated':
+            return;
+          case 'not_found':
+          case 'not_gallery':
+            break; // fall through to friend-invite
+          default:
+            console.warn('[RootNavigator] unexpected invite code status');
+            return;
+        }
+      } catch {
+        console.warn('[RootNavigator] redeem_gallery_invite_code threw');
+        return;
+      }
+
       const result = await resolveInviteCode(code, session.user.id);
       switch (result) {
         case 'ok':
@@ -142,7 +180,7 @@ export default function RootNavigator() {
 
   return (
     <TutorialProvider userId={session?.user.id}>
-    <NavigationContainer>
+    <NavigationContainer ref={navRef}>
       <>
       <Stack.Navigator key={onboardingStage} screenOptions={{ headerShown: false, animation: 'fade' }}>
         {session ? (
@@ -221,6 +259,11 @@ export default function RootNavigator() {
               name="GalleryInvite"
               component={GalleryInviteScreen}
               options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="GalleryInvitePrompt"
+              component={GalleryInvitePromptScreen}
+              options={{ headerShown: false, presentation: 'transparentModal', animation: 'fade' }}
             />
             <Stack.Screen
               name="EditBio"

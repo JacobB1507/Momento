@@ -6,6 +6,7 @@ import CommentsSheet from './CommentsSheet';
 import { useFocusEffect } from '@react-navigation/native';
 import type { Gallery } from '../types/database';
 import { supabase } from '../lib/supabase';
+import { SkeletonCircle } from './Skeleton';
 
 export const CARD_GAP = 12;
 export const SCREEN_PADDING = 16;

@@ -9,6 +9,7 @@ import { useNotifications } from '../hooks/useNotifications';
 import { NotificationsHeader } from '../components/NotificationsHeader';
 import NotificationRow from '../components/NotificationRow';
 import { markOneRead } from '../lib/notifications';
+import { SkeletonCircle, SkeletonText } from '../components/Skeleton';
 
 export default function NotificationsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -31,7 +32,25 @@ export default function NotificationsScreen() {
   if (initialLoading) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={styles.centered}><ActivityIndicator color="#FF6B6B" size="large" /></View>
+        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+          {Array.from({ length: 10 }).map((_, i) => (
+            <View
+              key={i}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                paddingVertical: 12,
+              }}
+            >
+              <SkeletonCircle size={36} />
+              <View style={{ marginLeft: 12, flex: 1 }}>
+                <SkeletonText width="85%" height={14} />
+                <View style={{ height: 4 }} />
+                <SkeletonText width={60} height={11} />
+              </View>
+            </View>
+          ))}
+        </View>
       </SafeAreaView>
     );
   }

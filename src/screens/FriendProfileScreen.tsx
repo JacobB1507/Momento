@@ -21,6 +21,7 @@ import { isTrustedFriend, addTrustedFriend, removeTrustedFriend } from '../lib/t
 import { blockUser, isBlocked, unblockUser } from '../lib/blocks';
 import { createConversation, requestMessagePermission, getOrCreateConversation } from '../lib/messages';
 import { GalleryCard } from '../components/GalleryCard';
+import { Skeleton, SkeletonCircle, SkeletonText } from '../components/Skeleton';
 import ProfileActionButtons from '../components/ProfileActionButtons';
 import MutualFriendsModal from '../components/MutualFriendsModal';
 import type { RootStackParamList } from '../navigation/types';
@@ -332,7 +333,26 @@ export default function FriendProfileScreen() {
         </>
       )}
       {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color="#FF6B6B" /></View>
+        <View style={{ padding: 16 }}>
+          <View style={{ alignItems: 'center', marginBottom: 24 }}>
+            <SkeletonCircle size={96} />
+            <View style={{ height: 16 }} />
+            <SkeletonText width={140} height={20} />
+            <View style={{ height: 8 }} />
+            <SkeletonText width={100} height={14} />
+            <View style={{ height: 20 }} />
+            <Skeleton width={160} height={36} borderRadius={18} />
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <View key={i} style={{ width: '50%', padding: 4 }}>
+                <Skeleton height={180} borderRadius={12} />
+                <View style={{ height: 8 }} />
+                <SkeletonText width="70%" height={14} />
+              </View>
+            ))}
+          </View>
+        </View>
       ) : (
         <FlatList
           data={galleries}

@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .from('profiles')
       // .eq() is defense-in-depth: RLS already enforces id = auth.uid(), but
       // explicit scoping ensures we never accidentally fetch another user's row.
-      .select('id, username, display_name, avatar_url, welcome_seen, skipped_avatar_setup, bio, phone_verified_at')
+      .select('id, username, display_name, avatar_url, welcome_seen, skipped_avatar_setup, bio, phone_verified_at, phone_verify_dismissed_until')
       .eq('id', uid)
       .maybeSingle();
     if (error) {
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const fetchProfile = async (userId: string) => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, username, display_name, avatar_url, welcome_seen, skipped_avatar_setup, bio, phone_verified_at')
+        .select('id, username, display_name, avatar_url, welcome_seen, skipped_avatar_setup, bio, phone_verified_at, phone_verify_dismissed_until')
         .eq('id', userId)
         .maybeSingle();
       if (!error) {

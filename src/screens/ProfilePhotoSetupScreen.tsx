@@ -4,8 +4,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../lib/supabase';
 import { uploadAvatarFile, setProfileAvatarUrl } from '../lib/galleries';
+import { reportError } from '../lib/errorReport';
 import { useAuth } from '../context/AuthContext';
 import styles from '../styles/profilePhotoSetupStyles';
+
+function describeUploadError(e: any): string {
+  if (!e) return '';
+  if (typeof e === 'string') return e;
+  const parts: string[] = [];
+  if (e.message) parts.push(String(e.message));
+  if (e.error && e.error !== e.message) parts.push(String(e.error));
+  if (e.statusCode) parts.push(`(${e.statusCode})`);
+  else if (e.code) parts.push(`(${e.code})`);
+  return parts.join(' ').trim();
+}
 
 export default function ProfilePhotoSetupScreen() {
   const { session, refreshProfile } = useAuth();
@@ -40,7 +52,12 @@ export default function ProfilePhotoSetupScreen() {
       await setProfileAvatarUrl(user.id, publicUrl);
       await refreshProfile();
     } catch (err: any) {
-      Alert.alert('Upload failed', err.message || 'Could not upload your photo. Please try again.');
+      console.log('[ProfilePhotoSetupScreen] avatar upload caught error:', err);
+      try {
+        Alert.alert('Upload failed', err?.message ?? 'Upload failed. Please try again.');
+      } catch {
+        Alert.alert('Upload failed', 'Unknown error.');
+      }
     } finally {
       setUploading(false);
     }

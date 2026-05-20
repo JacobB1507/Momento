@@ -28,6 +28,7 @@ export type RootStackParamList = {
   ChangeEmail: undefined;
   ChangePassword: undefined;
   GalleryInvite: { galleryId: string; notificationId: string };
+  GalleryInvitePrompt: { galleryId: string };
   EditBio: undefined;
   EditDisplayName: undefined;
   FriendProfile: { userId: string; username: string };

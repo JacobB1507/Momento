@@ -22,13 +22,26 @@ import type { RootStackParamList } from '../navigation/types';
 import type { Gallery } from '../types/database';
 import { supabase } from '../lib/supabase';
 import { getProfile, uploadAvatarFile, setProfileAvatarUrl } from '../lib/galleries';
+import { reportError } from '../lib/errorReport';
 
 import { GalleryCard, CARD_GAP } from '../components/GalleryCard';
+import { Skeleton, SkeletonCircle, SkeletonText } from '../components/Skeleton';
 import { FriendsListModal } from '../components/FriendsListModal';
 import { GalleryLongPressSheet } from '../components/GalleryLongPressSheet';
 
 const AVATAR_SIZE = 96;
 const BADGE_SIZE = 26;
+
+function describeUploadError(e: any): string {
+  if (!e) return '';
+  if (typeof e === 'string') return e;
+  const parts: string[] = [];
+  if (e.message) parts.push(String(e.message));
+  if (e.error && e.error !== e.message) parts.push(String(e.error));
+  if (e.statusCode) parts.push(`(${e.statusCode})`);
+  else if (e.code) parts.push(`(${e.code})`);
+  return parts.join(' ').trim();
+}
 
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -217,8 +230,13 @@ export default function ProfileScreen() {
       });
       await setProfileAvatarUrl(session!.user.id, publicUrl);
       setAvatarUrl(displayUrl);
-    } catch {
-      Alert.alert('Upload failed', 'Could not update your avatar. Please try again.');
+    } catch (err: any) {
+      console.log('[ProfileScreen] avatar upload caught error:', err);
+      try {
+        Alert.alert('Upload failed', err?.message ?? 'Upload failed. Please try again.');
+      } catch {
+        Alert.alert('Upload failed', 'Unknown error.');
+      }
     } finally {
       setUploading(false);
     }
@@ -229,8 +247,36 @@ export default function ProfileScreen() {
   if (!hasLoadedOnce) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color="#FF6B6B" />
+        <View style={{ padding: 16 }}>
+          <View style={{ alignItems: 'center', marginBottom: 24 }}>
+            <SkeletonCircle size={96} />
+            <View style={{ height: 16 }} />
+            <SkeletonText width={140} height={20} />
+            <View style={{ height: 8 }} />
+            <SkeletonText width={100} height={14} />
+            <View style={{ height: 20 }} />
+            <View style={{ flexDirection: 'row', gap: 24 }}>
+              <View style={{ alignItems: 'center' }}>
+                <SkeletonText width={32} height={18} />
+                <View style={{ height: 4 }} />
+                <SkeletonText width={50} height={12} />
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <SkeletonText width={32} height={18} />
+                <View style={{ height: 4 }} />
+                <SkeletonText width={50} height={12} />
+              </View>
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <View key={i} style={{ width: '50%', padding: 4 }}>
+                <Skeleton height={180} borderRadius={12} />
+                <View style={{ height: 8 }} />
+                <SkeletonText width="70%" height={14} />
+              </View>
+            ))}
+          </View>
         </View>
       </SafeAreaView>
     );

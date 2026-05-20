@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator, Keyb
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
+import { guardOtpSend, checkOtpVerifyRateLimit } from '../lib/rateLimit';
 
 export default function ChangePhoneScreen() {
   const navigation = useNavigation<any>();
@@ -55,6 +56,17 @@ export default function ChangePhoneScreen() {
       setLoading(false);
       return;
     }
+    const guard = await guardOtpSend(newPhone);
+    if (!guard.ok) {
+      const msg =
+        guard.reason === 'phone_hourly'
+          ? 'Too many code requests for this number. Please wait an hour and try again.'
+          : 'Too many code requests. Please wait 15 minutes and try again.';
+      Alert.alert('Slow down', msg);
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({ phone: newPhone });
     if (error) {
       Alert.alert('Could not send code', error.message);
@@ -72,6 +84,12 @@ export default function ChangePhoneScreen() {
       return;
     }
     setLoading(true);
+    const verifyOk = await checkOtpVerifyRateLimit();
+    if (!verifyOk) {
+      Alert.alert('Too many attempts', 'Please wait 15 minutes before trying again.');
+      setLoading(false);
+      return;
+    }
     const { error } = await supabase.auth.verifyOtp({ phone: newPhone, token: otp, type: 'phone_change' });
     if (error) {
       Alert.alert('Could not verify', error.message);

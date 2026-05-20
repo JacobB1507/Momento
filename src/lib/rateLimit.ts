@@ -9,14 +9,17 @@ export type RateLimitAction =
   | 'comment_send'
   | 'gallery_create'
   | 'photo_upload'
-  | 'invite_send';
+  | 'invite_send'
+  | 'otp_send'
+  | 'otp_send_hourly'
+  | 'otp_verify';
 
 interface RateLimitConfig {
   maxAttempts: number;
   windowMinutes: number;
 }
 
-const RATE_LIMITS: Record<RateLimitAction, RateLimitConfig> = {
+export const RATE_LIMITS: Record<RateLimitAction, RateLimitConfig> = {
   login_attempt:    { maxAttempts: 5,   windowMinutes: 15 },
   signup_attempt:   { maxAttempts: 3,   windowMinutes: 60 },
   password_reset:   { maxAttempts: 3,   windowMinutes: 60 },
@@ -26,6 +29,9 @@ const RATE_LIMITS: Record<RateLimitAction, RateLimitConfig> = {
   gallery_create:   { maxAttempts: 15,  windowMinutes: 60 },
   photo_upload:     { maxAttempts: 400, windowMinutes: 60 },
   invite_send:      { maxAttempts: 10,  windowMinutes: 60 },
+  otp_send:         { maxAttempts: 3,   windowMinutes: 15 },
+  otp_send_hourly:  { maxAttempts: 5,   windowMinutes: 60 },
+  otp_verify:       { maxAttempts: 5,   windowMinutes: 15 },
 };
 
 /**
@@ -69,4 +75,51 @@ export async function withRateLimit<T>(
   const allowed = await checkRateLimit(action);
   if (!allowed) throw new RateLimitError(action);
   return fn();
+}
+
+export async function checkPhoneRateLimit(
+  phone: string,
+  action: 'otp_send' | 'otp_send_hourly',
+  maxAttempts: number,
+  windowMinutes: number
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc('check_phone_rate_limit', {
+      p_phone: phone,
+      p_action: action,
+      p_max_attempts: maxAttempts,
+      p_window_minutes: windowMinutes,
+    });
+    if (error) return true;  // fail-open on RPC error, same pattern as checkRateLimit
+    return data === true;
+  } catch {
+    return true;
+  }
+}
+
+export async function checkOtpVerifyRateLimit(): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc('check_otp_verify_rate_limit', {
+      p_max_attempts: RATE_LIMITS.otp_verify.maxAttempts,
+      p_window_minutes: RATE_LIMITS.otp_verify.windowMinutes,
+    });
+    if (error) return true;
+    return data === true;
+  } catch {
+    return true;
+  }
+}
+
+export async function guardOtpSend(phoneE164: string): Promise<
+  { ok: true } | { ok: false; reason: 'user_burst' | 'user_hourly' | 'phone_hourly' }
+> {
+  const [userBurst, userHourly, phoneHourly] = await Promise.all([
+    checkRateLimit('otp_send'),
+    checkRateLimit('otp_send_hourly'),
+    checkPhoneRateLimit(phoneE164, 'otp_send_hourly', 5, 60),
+  ]);
+  if (!userBurst) return { ok: false, reason: 'user_burst' };
+  if (!userHourly) return { ok: false, reason: 'user_hourly' };
+  if (!phoneHourly) return { ok: false, reason: 'phone_hourly' };
+  return { ok: true };
 }

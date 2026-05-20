@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Keyboard,
   Pressable,
@@ -16,6 +16,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTutorial } from '../tutorial/TutorialContext';
 import { supabase } from '../lib/supabase';
 import { searchUsers, searchGalleries } from '../lib/search';
+import { SkeletonCircle, SkeletonText } from '../components/Skeleton';
 import { PeopleSearchResults } from '../components/PeopleSearchResults';
 import { GallerySearchResults } from '../components/GallerySearchResults';
 import { SearchRecentPeople } from '../components/SearchRecentPeople';
@@ -36,6 +37,7 @@ export default function SearchScreen() {
   const currentUserId = session?.user.id ?? '';
 
   const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('people');
   const [people, setPeople] = useState<any[]>([]);
   const [galleries, setGalleries] = useState<Gallery[]>([]);
@@ -47,7 +49,54 @@ export default function SearchScreen() {
   const searchKeyRef = useRef('');
   const galleriesKeyRef = useRef('');
 
-  const friendIds: string[] = [];
+  const [friendsList, setFriendsList] = useState<any[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState<boolean>(true);
+  const friendIds = useMemo(() => friendsList.map((f: any) => f.id), [friendsList]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { setFriendsLoading(false); return; }
+
+        const { data: rows, error: friendsError } = await supabase
+          .from('friends')
+          .select('sender_id, receiver_id')
+          .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+          .eq('status', 'accepted');
+
+        if (friendsError) { setFriendsLoading(false); return; }
+
+        const otherIds = (rows || [])
+          .map((r: any) => r.sender_id === user.id ? r.receiver_id : r.sender_id)
+          .filter(Boolean);
+
+        if (otherIds.length === 0) {
+          setFriendsList([]);
+          setFriendsLoading(false);
+          return;
+        }
+
+        const { data: profiles, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, username, display_name, avatar_url')
+          .in('id', otherIds);
+
+        if (profilesError) { setFriendsList([]); setFriendsLoading(false); return; }
+
+        const sorted = (profiles || []).slice().sort((a: any, b: any) => {
+          const aName = (a.display_name || a.username || '').toLowerCase();
+          const bName = (b.display_name || b.username || '').toLowerCase();
+          return aName.localeCompare(bName);
+        });
+
+        setFriendsList(sorted);
+        setFriendsLoading(false);
+      } catch {
+        setFriendsLoading(false);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -130,15 +179,21 @@ export default function SearchScreen() {
     if (!text.trim()) {
       setPeople([]);
       setGalleries([]);
+      setSearching(false);
       return;
     }
+    setSearching(true);
     debounceRef.current = setTimeout(async () => {
-      const [userResults, galleryResults] = await Promise.all([
-        searchUsers(text, currentUserId),
-        searchGalleries(text, currentUserId),
-      ]);
-      setPeople(userResults);
-      setGalleries(galleryResults as Gallery[]);
+      try {
+        const [userResults, galleryResults] = await Promise.all([
+          searchUsers(text, currentUserId),
+          searchGalleries(text, currentUserId),
+        ]);
+        setPeople(userResults);
+        setGalleries(galleryResults as Gallery[]);
+      } finally {
+        setSearching(false);
+      }
     }, 300);
   }, [currentUserId]);
 
@@ -223,6 +278,17 @@ export default function SearchScreen() {
         />
       )}
 
+      {isEmpty && activeTab === 'people' && !friendsLoading && friendsList.length > 0 && (
+        <View style={{ paddingHorizontal: 16, paddingTop: 8, marginTop: 24 }}>
+          <Text style={styles.suggestedHeading}>SUGGESTED</Text>
+          <PeopleSearchResults
+            results={friendsList.slice(0, 5)}
+            onAddFriend={handleAddFriend}
+            onNavigate={(user) => saveRecentProfile({ type: 'profile', userId: user.userId, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl })}
+          />
+        </View>
+      )}
+
       {isEmpty && activeTab === 'galleries' && (
         <SearchRecentGalleries
           recentGalleries={recentGalleries}
@@ -233,27 +299,51 @@ export default function SearchScreen() {
         />
       )}
 
-      {query.trim() !== '' && activeTab === 'people' && (
-        <PeopleSearchResults
-          results={people}
-          onAddFriend={handleAddFriend}
-          onNavigate={(user) => saveRecentProfile({ type: 'profile', userId: user.userId, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl })}
-        />
-      )}
-
-      {query.trim() !== '' && activeTab === 'galleries' && (
-        <GallerySearchResults
-          results={galleries}
-          onPress={handleGalleryPress}
-          currentUserId={currentUserId}
-          friendIds={[]}
-        />
-      )}
-
-      {query.trim() !== '' && hasNoResults && (
-        <View style={styles.center}>
-          <Text style={styles.hint}>No results found</Text>
-        </View>
+      {query.trim() !== '' && (
+        searching ? (
+          <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <View
+                key={i}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: 10,
+                }}
+              >
+                <SkeletonCircle size={40} />
+                <View style={{ marginLeft: 12, flex: 1 }}>
+                  <SkeletonText width="45%" height={14} />
+                  <View style={{ height: 4 }} />
+                  <SkeletonText width="30%" height={12} />
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <>
+            {activeTab === 'people' && (
+              <PeopleSearchResults
+                results={people}
+                onAddFriend={handleAddFriend}
+                onNavigate={(user) => saveRecentProfile({ type: 'profile', userId: user.userId, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl })}
+              />
+            )}
+            {activeTab === 'galleries' && (
+              <GallerySearchResults
+                results={galleries}
+                onPress={handleGalleryPress}
+                currentUserId={currentUserId}
+                friendIds={[]}
+              />
+            )}
+            {hasNoResults && (
+              <View style={styles.center}>
+                <Text style={styles.hint}>No results found</Text>
+              </View>
+            )}
+          </>
+        )
       )}
     </SafeAreaView>
       </View>
@@ -284,4 +374,5 @@ const styles = StyleSheet.create({
   tabTextActive: { color: '#fff' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   hint: { fontSize: 14, color: '#9CA3AF' },
+  suggestedHeading: { fontSize: 12, fontWeight: '500', color: '#B0B7C3', letterSpacing: 0.4, marginBottom: 2 },
 });

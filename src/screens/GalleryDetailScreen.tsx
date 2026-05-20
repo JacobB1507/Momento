@@ -26,6 +26,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import { PhotoGrid } from '../components/PhotoGrid';
 import UploadProgressOverlay from '../components/UploadProgressOverlay';
 import { PhotoUploadReviewModal } from '../components/PhotoUploadReviewModal';
+import { Skeleton } from '../components/Skeleton';
 import styles from '../styles/galleryDetailStyles';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'GalleryDetail'>;
@@ -91,15 +92,15 @@ export default function GalleryDetailScreen() {
   useEffect(() => {
     Promise.all([load(), loadGalleryMeta()]).finally(() => setLoading(false));
     getRemovalRequests(galleryId).then(data => setRemovalRequestCount(data.length));
-    supabase.from('gallery_members').select('user_id', { count: 'exact', head: true }).eq('gallery_id', galleryId).then(({ count }) => setContributorCount(count ?? 0));
+    supabase.from('gallery_members').select('user_id', { count: 'exact', head: true }).eq('gallery_id', galleryId).eq('status', 'accepted').then(({ count }) => setContributorCount(count ?? 0));
     if (session?.user.id) {
       supabase
         .from('gallery_members')
-        .select('user_id')
+        .select('user_id, status')
         .eq('gallery_id', galleryId)
         .eq('user_id', session.user.id)
         .maybeSingle()
-        .then(({ data }) => setIsMember(!!data));
+        .then(({ data }) => setIsMember(!!data && data.status === 'accepted'));
     }
   }, [load, loadGalleryMeta, galleryId, session?.user.id]);
 
@@ -243,7 +244,17 @@ export default function GalleryDetailScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color="#FF6B6B" /></View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 4 }}>
+          {Array.from({ length: 9 }).map((_, i) => (
+            <View key={i} style={{ width: '33.333%', padding: 2 }}>
+              <Skeleton
+                width="100%"
+                style={{ aspectRatio: 1 }}
+                borderRadius={4}
+              />
+            </View>
+          ))}
+        </View>
       ) : error ? (
         <View style={styles.center}>
           <Text style={styles.errorText}>{error}</Text>

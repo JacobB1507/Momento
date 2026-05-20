@@ -35,7 +35,7 @@ const Sep = () => <View style={styles.separator} />;
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const userId = session?.user.id ?? '';
   const [defaultPrivacy, setDefaultPrivacy] = useState<string>('friends');
 
@@ -66,6 +66,15 @@ export default function SettingsScreen() {
           <Row label="Change Email" onPress={go('ChangeEmail')} />
           <Sep />
           <Row label="Change Phone Number" onPress={go('ChangePhone')} />
+          {!profile?.phone_verified_at && (
+            <>
+              <Sep />
+              <Row
+                label={profile?.phone ? 'Verify phone number' : 'Add phone number'}
+                onPress={() => navigation.navigate('PhoneVerification' as never)}
+              />
+            </>
+          )}
           <Sep />
           <Row label="Change Password" onPress={go('ChangePassword')} />
           <Sep />

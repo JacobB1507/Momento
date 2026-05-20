@@ -132,47 +132,104 @@ export async function uploadGalleryPhoto({
   }
 }
 
+function describeAvatarError(label: string, e: unknown): string {
+  try {
+    const anyE = e as any;
+    const parts: string[] = [label];
+    if (anyE?.name) parts.push(`name=${anyE.name}`);
+    if (anyE?.statusCode) parts.push(`statusCode=${anyE.statusCode}`);
+    if (anyE?.status) parts.push(`status=${anyE.status}`);
+    if (anyE?.error) parts.push(`error=${anyE.error}`);
+    if (anyE?.message) parts.push(`message=${anyE.message}`);
+    if (anyE && typeof anyE === 'object' && !anyE.message && !anyE.error) {
+      try { parts.push(`raw=${JSON.stringify(anyE).slice(0, 200)}`); } catch {}
+    }
+    return parts.join(' | ');
+  } catch {
+    return (e as any)?.message ?? 'Avatar upload failed (unknown error).';
+  }
+}
+
 export async function uploadAvatarFile({ uri, mimeType }: {
   uri: string;
   mimeType?: string;
 }): Promise<{ publicUrl: string; displayUrl: string }> {
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError) throw sessionError;
-  if (!session) throw new Error('Not signed in');
+  let stage = 'init';
+  try {
+    stage = 'refreshSession';
+    console.log('[uploadAvatarFile] entering stage:', stage);
+    await supabase.auth.refreshSession().catch(() => {});
 
-  const userId = session.user.id;
+    stage = 'getSession';
+    console.log('[uploadAvatarFile] entering stage:', stage);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Not signed in');
+    console.log('[uploadAvatarFile] hasSession = true tokenLen =', session.access_token.length);
 
-  const response = await fetch(uri);
-  const arrayBuffer = await response.arrayBuffer();
+    const contentType = mimeType || 'image/jpeg';
 
-  const contentType = mimeType || 'image/jpeg';
-  const ext = contentType.startsWith('image/')
-    ? (contentType.split('/')[1] ?? 'jpg')
-    : 'jpg';
-  const storagePath = `${userId}/avatar.${ext === 'jpeg' ? 'jpg' : ext}`;
+    stage = 'fetchImage';
+    console.log('[uploadAvatarFile] entering stage:', stage);
+    const response = await fetch(uri);
+    if (!response.ok) throw new Error(`Image fetch failed: ${response.status}`);
 
-  const { error: uploadError } = await supabase.storage
-    .setHeader('Authorization', `Bearer ${session.access_token}`)
-    .from('avatars')
-    .upload(storagePath, arrayBuffer, {
-      contentType,
-      upsert: true,
+    stage = 'arrayBuffer';
+    console.log('[uploadAvatarFile] entering stage:', stage);
+    const arrayBuffer = await response.arrayBuffer();
+    const byteLength = arrayBuffer.byteLength;
+    console.log('[uploadAvatarFile] byteLength =', byteLength);
+    if (byteLength === 0) throw new Error('Avatar arrayBuffer is empty');
+
+    stage = 'callEdgeFunction';
+    console.log('[uploadAvatarFile] entering stage:', stage);
+    const supabaseUrl = (supabase as any).supabaseUrl
+      ?? (supabase as any).storageUrl?.replace('/storage/v1', '')
+      ?? '';
+    if (!supabaseUrl) throw new Error('Could not derive supabase url');
+
+    const endpoint = `${supabaseUrl}/functions/v1/upload-avatar`;
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': contentType,
+        'x-mime-type': contentType,
+      },
+      body: arrayBuffer,
     });
-  if (uploadError) throw uploadError;
 
-  const { data: urlData } = supabase.storage
-    .from('avatars')
-    .getPublicUrl(storagePath);
+    stage = 'parseResponse';
+    console.log('[uploadAvatarFile] entering stage:', stage, 'status:', res.status);
+    const json = await res.json().catch(() => ({ error: 'invalid_json' }));
 
-  return { publicUrl: urlData.publicUrl, displayUrl: `${urlData.publicUrl}?t=${Date.now()}` };
+    if (!res.ok || !json?.ok) {
+      console.log('[uploadAvatarFile] edge function error:', JSON.stringify(json));
+      const msg = (json && (json.detail || json.error)) || `HTTP ${res.status}`;
+      throw new Error(`Avatar upload failed: ${msg}`);
+    }
+
+    const publicUrl: string = json.publicUrl;
+    const displayUrl = `${publicUrl}?t=${Date.now()}`;
+    console.log('[uploadAvatarFile] SUCCESS publicUrl =', publicUrl);
+
+    return { publicUrl, displayUrl };
+  } catch (e: any) {
+    console.log('[uploadAvatarFile] ERROR stage:', stage, 'message:', e?.message);
+    throw e;
+  }
 }
 
 export async function setProfileAvatarUrl(userId: string, publicUrlWithoutCacheBust: string) {
-  const { error } = await supabase
-    .from('profiles')
-    .update({ avatar_url: publicUrlWithoutCacheBust })
-    .eq('id', userId);
-  if (error) throw error;
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ avatar_url: publicUrlWithoutCacheBust })
+      .eq('id', userId);
+    if (error) throw error;
+  } catch (e) {
+    reportError(`setProfileAvatarUrl failed | ${(e as any)?.message ?? 'no message'} | code=${(e as any)?.code ?? 'none'}`);
+    throw e;
+  }
 }
 
 export async function inviteUserToGallery(galleryId: string, email: string): Promise<'ok' | 'no_account'> {

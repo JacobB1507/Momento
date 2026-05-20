@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,6 +23,8 @@ import type { RootStackParamList } from '../navigation/types';
 import { clearDraft } from '../lib/createGalleryDraft';
 import { checkRateLimit } from '../lib/rateLimit';
 import { userFacingError, reportError } from '../lib/errorReport';
+import { SearchPersonRow } from '../components/SearchPersonRow';
+import { FriendInviteCard } from '../components/FriendInviteCard';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'GalleryInviteNew'>;
@@ -35,6 +37,13 @@ type SmartSuggestion = {
   is_friend: boolean;
   shared_gallery_count: number;
   mutual_count: number;
+};
+
+type Friend = {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
 };
 
 
@@ -96,30 +105,127 @@ export default function GalleryInviteNewScreen() {
   const [existingMemberIds, setExistingMemberIds] = useState<Set<string>>(new Set());
   const [searchText, setSearchText] = useState('');
   const [copied, setCopied] = useState(false);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [recentCollaboratorIds, setRecentCollaboratorIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [mutualCountsByFriendId, setMutualCountsByFriendId] = useState<Record<string, number>>({});
+  const scrollRef = useRef<ScrollView>(null);
+  const searchBarYRef = useRef(0);
   const creatingRef = useRef(false);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (pendingCreate && !createdGalleryId) {
-      initUser();
+      createGallery().catch(e => reportError('GalleryInviteNewScreen.mountCreate', e));
     } else {
       init(createdGalleryId!);
     }
   }, []);
 
-  const initUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    setCurrentUserId(user.id);
-    const code = await getOrCreateInviteCode(user.id);
-    setInviteCode(code);
-  };
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session || cancelled) { setLoading(false); return; }
+        const uid = session.user.id;
+
+        const [friendResult, galleryResult] = await Promise.all([
+          supabase
+            .from('friends')
+            .select('sender_id, receiver_id, status')
+            .or(`sender_id.eq.${uid},receiver_id.eq.${uid}`)
+            .eq('status', 'accepted'),
+          supabase
+            .from('gallery_members')
+            .select('gallery_id, invited_at')
+            .eq('user_id', uid)
+            .order('invited_at', { ascending: false })
+            .limit(20),
+        ]);
+
+        if (cancelled) return;
+
+        const friendIds = (friendResult.data ?? [])
+          .map((r: any) => r.sender_id === uid ? r.receiver_id : r.sender_id);
+
+        if (friendIds.length > 0) {
+          const { data: profileRows } = await supabase
+            .from('profiles')
+            .select('id, username, display_name, avatar_url')
+            .in('id', friendIds);
+          if (!cancelled) setFriends(profileRows ?? []);
+
+          // Compute mutual friend counts for each friend
+          const { data: friendsOfFriends } = await supabase
+            .from('friends')
+            .select('sender_id, receiver_id')
+            .or(`sender_id.in.(${friendIds.join(',')}),receiver_id.in.(${friendIds.join(',')})`)
+            .eq('status', 'accepted');
+
+          const counts: Record<string, number> = {};
+          const friendIdSet = new Set(friendIds);
+          for (const f of friendIds) counts[f] = 0;
+          for (const row of friendsOfFriends ?? []) {
+            const a = row.sender_id;
+            const b = row.receiver_id;
+            if (friendIdSet.has(a) && friendIdSet.has(b) && a !== uid && b !== uid) {
+              counts[a] = (counts[a] ?? 0) + 1;
+              counts[b] = (counts[b] ?? 0) + 1;
+            }
+          }
+          if (!cancelled) setMutualCountsByFriendId(counts);
+        } else {
+          if (!cancelled) setFriends([]);
+        }
+
+        const galleryIds = (galleryResult.data ?? []).map((g: any) => g.gallery_id);
+        if (galleryIds.length > 0) {
+          const { data: collabRows } = await supabase
+            .from('gallery_members')
+            .select('user_id, invited_at')
+            .in('gallery_id', galleryIds)
+            .neq('user_id', uid)
+            .order('invited_at', { ascending: false })
+            .limit(50);
+
+          if (!cancelled) {
+            const seen = new Set<string>();
+            const ordered: string[] = [];
+            for (const row of collabRows ?? []) {
+              if (!seen.has(row.user_id)) {
+                seen.add(row.user_id);
+                ordered.push(row.user_id);
+              }
+            }
+            setRecentCollaboratorIds(ordered);
+          }
+        } else {
+          if (!cancelled) setRecentCollaboratorIds([]);
+        }
+      } catch (e) {
+        reportError('GalleryInviteNewScreen.loadFriendsAndCollaborators', e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, []);
 
   const init = async (gid: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setCurrentUserId(user.id);
 
-    const code = await getOrCreateInviteCode(user.id);
+    const code = await getOrCreateGalleryInviteCode(user.id, gid);
     setInviteCode(code);
 
     const { data: members } = await supabase
@@ -163,16 +269,17 @@ export default function GalleryInviteNewScreen() {
     }
   };
 
-  const getOrCreateInviteCode = async (userId: string): Promise<string> => {
+  const getOrCreateGalleryInviteCode = async (userId: string, galleryId: string): Promise<string> => {
     const { data: existing } = await supabase
       .from('invites')
       .select('code')
       .eq('sender_id', userId)
+      .eq('gallery_id', galleryId)
       .maybeSingle();
     if (existing?.code) return existing.code;
 
     const code = Math.random().toString(36).substring(2, 10);
-    await supabase.from('invites').insert({ sender_id: userId, code });
+    await supabase.from('invites').insert({ sender_id: userId, code, gallery_id: galleryId });
     return code;
   };
 
@@ -192,33 +299,42 @@ export default function GalleryInviteNewScreen() {
   };
 
   const handleCopy = async () => {
+    if (!inviteCode) return;
     await Clipboard.setStringAsync(inviteLink);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   const handleShare = async () => {
-    await Share.share({ message: `Join my gallery on Momento! ${inviteLink}` });
+    await Share.share({ message: inviteLink, url: inviteLink });
   };
 
   const inviteLink = `momento://invite/${inviteCode}`;
 
   const searchActive = searchText.trim().length > 0;
 
-  const friendSuggestions = smartSuggestions
-    .filter(s => s.is_friend && !existingMemberIds.has(s.user_id))
-    .slice(0, 7);
   const peopleSuggestions = smartSuggestions
     .filter(s => !s.is_friend && !existingMemberIds.has(s.user_id))
     .slice(0, 5);
-  const filteredSuggestions = searchActive
-    ? smartSuggestions
-        .filter(s => !existingMemberIds.has(s.user_id))
-        .filter(s => {
-          const q = searchText.toLowerCase();
-          return (s.display_name ?? '').toLowerCase().includes(q) || s.username.toLowerCase().includes(q);
-        })
-    : [];
+
+  const displayedFriends = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    if (q.length > 0) {
+      return friends.filter(f =>
+        (f.username ?? '').toLowerCase().includes(q) ||
+        (f.display_name ?? '').toLowerCase().includes(q)
+      );
+    }
+    const rank = new Map(recentCollaboratorIds.map((id, i) => [id, i]));
+    const sorted = [...friends].sort((a, b) => {
+      const ar = rank.has(a.id) ? rank.get(a.id)! : Infinity;
+      const br = rank.has(b.id) ? rank.get(b.id)! : Infinity;
+      if (ar !== br) return ar - br;
+      return (a.display_name ?? a.username ?? '').localeCompare(b.display_name ?? b.username ?? '');
+    });
+    return sorted.slice(0, 5);
+  }, [friends, recentCollaboratorIds, searchText]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -286,111 +402,13 @@ export default function GalleryInviteNewScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.subtitle}>Contributors can add photos to this gallery.</Text>
-
-        {/* Search input */}
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by name or username..."
-          placeholderTextColor="#6B7280"
-          value={searchText}
-          onChangeText={setSearchText}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-
-        {smartLoading ? (
-          <ActivityIndicator color="#E91E8C" style={{ marginVertical: 24 }} />
-        ) : searchActive ? (
-          /* Filtered flat list */
-          <View style={styles.personList}>
-            {filteredSuggestions.length === 0 ? (
-              <Text style={styles.emptyText}>No results for "{searchText}"</Text>
-            ) : (
-              filteredSuggestions.map((item, index) => (
-                <View key={item.user_id}>
-                  {index > 0 && <View style={styles.rowSeparator} />}
-                  <InviteRow
-                    item={item}
-                    invitedIds={invitedIds}
-                    onInvite={handleInvite}
-                    subLabel={
-                      item.is_friend && item.shared_gallery_count > 0
-                        ? `${item.shared_gallery_count} galleries together`
-                        : !item.is_friend && item.mutual_count > 0
-                        ? `${item.mutual_count} mutual friends`
-                        : undefined
-                    }
-                  />
-                </View>
-              ))
-            )}
-          </View>
-        ) : (
-          /* Smart suggestion sections */
-          <>
-            {friendSuggestions.length > 0 && (
-              <View style={styles.suggestionSection}>
-                <Text style={styles.dividerLabel}>FRIENDS</Text>
-                <View style={styles.personList}>
-                  {friendSuggestions.map((item, index) => (
-                    <View key={item.user_id}>
-                      {index > 0 && <View style={styles.rowSeparator} />}
-                      <InviteRow
-                        item={item}
-                        invitedIds={invitedIds}
-                        onInvite={handleInvite}
-                        subLabel={item.shared_gallery_count > 0 ? `${item.shared_gallery_count} galleries together` : undefined}
-                      />
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {peopleSuggestions.length > 0 && (
-              <View style={styles.suggestionSection}>
-                <Text style={styles.dividerLabel}>PEOPLE YOU MAY KNOW</Text>
-                <View style={styles.personList}>
-                  {peopleSuggestions.map((item, index) => (
-                    <View key={item.user_id}>
-                      {index > 0 && <View style={styles.rowSeparator} />}
-                      <InviteRow
-                        item={item}
-                        invitedIds={invitedIds}
-                        onInvite={handleInvite}
-                        subLabel={item.mutual_count > 0 ? `${item.mutual_count} mutual friends` : undefined}
-                      />
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-          </>
-        )}
-
-        {/* Section — Invite via Link */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Invite via Link</Text>
-          <View style={styles.linkBox}>
-            <Text style={styles.linkText} numberOfLines={1}>{inviteLink}</Text>
-          </View>
-          <View style={styles.linkButtons}>
-            <TouchableOpacity onPress={handleCopy} style={styles.linkBtn} activeOpacity={0.7}>
-              <Text style={styles.linkBtnIcon}>⎘</Text>
-              <Text style={styles.linkBtnText}>{copied ? 'Copied!' : 'Copy Link'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleShare} style={styles.linkBtn} activeOpacity={0.7}>
-              <Text style={styles.linkBtnIcon}>↑</Text>
-              <Text style={styles.linkBtnText}>Share</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
         {/* Section — QR Code */}
         <View style={styles.section}>
@@ -419,7 +437,98 @@ export default function GalleryInviteNewScreen() {
           </View>
         </View>
 
-        <View style={{ height: 40 }} />
+        {/* Section — Invite via Link */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Invite via Link</Text>
+          <View style={styles.linkBox}>
+            <Text style={styles.linkText} numberOfLines={1}>{inviteLink}</Text>
+          </View>
+          <View style={styles.linkButtons}>
+            <TouchableOpacity onPress={handleCopy} style={styles.linkBtn} activeOpacity={0.7}>
+              <Text style={styles.linkBtnIcon}>⎘</Text>
+              <Text style={styles.linkBtnText}>{copied ? 'Copied!' : 'Copy Link'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleShare} style={styles.linkBtn} activeOpacity={0.7}>
+              <Text style={styles.linkBtnIcon}>↑</Text>
+              <Text style={styles.linkBtnText}>Share</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Section — Friends (idle: top-5 by recency; hidden while searching) */}
+        <View style={styles.friendsSection}>
+          <Text style={styles.dividerLabel}>FRIENDS</Text>
+          {loading ? (
+            <ActivityIndicator color="#E91E8C" style={{ marginVertical: 12 }} />
+          ) : friends.length === 0 ? (
+            <Text style={styles.emptyText}>You haven't added any friends yet</Text>
+          ) : !searchActive ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+            >
+              {displayedFriends.map(friend => (
+                <FriendInviteCard
+                  key={friend.id}
+                  friend={friend}
+                  mutualCount={mutualCountsByFriendId[friend.id] ?? 0}
+                  isInvited={invitedIds.has(friend.id)}
+                  onInvite={() => handleInvite(friend.id)}
+                />
+              ))}
+            </ScrollView>
+          ) : null}
+        </View>
+
+        {/* Search bar */}
+        <View onLayout={(e) => { searchBarYRef.current = e.nativeEvent.layout.y; }}>
+          <TextInput
+            style={[styles.searchInput, { marginTop: 8 }]}
+            placeholder="Search friends by name or username..."
+            placeholderTextColor="#6B7280"
+            value={searchText}
+            onChangeText={setSearchText}
+            autoCapitalize="none"
+            autoCorrect={false}
+            onFocus={() => scrollRef.current?.scrollTo({ y: Math.max(0, searchBarYRef.current - 8), animated: true })}
+          />
+        </View>
+
+        {/* Search results — only shown when typing */}
+        {searchActive && (
+          <View style={styles.personList}>
+            {displayedFriends.length === 0 ? (
+              <Text style={styles.emptyText}>No friends match "{searchText}"</Text>
+            ) : (
+              displayedFriends.map((f, index) => {
+                const isInvited = invitedIds.has(f.id);
+                return (
+                  <View key={f.id}>
+                    {index > 0 && <View style={styles.rowSeparator} />}
+                    <TouchableOpacity
+                      onPress={() => { if (!isInvited) handleInvite(f.id); }}
+                      activeOpacity={isInvited ? 1 : 0.8}
+                      disabled={isInvited}
+                    >
+                      <View
+                        pointerEvents="none"
+                        style={isInvited ? styles.invitedCardWrapper : undefined}
+                      >
+                        <SearchPersonRow
+                          user={{ id: f.id, username: f.username, display_name: f.display_name, avatar_url: f.avatar_url, bio: null }}
+                          currentUserId={currentUserId}
+                        />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
+            )}
+          </View>
+        )}
+
+        <View style={{ height: 400 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -465,6 +574,8 @@ const styles = StyleSheet.create({
   },
 
   suggestionSection: { marginBottom: 24 },
+  friendsSection: { marginBottom: 16 },
+  invitedCardWrapper: { backgroundColor: '#F0FDF4' },
 
   personList: {
     backgroundColor: '#fff',

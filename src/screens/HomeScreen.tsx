@@ -16,6 +16,8 @@ import { getUnreadCount, fetchUnreadNotificationCount } from '../lib/notificatio
 import { getFeedGalleries } from '../lib/feed';
 import type { FeedGallery } from '../lib/feed';
 import { GalleryCard, CARD_GAP } from '../components/GalleryCard';
+import PhoneVerificationBanner from '../components/PhoneVerificationBanner';
+import { Skeleton } from '../components/Skeleton';
 import { supabase } from '../lib/supabase';
 import type { RootStackParamList } from '../navigation/types';
 import type { Gallery } from '../types/database';
@@ -35,6 +37,7 @@ export default function HomeScreen() {
   const [discoverGalleries, setDiscoverGalleries] = useState<Gallery[]>([]);
   const [friendIds, setFriendIds] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   const loadFriendGalleries = useCallback(async () => {
     if (!userId) return;
@@ -71,6 +74,7 @@ export default function HomeScreen() {
 
   const loadAll = useCallback(async () => {
     await Promise.all([loadFriendGalleries(), loadDiscover()]);
+    setHasLoadedOnce(true);
   }, [loadFriendGalleries, loadDiscover]);
 
   useFocusEffect(useCallback(() => { loadAll(); }, [loadAll]));
@@ -110,6 +114,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <PhoneVerificationBanner />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Momento</Text>
         <Pressable
@@ -147,7 +152,15 @@ export default function HomeScreen() {
         ))}
       </View>
 
-      {activeTab === 'friends' ? (
+      {!hasLoadedOnce ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 8 }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <View key={i} style={{ width: '50%', padding: 4 }}>
+              <Skeleton height={180} borderRadius={12} />
+            </View>
+          ))}
+        </View>
+      ) : activeTab === 'friends' ? (
         <FlatList
           key="friends_list"
           data={friendGalleries}

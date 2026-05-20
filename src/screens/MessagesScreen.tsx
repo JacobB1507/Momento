@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { fetchConversations, fetchMessageRequests, respondToMessageRequest, clearConversationForUser, setConversationPinned } from '../lib/messages';
 import ConversationRow from '../components/ConversationRow';
+import { SkeletonCircle, SkeletonText } from '../components/Skeleton';
 
 export default function MessagesScreen() {
   const { session } = useAuth();
@@ -170,7 +171,42 @@ export default function MessagesScreen() {
     </View>
   ) : null;
 
-  if (loading) return <ActivityIndicator style={{ flex: 1 }} color="#FF6B6B" />;
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Messages</Text>
+        </View>
+        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <View
+              key={i}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 14,
+              }}
+            >
+              <SkeletonCircle size={48} />
+              <View style={{ marginLeft: 12, flex: 1 }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    marginBottom: 6,
+                  }}
+                >
+                  <SkeletonText width="40%" height={15} />
+                  <SkeletonText width={40} height={11} />
+                </View>
+                <SkeletonText width="75%" height={13} />
+              </View>
+            </View>
+          ))}
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>

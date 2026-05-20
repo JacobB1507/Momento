@@ -14,6 +14,7 @@ import type { RouteProp } from '@react-navigation/native';
 import ImageViewer from 'react-native-image-zoom-viewer';
 import type { RootStackParamList } from '../navigation/types';
 import { supabase } from '../lib/supabase';
+import { SkeletonCircle, SkeletonText } from '../components/Skeleton';
 
 type Uploader = { id: string; username: string; display_name: string | null; avatar_url: string | null };
 
@@ -83,26 +84,37 @@ export default function PhotoViewerScreen() {
       </SafeAreaView>
 
       {/* Uploader overlay at bottom */}
-      {currentUploader && (
+      {photos[currentIndex]?.uploaded_by && (
         <SafeAreaView edges={['bottom']} style={styles.footerWrap} pointerEvents="box-none">
           <View style={styles.footer}>
-            {currentUploader.avatar_url ? (
-              <Image
-                source={{ uri: currentUploader.avatar_url }}
-                style={styles.avatar}
-                contentFit="cover"
-                transition={0}
-              />
-            ) : (
-              <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                <Text style={styles.avatarLetter}>
-                  {(currentUploader.display_name ?? currentUploader.username ?? '?')[0].toUpperCase()}
+            {currentUploader ? (
+              <>
+                {currentUploader.avatar_url ? (
+                  <Image
+                    source={{ uri: currentUploader.avatar_url }}
+                    style={styles.avatar}
+                    contentFit="cover"
+                    transition={0}
+                  />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                    <Text style={styles.avatarLetter}>
+                      {(currentUploader.display_name ?? currentUploader.username ?? '?')[0].toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <Text style={styles.uploaderName}>
+                  @{currentUploader.username}
                 </Text>
-              </View>
+              </>
+            ) : (
+              <>
+                <SkeletonCircle size={32} />
+                <View style={{ marginLeft: 10 }}>
+                  <SkeletonText width={100} height={14} />
+                </View>
+              </>
             )}
-            <Text style={styles.uploaderName}>
-              @{currentUploader.username}
-            </Text>
           </View>
         </SafeAreaView>
       )}

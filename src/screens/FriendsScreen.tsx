@@ -25,6 +25,7 @@ import {
   respondToFriendRequest,
   removeFriend,
 } from '../lib/friends';
+import { SkeletonCircle, SkeletonText } from '../components/Skeleton';
 
 type Profile = { id: string; username: string | null; display_name?: string | null; avatar_url: string | null };
 type FriendItem = { friendshipId: string; profile: Profile };
@@ -152,8 +153,24 @@ export default function FriendsScreen() {
             <Text style={styles.headerTitle}>Friends</Text>
           </View>
         </View>
-        <View style={styles.centered}>
-          <ActivityIndicator color="#FF6B6B" />
+        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <View
+              key={i}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 12,
+              }}
+            >
+              <SkeletonCircle size={44} />
+              <View style={{ marginLeft: 12, flex: 1 }}>
+                <SkeletonText width="50%" height={15} />
+                <View style={{ height: 4 }} />
+                <SkeletonText width="30%" height={12} />
+              </View>
+            </View>
+          ))}
         </View>
       </SafeAreaView>
     );

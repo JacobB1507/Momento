@@ -15,7 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
-import { checkRateLimit } from '../../lib/rateLimit';
+import { checkRateLimit, checkPhoneRateLimit, RATE_LIMITS } from '../../lib/rateLimit';
 import { validatePassword, validateEmailFormat, PASSWORD_RULE } from '../../lib/validation';
 import { userFacingError, reportError } from '../../lib/errorReport';
 import type { SignUpNavigationProp } from '../../navigation/types';
@@ -109,6 +109,20 @@ export default function SignUpScreen({ navigation }: Props) {
 
     if (phoneResult?.data === true) {
       setAccountExistsForPhone(digits);
+      setLoading(false);
+      return;
+    }
+
+    // Per-phone-number rate limit guard. Protects against an attacker creating
+    // many accounts targeting the same victim phone number for SMS abuse.
+    const phoneAllowed = await checkPhoneRateLimit(
+      normalizedPhone,
+      'otp_send_hourly',
+      RATE_LIMITS.otp_send_hourly.maxAttempts,
+      RATE_LIMITS.otp_send_hourly.windowMinutes
+    );
+    if (!phoneAllowed) {
+      Alert.alert('Slow down', 'Too many signups for this phone number. Please wait an hour.');
       setLoading(false);
       return;
     }
