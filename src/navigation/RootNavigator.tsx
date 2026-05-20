@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Alert } from 'react-native';
+import { Alert, View, ActivityIndicator } from 'react-native';
 import SplashScreen from '../screens/SplashScreen';
 import UsernameSetupScreen from '../screens/UsernameSetupScreen';
 import ProfileSetupScreen from '../screens/ProfileSetupScreen';
@@ -54,7 +54,7 @@ import TutorialBootstrap from '../tutorial/TutorialBootstrap';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
-  const { session, loading, restoringSession, profile, profileReady, passwordRecoveryRequested, phoneVerificationRequired } = useAuth();
+  const { session, loading, restoringSession, profile, profileReady, profileLoaded, passwordRecoveryRequested, phoneVerificationRequired } = useAuth();
   const navRef = useNavigationContainerRef<RootStackParamList>();
 
   const hasUsername = !!profile?.username;
@@ -182,6 +182,11 @@ export default function RootNavigator() {
     <TutorialProvider userId={session?.user.id}>
     <NavigationContainer ref={navRef}>
       <>
+      {session && !profileLoaded ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" />
+        </View>
+      ) : (
       <Stack.Navigator key={onboardingStage} screenOptions={{ headerShown: false, animation: 'fade' }}>
         {session ? (
           <>
@@ -326,6 +331,7 @@ export default function RootNavigator() {
           </>
         )}
       </Stack.Navigator>
+      )}
       <TutorialBootstrap welcomeSeen={hasWelcomeSeen} />
       <TutorialOverlay />
       </>

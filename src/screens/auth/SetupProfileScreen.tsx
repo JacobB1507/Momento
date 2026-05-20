@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,11 +13,24 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { takePendingAppleName } from '../../lib/appleAuth';
 
 export default function SetupProfileScreen() {
   const { refreshProfile } = useAuth();
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
+
+  useEffect(() => {
+    takePendingAppleName().then(name => {
+      if (!name) return;
+      const prefill = [name.given, name.family]
+        .filter(Boolean)
+        .map(s => s.replace(/[\x00-\x1F\x7F]/g, '').trim())
+        .join(' ')
+        .trim();
+      if (prefill) setDisplayName(prev => prev || prefill);
+    });
+  }, []);
   const [displayNameError, setDisplayNameError] = useState('');
   const [usernameError, setUsernameError] = useState('');
   const [error, setError] = useState('');

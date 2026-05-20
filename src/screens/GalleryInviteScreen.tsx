@@ -55,28 +55,28 @@ export default function GalleryInviteScreen() {
 
   const handleAccept = async () => {
     setJoining(true);
-    const { error } = await acceptGalleryInvite(galleryId, userId);
-    if (error) {
+    try {
+      await acceptGalleryInvite(galleryId);
+      await markOneRead(notificationId);
       setJoining(false);
-      Alert.alert('Error', error.message ?? 'Could not accept invite.');
-      return;
+      navigation.navigate('GalleryDetail', { galleryId, galleryTitle: title });
+    } catch (err: any) {
+      setJoining(false);
+      Alert.alert('Error', err?.message ?? 'Could not accept invite.');
     }
-    await markOneRead(notificationId);
-    setJoining(false);
-    navigation.navigate('GalleryDetail', { galleryId, galleryTitle: title });
   };
 
   const handleDecline = async () => {
     setDeclining(true);
-    const { error } = await declineGalleryInvite(galleryId, userId);
-    if (error) {
+    try {
+      await declineGalleryInvite(galleryId);
+      await markOneRead(notificationId);
       setDeclining(false);
-      Alert.alert('Error', error.message ?? 'Could not decline invite.');
-      return;
+      navigation.goBack();
+    } catch (err: any) {
+      setDeclining(false);
+      Alert.alert('Error', err?.message ?? 'Could not decline invite.');
     }
-    await markOneRead(notificationId);
-    setDeclining(false);
-    navigation.goBack();
   };
 
   if (loading) {

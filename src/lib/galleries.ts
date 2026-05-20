@@ -359,24 +359,40 @@ export async function getGalleryRole(
   return { role: (data?.role as 'owner' | 'admin' | 'member') ?? null, error: null };
 }
 
-export async function acceptGalleryInvite(galleryId: string, userId: string) {
-  const { error } = await supabase
+export async function acceptGalleryInvite(galleryId: string): Promise<void> {
+  if (!galleryId) throw new Error('galleryId is required');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not signed in');
+
+  const { data, error } = await supabase
     .from('gallery_members')
-    .update({ status: 'accepted' })
+    .update({ status: 'accepted', role: 'member' })
     .eq('gallery_id', galleryId)
-    .eq('user_id', userId)
-    .eq('status', 'pending');
-  return { error };
+    .eq('user_id', user.id)
+    .eq('status', 'pending')
+    .select();
+  if (error) throw error;
+
+  if (data && data.length > 0) return;
+
+  // No pending row found — legacy flow: insert fresh accepted row
+  const { error: insertError } = await supabase
+    .from('gallery_members')
+    .insert({ gallery_id: galleryId, user_id: user.id, role: 'member', status: 'accepted' });
+  if (insertError) throw insertError;
 }
 
-export async function declineGalleryInvite(galleryId: string, userId: string) {
+export async function declineGalleryInvite(galleryId: string): Promise<void> {
+  if (!galleryId) throw new Error('galleryId is required');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not signed in');
+
   const { error } = await supabase
     .from('gallery_members')
     .delete()
     .eq('gallery_id', galleryId)
-    .eq('user_id', userId)
-    .eq('status', 'pending');
-  return { error };
+    .eq('user_id', user.id);
+  if (error) throw error;
 }
 
 export async function transferGalleryOwnership(galleryId: string, newOwnerId: string) {

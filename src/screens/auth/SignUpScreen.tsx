@@ -20,6 +20,7 @@ import { validatePassword, validateEmailFormat, PASSWORD_RULE } from '../../lib/
 import { userFacingError, reportError } from '../../lib/errorReport';
 import type { SignUpNavigationProp } from '../../navigation/types';
 import PasswordInput from '../../components/PasswordInput';
+import { AppleSignInButton } from '../../components/AppleSignInButton';
 import { setPendingPhone } from '../../lib/pendingPhone';
 import { formatPhone } from '../../lib/phoneFormat';
 
@@ -367,6 +368,17 @@ export default function SignUpScreen({ navigation }: Props) {
               )}
             </Pressable>
 
+            {/* Apple Sign In */}
+            <View style={styles.orDivider}>
+              <View style={styles.orLine} />
+              <Text style={styles.orText}>or</Text>
+              <View style={styles.orLine} />
+            </View>
+            <AppleSignInButton
+              onSuccess={() => {}}
+              onError={(reason) => { if (reason !== 'cancelled') Alert.alert('Sign in failed', reason); }}
+            />
+
             <View style={styles.switchRow}>
               <Text style={styles.switchText}>Already have an account? </Text>
               <Pressable onPress={() => navigation.navigate('Login')}>
@@ -471,6 +483,9 @@ const styles = StyleSheet.create({
   },
   switchText: { color: '#6B7280', fontSize: 15 },
   link: { color: '#FF6B6B', fontSize: 15, fontWeight: '600' },
+  orDivider: { flexDirection: 'row', alignItems: 'center', marginTop: 24, marginBottom: 16 },
+  orLine: { flex: 1, height: 1, backgroundColor: '#E5E7EB' },
+  orText: { color: '#9CA3AF', fontSize: 14, fontWeight: '500', marginHorizontal: 12 },
   fieldError: { color: '#FF3B30', fontSize: 13, marginBottom: 8 },
   errorText: {
     color: '#D32F2F',

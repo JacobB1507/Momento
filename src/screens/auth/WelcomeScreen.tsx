@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import type { RootStackParamList } from '../../navigation/types';
+import { AppleSignInButton } from '../../components/AppleSignInButton';
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, 'Welcome'> };
 
@@ -50,6 +51,15 @@ export default function WelcomeScreen({ navigation }: Props) {
             <Text style={styles.btnOutlineText}>Sign In</Text>
           </Pressable>
 
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <AppleSignInButton
+            onError={(reason) => Alert.alert('Sign in failed', reason)}
+          />
         </View>
       </View>
     </SafeAreaView>
@@ -112,6 +122,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   btnPressed: { opacity: 0.85 },
+
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.35)' },
+  dividerText: { color: 'rgba(255,255,255,0.65)', fontSize: 14, fontWeight: '500' },
 
   privateBetaPill: {
     alignSelf: 'center',

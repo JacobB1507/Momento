@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Alert,
   Image,
   Pressable,
@@ -114,6 +115,12 @@ export default function GalleryInviteNewScreen() {
   const creatingRef = useRef(false);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [acceptedContributorCount, setAcceptedContributorCount] = useState(0);
+  const [acceptedContributorAvatars, setAcceptedContributorAvatars] = useState<string[]>([]);
+  const bannerOpacity = useRef(new Animated.Value(0)).current;
+  const bannerScale = useRef(new Animated.Value(1)).current;
+  const prevCountRef = useRef(0);
+
   useEffect(() => {
     if (pendingCreate && !createdGalleryId) {
       createGallery().catch(e => reportError('GalleryInviteNewScreen.mountCreate', e));
@@ -127,6 +134,44 @@ export default function GalleryInviteNewScreen() {
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!createdGalleryId) return;
+    const galleryId = createdGalleryId;
+    loadAcceptedContributors(galleryId);
+    const interval = setInterval(() => loadAcceptedContributors(galleryId), 5000);
+    const channel = supabase
+      .channel(`gallery-members-${galleryId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'gallery_members',
+        filter: `gallery_id=eq.${galleryId}`,
+      }, () => loadAcceptedContributors(galleryId))
+      .subscribe();
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
+  }, [createdGalleryId]);
+
+  useEffect(() => {
+    Animated.timing(bannerOpacity, {
+      toValue: acceptedContributorCount > 0 ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [acceptedContributorCount]);
+
+  useEffect(() => {
+    if (prevCountRef.current === 0 && acceptedContributorCount === 1) {
+      Animated.sequence([
+        Animated.timing(bannerScale, { toValue: 1.05, duration: 200, useNativeDriver: true }),
+        Animated.timing(bannerScale, { toValue: 1, duration: 200, useNativeDriver: true }),
+      ]).start();
+    }
+    prevCountRef.current = acceptedContributorCount;
+  }, [acceptedContributorCount]);
 
   useEffect(() => {
     let cancelled = false;
@@ -219,6 +264,26 @@ export default function GalleryInviteNewScreen() {
     load();
     return () => { cancelled = true; };
   }, []);
+
+  const loadAcceptedContributors = async (galleryId: string) => {
+    try {
+      const { data } = await supabase
+        .from('gallery_members')
+        .select('user_id, profiles(avatar_url)')
+        .eq('gallery_id', galleryId)
+        .eq('status', 'accepted')
+        .neq('user_id', currentUserId)
+        .limit(20);
+      if (data) {
+        setAcceptedContributorCount(data.length);
+        setAcceptedContributorAvatars(
+          (data as any[]).map(r => r.profiles?.avatar_url).filter(Boolean).slice(0, 5)
+        );
+      }
+    } catch {
+      // keep current count on error
+    }
+  };
 
   const init = async (gid: string) => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -343,18 +408,23 @@ export default function GalleryInviteNewScreen() {
         <Pressable
           onPress={async () => {
             if (pendingCreate && createdGalleryId) {
-              Alert.alert(
-                'Discard this gallery?',
-                'The gallery you created will be deleted.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Discard', style: 'destructive', onPress: async () => {
-                    await supabase.from('galleries').delete().eq('id', createdGalleryId);
-                    clearDraft();
-                    navigation.goBack();
-                  }},
-                ]
-              );
+              if (acceptedContributorCount > 0) {
+                clearDraft();
+                navigation.goBack();
+              } else {
+                Alert.alert(
+                  'Discard this gallery?',
+                  'The gallery you created will be deleted.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Discard', style: 'destructive', onPress: async () => {
+                      await supabase.from('galleries').delete().eq('id', createdGalleryId);
+                      clearDraft();
+                      navigation.goBack();
+                    }},
+                  ]
+                );
+              }
             } else {
               navigation.goBack();
             }
@@ -400,6 +470,19 @@ export default function GalleryInviteNewScreen() {
           <Text style={styles.headerDone}>Done</Text>
         </Pressable>
       </View>
+
+      <Animated.View style={[styles.contributorBanner, { opacity: bannerOpacity, transform: [{ scale: bannerScale }] }]}>
+        <View style={{ flexDirection: 'row' }}>
+          {acceptedContributorAvatars.map((uri, i) => (
+            <Image
+              key={i}
+              source={{ uri }}
+              style={[styles.bannerAvatar, i > 0 ? { marginLeft: -8 } : {}]}
+            />
+          ))}
+        </View>
+        <Text style={styles.bannerText}>{acceptedContributorCount} joined</Text>
+      </Animated.View>
 
       <ScrollView
         ref={scrollRef}
@@ -655,5 +738,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 4,
     marginBottom: 16,
+  },
+
+  contributorBanner: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bannerAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  bannerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#166534',
   },
 });

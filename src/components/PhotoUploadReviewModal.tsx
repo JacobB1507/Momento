@@ -60,7 +60,7 @@ export function PhotoUploadReviewModal({
   };
 
   const deselectAll = () => {
-    setSelectedUris(new Set());
+    exitSelectMode();
   };
 
   const enterSelectMode = () => {

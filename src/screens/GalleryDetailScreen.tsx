@@ -208,12 +208,14 @@ export default function GalleryDetailScreen() {
             onPress={() => setShowContributors(true)}
             hitSlop={8}
           >
-            <Ionicons name="people-outline" size={16} color="#fff" />
-            {contributorCount > 1 && (
-              <View style={styles.contributorBadge}>
-                <Text style={styles.contributorBadgeText}>{contributorCount}</Text>
-              </View>
-            )}
+            <View style={{ position: 'relative' }}>
+              <Ionicons name="people-outline" size={16} color="#fff" />
+              {contributorCount > 1 && (
+                <View style={{ position: 'absolute', bottom: -4, right: -5, backgroundColor: '#FF6B6B', borderRadius: 7, minWidth: 14, height: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.25)' }}>
+                  <Text style={{ color: '#fff', fontSize: 8, fontWeight: '700', lineHeight: 12 }}>{contributorCount}</Text>
+                </View>
+              )}
+            </View>
           </Pressable>
           {removalRequestCount > 0 && (
             <Pressable

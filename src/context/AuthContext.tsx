@@ -13,6 +13,7 @@ type AuthContextType = {
   restoringSession: boolean;
   profile: Record<string, any> | null;
   profileReady: boolean;
+  profileLoaded: boolean;
   refreshProfile: () => Promise<void>;
   passwordRecoveryRequested: boolean;
   phoneVerificationRequired: boolean;
@@ -24,6 +25,7 @@ const AuthContext = createContext<AuthContextType>({
   restoringSession: true,
   profile: null,
   profileReady: false,
+  profileLoaded: false,
   refreshProfile: async () => {},
   passwordRecoveryRequested: false,
   phoneVerificationRequired: false,
@@ -35,6 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [restoringSession, setRestoringSession] = useState(true);
   const [profile, setProfile] = useState<Record<string, any> | null>(null);
   const [profileReady, setProfileReady] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [passwordRecoveryRequested, setPasswordRecoveryRequested] = useState(false);
   const [phoneVerificationRequired, setPhoneVerificationRequired] = useState(false);
   const lastUserIdRef = useRef<string | null>(null);
@@ -63,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setPhoneVerificationRequired(false); // BETA BYPASS — re-enable before public launch
     }
     setProfileReady(true);
+    setProfileLoaded(true);
   };
 
   useEffect(() => {
@@ -88,6 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setPhoneVerificationRequired(false); // BETA BYPASS — re-enable before public launch
       }
       setProfileReady(true);
+      setProfileLoaded(true);
     };
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -157,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Only clear profile on actual sign-out, not on transient null-session pulses
         setProfile(null);
         setProfileReady(true);
+        setProfileLoaded(false);
         setPasswordRecoveryRequested(false);
         setPhoneVerificationRequired(false);
       }
@@ -170,7 +176,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, loading, restoringSession, profile, profileReady, refreshProfile, passwordRecoveryRequested, phoneVerificationRequired }}>
+    <AuthContext.Provider value={{ session, loading, restoringSession, profile, profileReady, profileLoaded, refreshProfile, passwordRecoveryRequested, phoneVerificationRequired }}>
       {children}
     </AuthContext.Provider>
   );

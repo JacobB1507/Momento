@@ -96,15 +96,13 @@ export function PhotoGrid({ photos, isOwner, isMember, currentUserId, onDeletePh
       data={visiblePhotos}
       keyExtractor={(item) => item.id}
       numColumns={COLUMNS}
-      renderItem={({ item, index }) => {
-        const isLastInRow = (index + 1) % COLUMNS === 0;
+      renderItem={({ item }) => {
         const canInteract = currentUserId === item.uploaded_by || !!onRemovalRequest;
         const uploader = uploaderProfiles[item.uploaded_by];
         return (
           <Pressable
             style={({ pressed }) => [
               styles.cell,
-              !isLastInRow && { marginRight: GAP },
               pressed && styles.cellPressed,
             ]}
             onPress={onPhotoPress ? () => onPhotoPress(item, index) : undefined}
@@ -152,6 +150,7 @@ export function PhotoGrid({ photos, isOwner, isMember, currentUserId, onDeletePh
       }}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.grid}
+      columnWrapperStyle={{ justifyContent: 'flex-start', gap: GAP }}
       ItemSeparatorComponent={() => <View style={{ height: GAP }} />}
     />
   );
