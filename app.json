@@ -16,8 +16,12 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.momento",
+      "usesAppleSignIn": true,
       "config": {
         "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "NSContactsUsageDescription": "Momento uses your contacts to help you find friends who are already using the app. Your contacts are matched privately and never stored on our servers."
       }
     },
     "android": {

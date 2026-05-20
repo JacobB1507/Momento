@@ -32,6 +32,7 @@ import ChatScreen from '../screens/ChatScreen';
 import NewMessageScreen from '../screens/NewMessageScreen';
 import MessageRequestsScreen from '../screens/MessageRequestsScreen';
 import ProfilePhotoSetupScreen from '../screens/ProfilePhotoSetupScreen';
+import ContactSyncPromptScreen from '../screens/ContactSyncPromptScreen';
 import DeleteAccountScreen from '../screens/DeleteAccountScreen';
 import PrivacyPolicyScreen from '../screens/auth/PrivacyPolicyScreen';
 import TermsOfServiceScreen from '../screens/auth/TermsOfServiceScreen';
@@ -61,11 +62,13 @@ export default function RootNavigator() {
   const hasDisplayName = !!profile?.display_name;
   const hasWelcomeSeen = !!profile?.welcome_seen;
   const hasProfilePhoto = !!profile?.avatar_url || !!profile?.skipped_avatar_setup;
+  const hasContactsPromptShown = !!profile?.contacts_prompt_shown_at;
 
   const onboardingStage =
     phoneVerificationRequired ? 'phone-verification' :
     !hasUsername || !hasDisplayName ? 'setup' :
     !hasProfilePhoto ? 'photo' :
+    !hasContactsPromptShown ? 'contactsPrompt' :
     !hasWelcomeSeen ? 'welcome' :
     'main';
 
@@ -197,6 +200,8 @@ export default function RootNavigator() {
               <Stack.Screen name="SetupProfile" component={SetupProfileScreen} />
             ) : !hasProfilePhoto ? (
               <Stack.Screen name="ProfilePhotoSetup" component={ProfilePhotoSetupScreen} options={{ headerShown: false }} />
+            ) : !hasContactsPromptShown ? (
+              <Stack.Screen name="ContactSyncPrompt" component={ContactSyncPromptScreen} options={{ gestureEnabled: false }} />
             ) : !hasWelcomeSeen ? (
               <Stack.Screen name="WelcomeBeta" component={WelcomeBetaScreen} />
             ) : (

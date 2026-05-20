@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -21,12 +21,13 @@ import { Skeleton } from '../components/Skeleton';
 import { supabase } from '../lib/supabase';
 import type { RootStackParamList } from '../navigation/types';
 import type { Gallery } from '../types/database';
+import AddContactsModal from '../components/AddContactsModal';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type Tab = 'friends' | 'discover';
 
 export default function HomeScreen() {
-  const { session } = useAuth();
+  const { session, profile, refreshProfile } = useAuth();
   const navigation = useNavigation();
   const rootNav = navigation.getParent<NavProp>();
   const userId = session?.user.id ?? '';
@@ -38,6 +39,7 @@ export default function HomeScreen() {
   const [friendIds, setFriendIds] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [contactsModalVisible, setContactsModalVisible] = useState(false);
 
   const loadFriendGalleries = useCallback(async () => {
     if (!userId) return;
@@ -78,6 +80,18 @@ export default function HomeScreen() {
   }, [loadFriendGalleries, loadDiscover]);
 
   useFocusEffect(useCallback(() => { loadAll(); }, [loadAll]));
+
+  useEffect(() => {
+    if (!profile) return;
+    const shouldShow =
+      profile.contacts_prompt_shown_at &&
+      !profile.contacts_modal_shown_at &&
+      profile.welcome_seen === true;
+    if (shouldShow) {
+      const t = setTimeout(() => setContactsModalVisible(true), 400);
+      return () => clearTimeout(t);
+    }
+  }, [profile?.id, profile?.contacts_modal_shown_at, profile?.contacts_prompt_shown_at, profile?.welcome_seen]);
 
   useFocusEffect(
     useCallback(() => {
@@ -205,6 +219,17 @@ export default function HomeScreen() {
               friendIds={friendIds}
             />
           )}
+        />
+      )}
+      {profile?.id && (
+        <AddContactsModal
+          visible={contactsModalVisible}
+          currentUserId={profile.id}
+          friendIds={friendIds}
+          onDismiss={async () => {
+            setContactsModalVisible(false);
+            await refreshProfile();
+          }}
         />
       )}
     </SafeAreaView>

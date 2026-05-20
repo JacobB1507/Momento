@@ -28,6 +28,9 @@ import UploadProgressOverlay from '../components/UploadProgressOverlay';
 import { PhotoUploadReviewModal } from '../components/PhotoUploadReviewModal';
 import { Skeleton } from '../components/Skeleton';
 import styles from '../styles/galleryDetailStyles';
+import SelectionActionBar from '../components/SelectionActionBar';
+import SaveConfirmSheet from '../components/SaveConfirmSheet';
+import { savePhotosToCameraRoll, sharePhotos, type SavablePhoto } from '../lib/photoSave';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'GalleryDetail'>;
 type RouteProps = RouteProp<RootStackParamList, 'GalleryDetail'>;
@@ -53,6 +56,10 @@ export default function GalleryDetailScreen() {
   const [showComments, setShowComments] = useState(false);
   const [pendingReviewPhotos, setPendingReviewPhotos] = useState<any[] | null>(null);
   const [highlightedRequestId, setHighlightedRequestId] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [saveConfirmVisible, setSaveConfirmVisible] = useState(false);
+  const [saveInProgress, setSaveInProgress] = useState(false);
   const highlightConsumed = useRef(false);
 
   const isOwner = !!session?.user.id && session.user.id === galleryMeta?.created_by;
@@ -195,6 +202,50 @@ export default function GalleryDetailScreen() {
     setPendingReviewPhotos(result.assets);
   };
 
+  const enterSelectionMode = () => { setSelectionMode(true); setSelectedIds([]); };
+  const exitSelectionMode = () => { setSelectionMode(false); setSelectedIds([]); };
+  const toggleSelect = (photoId: string) => setSelectedIds(prev =>
+    prev.includes(photoId) ? prev.filter(id => id !== photoId) : [...prev, photoId],
+  );
+  const selectAll = () => setSelectedIds(photos.map(p => p.id));
+  const deselectAll = () => setSelectedIds([]);
+  const handleSavePress = () => { if (selectedIds.length === 0) return; setSaveConfirmVisible(true); };
+  const handleSaveConfirm = async (dedupe: boolean) => {
+    if (!session?.user.id) return;
+    setSaveConfirmVisible(false);
+    setSaveInProgress(true);
+    const chosen: SavablePhoto[] = photos.filter(p => selectedIds.includes(p.id)).map(p => ({ id: p.id, url: p.url }));
+    try {
+      const result = await savePhotosToCameraRoll({ photos: chosen, userId: session.user.id, galleryId, dedupe });
+      if (result.permissionDenied) {
+        Alert.alert('Permission Needed', 'Please enable Photos access for Momento in iOS Settings.');
+      } else {
+        const parts: string[] = [];
+        if (result.savedCount > 0) parts.push(`Saved ${result.savedCount} photo${result.savedCount === 1 ? '' : 's'}.`);
+        if (result.skippedDuplicateCount > 0) parts.push(`Skipped ${result.skippedDuplicateCount} duplicate${result.skippedDuplicateCount === 1 ? '' : 's'}.`);
+        if (result.failedCount > 0) parts.push(`${result.failedCount} failed to save.`);
+        Alert.alert('Saved', parts.join(' ') || 'Done.');
+      }
+      setSaveInProgress(false);
+      exitSelectionMode();
+    } catch (e: any) {
+      Alert.alert('Save Failed', e?.message ?? 'An error occurred.');
+      setSaveInProgress(false);
+    }
+  };
+  const handleSharePress = async () => {
+    if (selectedIds.length === 0) return;
+    setSaveInProgress(true);
+    const chosen: SavablePhoto[] = photos.filter(p => selectedIds.includes(p.id)).map(p => ({ id: p.id, url: p.url }));
+    try {
+      await sharePhotos(chosen);
+    } catch (e: any) {
+      Alert.alert('Share Failed', e?.message ?? 'An error occurred.');
+    } finally {
+      setSaveInProgress(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
@@ -203,6 +254,15 @@ export default function GalleryDetailScreen() {
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>{galleryMeta?.title ?? ''}</Text>
         <View style={styles.headerActions}>
+          {isMember && photos.length > 0 && !selectionMode && (
+            <Pressable
+              style={({ pressed }) => [styles.settingsButton, pressed && { opacity: 0.7 }]}
+              onPress={enterSelectionMode}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
+            </Pressable>
+          )}
           <Pressable
             style={({ pressed }) => [styles.inviteButton, pressed && { opacity: 0.7 }]}
             onPress={() => setShowContributors(true)}
@@ -211,8 +271,8 @@ export default function GalleryDetailScreen() {
             <View style={{ position: 'relative' }}>
               <Ionicons name="people-outline" size={16} color="#fff" />
               {contributorCount > 1 && (
-                <View style={{ position: 'absolute', bottom: -4, right: -5, backgroundColor: '#FF6B6B', borderRadius: 7, minWidth: 14, height: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.25)' }}>
-                  <Text style={{ color: '#fff', fontSize: 8, fontWeight: '700', lineHeight: 12 }}>{contributorCount}</Text>
+                <View style={{ position: 'absolute', bottom: -13, right: -14, backgroundColor: '#FF6B6B', borderRadius: 9, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderWidth: 2, borderColor: 'rgba(255,255,255,0.25)' }}>
+                  <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700', lineHeight: undefined, includeFontPadding: false, textAlignVertical: 'center' }}>{contributorCount}</Text>
                 </View>
               )}
             </View>
@@ -298,6 +358,10 @@ export default function GalleryDetailScreen() {
               galleryTitle: galleryMeta?.title ?? '',
             })
           }
+          selectionMode={selectionMode}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+          onEnterSelection={enterSelectionMode}
         />
       )}
 
@@ -368,6 +432,25 @@ export default function GalleryDetailScreen() {
             : <Text style={styles.fabIcon}>+</Text>}
         </Pressable>
       )}
+      {selectionMode && (
+        <SelectionActionBar
+          selectedCount={selectedIds.length}
+          totalCount={photos.length}
+          onSelectAll={selectAll}
+          onDeselectAll={deselectAll}
+          onSave={handleSavePress}
+          onShare={handleSharePress}
+          onCancel={exitSelectionMode}
+          disabled={saveInProgress}
+        />
+      )}
+      <SaveConfirmSheet
+        visible={saveConfirmVisible}
+        selectedCount={selectedIds.length}
+        userId={session?.user?.id ?? ''}
+        onCancel={() => setSaveConfirmVisible(false)}
+        onConfirm={handleSaveConfirm}
+      />
     </SafeAreaView>
   );
 }

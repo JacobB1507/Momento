@@ -25,6 +25,30 @@ export async function sendFriendRequest(
   return 'sent';
 }
 
+/**
+ * Same as sendFriendRequest but accepts a verified receiverId (UUID) directly.
+ * Use this when the receiver was returned by a server-verified source
+ * (e.g. match_contacts_by_phone_hashes RPC). Do NOT call this with
+ * receiverIds derived from arbitrary user input.
+ */
+export async function sendFriendRequestById(
+  senderId: string,
+  receiverId: string,
+): Promise<'sent' | 'already_friends' | 'error'> {
+  if (!senderId || !receiverId) return 'error';
+  if (senderId === receiverId) return 'error';
+
+  const { error: insertError } = await supabase
+    .from('friends')
+    .insert({ sender_id: senderId, receiver_id: receiverId, status: 'pending' });
+
+  if (insertError) {
+    if (insertError.code === '23505') return 'already_friends';
+    return 'error';
+  }
+  return 'sent';
+}
+
 export async function getFriends(userId: string) {
   const { data, error } = await supabase
     .from('friends')

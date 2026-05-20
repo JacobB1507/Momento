@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Dimensions, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { Photo } from '../types/database';
 import { supabase } from '../lib/supabase';
 import { deleteOwnPhoto } from '../lib/photoRemoval';
@@ -8,11 +9,11 @@ import { Skeleton, SkeletonCircle } from './Skeleton';
 type UploaderProfile = { id: string; username: string | null; avatar_url: string | null };
 
 const AVATAR_BADGE = 28;
-
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GAP = 2;
 const COLUMNS = 3;
 const PHOTO_SIZE = Math.floor((SCREEN_WIDTH - GAP * (COLUMNS - 1)) / COLUMNS);
+const SELECT_RED = '#FF3B30';
 
 type Props = {
   photos: Photo[];
@@ -22,9 +23,25 @@ type Props = {
   onDeletePhoto: (photo: Photo) => void;
   onRemovalRequest?: (photoId: string) => void;
   onPhotoPress?: (photo: Photo, index: number) => void;
+  selectionMode?: boolean;
+  selectedIds?: string[];
+  onToggleSelect?: (photoId: string) => void;
+  onEnterSelection?: () => void;
 };
 
-export function PhotoGrid({ photos, isOwner, isMember, currentUserId, onDeletePhoto, onRemovalRequest, onPhotoPress }: Props) {
+function SelectionCircle({ selected }: { selected: boolean }) {
+  return (
+    <View style={[styles.selCircle, selected && styles.selCircleActive]}>
+      {selected && <Ionicons name="checkmark" size={16} color="#fff" />}
+    </View>
+  );
+}
+
+export function PhotoGrid({
+  photos, isOwner, isMember, currentUserId,
+  onDeletePhoto, onRemovalRequest, onPhotoPress,
+  selectionMode = false, selectedIds = [], onToggleSelect, onEnterSelection,
+}: Props) {
   const [uploaderProfiles, setUploaderProfiles] = useState<Record<string, UploaderProfile>>({});
   const [hiddenPhotoIds, setHiddenPhotoIds] = useState<string[]>([]);
   const [loadedPhotoIds, setLoadedPhotoIds] = useState<Set<string>>(new Set());
@@ -54,68 +71,60 @@ export function PhotoGrid({ photos, isOwner, isMember, currentUserId, onDeletePh
   }, [photos]);
 
   const handleLongPress = (item: Photo) => {
+    if (selectionMode) return;
     if (!isMember) {
       Alert.alert('Not a contributor', 'You must be a contributor to this gallery to request photo removal.');
       return;
     }
     const isOwn = !!currentUserId && currentUserId === item.uploaded_by;
-    const hideOption = {
-      text: 'Hide from My View',
-      onPress: () => setHiddenPhotoIds(prev => [...prev, item.id]),
-    };
+    const hideOption = { text: 'Hide from My View', onPress: () => setHiddenPhotoIds(prev => [...prev, item.id]) };
+    const selectOption = onEnterSelection ? [{ text: 'Select', onPress: onEnterSelection }] : [];
     if (isOwn) {
       Alert.alert(undefined, undefined, [
-        {
-          text: 'Delete Photo',
-          style: 'destructive',
-          onPress: async () => {
+        ...selectOption,
+        { text: 'Delete Photo', style: 'destructive' as const, onPress: async () => {
             const ok = await deleteOwnPhoto(item.id);
             if (ok) onDeletePhoto(item);
             else Alert.alert('Error', 'Could not delete photo. Please try again.');
           },
         },
         hideOption,
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' as const },
       ]);
     } else {
       Alert.alert(undefined, undefined, [
-        {
-          text: 'Request Removal',
-          onPress: () => onRemovalRequest?.(item.id),
-        },
+        ...selectOption,
+        { text: 'Request Removal', onPress: () => onRemovalRequest?.(item.id) },
         hideOption,
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' as const },
       ]);
     }
   };
 
   const visiblePhotos = photos.filter(p => !hiddenPhotoIds.includes(p.id));
+  const selectedSet = new Set(selectedIds);
 
   return (
     <FlatList
       data={visiblePhotos}
       keyExtractor={(item) => item.id}
       numColumns={COLUMNS}
-      renderItem={({ item }) => {
+      renderItem={({ item, index }) => {
         const canInteract = currentUserId === item.uploaded_by || !!onRemovalRequest;
         const uploader = uploaderProfiles[item.uploaded_by];
+        const isSelected = !hiddenPhotoIds.includes(item.id) && selectedSet.has(item.id);
         return (
           <Pressable
-            style={({ pressed }) => [
-              styles.cell,
-              pressed && styles.cellPressed,
-            ]}
-            onPress={onPhotoPress ? () => onPhotoPress(item, index) : undefined}
-            onLongPress={canInteract ? () => handleLongPress(item) : undefined}
+            style={({ pressed }) => [styles.cell, pressed && styles.cellPressed]}
+            onPress={selectionMode && isMember
+              ? () => onToggleSelect?.(item.id)
+              : onPhotoPress ? () => onPhotoPress(item, index) : undefined}
+            onLongPress={!selectionMode && canInteract ? () => handleLongPress(item) : undefined}
             delayLongPress={400}
           >
             {!loadedPhotoIds.has(item.id) && (
               <View style={StyleSheet.absoluteFill}>
-                <Skeleton
-                  width={PHOTO_SIZE}
-                  height={PHOTO_SIZE}
-                  borderRadius={0}
-                />
+                <Skeleton width={PHOTO_SIZE} height={PHOTO_SIZE} borderRadius={0} />
               </View>
             )}
             <Image
@@ -125,25 +134,24 @@ export function PhotoGrid({ photos, isOwner, isMember, currentUserId, onDeletePh
               onLoad={() => markLoaded(item.id)}
               onError={() => markLoaded(item.id)}
             />
+            {isSelected && <View style={styles.selOverlay} />}
             {item.uploaded_by && (
               <View style={styles.avatarBadge}>
                 {uploader ? (
                   uploader.avatar_url ? (
-                    <Image
-                      source={{ uri: uploader.avatar_url }}
-                      style={styles.avatarImage}
-                    />
+                    <Image source={{ uri: uploader.avatar_url }} style={styles.avatarImage} />
                   ) : (
                     <View style={styles.avatarPlaceholder}>
-                      <Text style={styles.avatarLetter}>
-                        {(uploader.username ?? '?').charAt(0).toUpperCase()}
-                      </Text>
+                      <Text style={styles.avatarLetter}>{(uploader.username ?? '?').charAt(0).toUpperCase()}</Text>
                     </View>
                   )
                 ) : (
                   <SkeletonCircle size={AVATAR_BADGE} />
                 )}
               </View>
+            )}
+            {selectionMode && isMember && (
+              <View style={styles.selCircleWrap}><SelectionCircle selected={isSelected} /></View>
             )}
           </Pressable>
         );
@@ -164,21 +172,23 @@ const styles = StyleSheet.create({
 
   avatarBadge: { position: 'absolute', bottom: 4, right: 4 },
   avatarImage: {
-    width: AVATAR_BADGE,
-    height: AVATAR_BADGE,
-    borderRadius: AVATAR_BADGE / 2,
-    borderWidth: 2,
-    borderColor: '#fff',
+    width: AVATAR_BADGE, height: AVATAR_BADGE, borderRadius: AVATAR_BADGE / 2,
+    borderWidth: 2, borderColor: '#fff',
   },
   avatarPlaceholder: {
-    width: AVATAR_BADGE,
-    height: AVATAR_BADGE,
-    borderRadius: AVATAR_BADGE / 2,
-    backgroundColor: '#FF6B6B',
-    borderWidth: 2,
-    borderColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: AVATAR_BADGE, height: AVATAR_BADGE, borderRadius: AVATAR_BADGE / 2,
+    backgroundColor: '#FF6B6B', borderWidth: 2, borderColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
   },
   avatarLetter: { color: '#fff', fontSize: 11, fontWeight: '700' },
+
+  selOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.25)' },
+  selCircleWrap: { position: 'absolute', top: 6, right: 6 },
+  selCircle: {
+    width: 24, height: 24, borderRadius: 12,
+    borderWidth: 2, borderColor: '#fff',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  selCircleActive: { backgroundColor: SELECT_RED, borderColor: '#fff' },
 });

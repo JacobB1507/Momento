@@ -6,9 +6,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { getDefaultGalleryPrivacy } from '../lib/galleries';
+import { hasContactsPermission, requestContactsPermission } from '../lib/contacts';
+import * as Contacts from 'expo-contacts';
+import { reportError } from '../lib/errorReport';
 
-function Row({ label, subtitle, icon, onPress }: {
-  label: string; subtitle?: string; icon?: React.ReactNode; onPress: () => void;
+function Row({ label, subtitle, icon, badge, onPress }: {
+  label: string; subtitle?: string; icon?: React.ReactNode; badge?: boolean; onPress: () => void;
 }) {
   return (
     <Pressable style={({ pressed }) => [styles.row, pressed && styles.rowPressed]} onPress={onPress}>
@@ -26,7 +29,10 @@ function Row({ label, subtitle, icon, onPress }: {
           {subtitle && <Text style={styles.rowSub}>{subtitle}</Text>}
         </View>
       )}
-      <Text style={styles.chevron}>›</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        {badge && <View style={styles.badgeDot} />}
+        <Text style={styles.chevron}>›</Text>
+      </View>
     </Pressable>
   );
 }
@@ -38,13 +44,43 @@ export default function SettingsScreen() {
   const { session, profile } = useAuth();
   const userId = session?.user.id ?? '';
   const [defaultPrivacy, setDefaultPrivacy] = useState<string>('friends');
+  const [syncingContacts, setSyncingContacts] = useState(false);
+  const [contactsPermissionGranted, setContactsPermissionGranted] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       if (!userId) return;
       getDefaultGalleryPrivacy(userId).then(setDefaultPrivacy);
+      (async () => {
+        try {
+          const { status } = await Contacts.getPermissionsAsync();
+          setContactsPermissionGranted(status === 'granted');
+        } catch {
+          setContactsPermissionGranted(false);
+        }
+      })();
     }, [userId])
   );
+
+  const handleSyncContacts = async () => {
+    if (syncingContacts || !profile?.id) return;
+    setSyncingContacts(true);
+    try {
+      const granted = await hasContactsPermission();
+      const finalGranted = granted || (await requestContactsPermission());
+      await supabase.from('profiles').update({ contacts_prompt_shown_at: new Date().toISOString(), contacts_skipped_at: null }).eq('id', profile.id);
+      Alert.alert(
+        finalGranted ? 'Contacts synced' : 'Permission disabled',
+        finalGranted
+          ? 'Open the Friends tab to see contacts on Momento.'
+          : 'Contacts permission is off. To enable, go to iOS Settings → Momento → Contacts.',
+      );
+    } catch (e: any) {
+      reportError('SettingsScreen.syncContacts', e);
+    } finally {
+      setSyncingContacts(false);
+    }
+  };
 
   const go = (screen: string) => () => navigation.navigate(screen as never);
   const privacyLabel = defaultPrivacy.charAt(0).toUpperCase() + defaultPrivacy.slice(1);
@@ -59,6 +95,20 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {!contactsPermissionGranted && (
+          <>
+            <Text style={styles.sectionLabel}>FRIENDS</Text>
+            <View style={[styles.card, syncingContacts && { opacity: 0.5 }]}>
+              <Row
+                label="Sync Contacts"
+                icon={<Ionicons name="people-outline" size={18} color="#111827" />}
+                badge={!!profile?.contacts_skipped_at}
+                onPress={handleSyncContacts}
+              />
+            </View>
+          </>
+        )}
+
         <Text style={styles.sectionLabel}>PROFILE</Text>
         <View style={styles.card}>
           <Row label="Change Username" onPress={go('ChangeUsername')} />
@@ -197,4 +247,5 @@ const styles = StyleSheet.create({
   deleteText: { color: '#EF4444', fontSize: 16, fontWeight: '600' },
   betaFooter: { marginTop: 24, paddingBottom: 40, alignItems: 'center' },
   betaFooterText: { fontSize: 12, color: '#9CA3AF', letterSpacing: 0.3 },
+  badgeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF3B30' },
 });

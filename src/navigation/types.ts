@@ -37,6 +37,7 @@ export type RootStackParamList = {
   MessageRequests: undefined;
   DeleteAccount: undefined;
   ProfilePhotoSetup: undefined;
+  ContactSyncPrompt: undefined;
   PrivacyPolicy: undefined;
   TermsOfService: undefined;
   ChangePhone: undefined;

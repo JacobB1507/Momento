@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -26,6 +26,7 @@ import {
   removeFriend,
 } from '../lib/friends';
 import { SkeletonCircle, SkeletonText } from '../components/Skeleton';
+import ContactsOnMomentoSection from '../components/ContactsOnMomentoSection';
 
 type Profile = { id: string; username: string | null; display_name?: string | null; avatar_url: string | null };
 type FriendItem = { friendshipId: string; profile: Profile };
@@ -64,6 +65,9 @@ export default function FriendsScreen() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [requestsExpanded, setRequestsExpanded] = useState(false);
+  const [contactsRefreshKey, setContactsRefreshKey] = useState(0);
+
+  const friendIds = useMemo(() => friends.map(f => f.profile.id), [friends]);
 
   const loadData = async () => {
     if (!userId) return;
@@ -93,7 +97,10 @@ export default function FriendsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadData().finally(() => setInitialLoading(false));
+      loadData().finally(() => {
+        setInitialLoading(false);
+        setContactsRefreshKey(k => k + 1);
+      });
     }, []),
   );
 
@@ -250,6 +257,18 @@ export default function FriendsScreen() {
               </Pressable>
             )}
           </>
+        )}
+
+        {/* Contacts on Momento */}
+        {!!userId && (
+          <ContactsOnMomentoSection
+            currentUserId={userId}
+            friendIds={friendIds}
+            pendingRequestIds={[]}
+            refreshKey={contactsRefreshKey}
+            onFriendRequestSent={() => setContactsRefreshKey(k => k + 1)}
+            onPress={(uid) => navigation.navigate('FriendProfile', { userId: uid, username: '' } as any)}
+          />
         )}
 
         {/* Section 2 — Friends list */}
