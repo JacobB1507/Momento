@@ -43,6 +43,7 @@ function tintForId(id: string): string {
 
 export default function ConversationRow({ conversation, currentUserId, onPress, onLongPress, customPreview, isPinned }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const isUnread = (conversation.unread_count ?? 0) > 0;
   const otherId =
     conversation.participant_1 !== currentUserId
       ? conversation.participant_1
@@ -83,7 +84,7 @@ export default function ConversationRow({ conversation, currentUserId, onPress, 
           {profile === null ? (
             <View style={styles.nameSkeleton} />
           ) : (
-            <Text style={styles.username} numberOfLines={1} ellipsizeMode="tail">
+            <Text style={[styles.username, isUnread && styles.nameUnread]} numberOfLines={1} ellipsizeMode="tail">
               {profile.display_name || profile.username || ''}
             </Text>
           )}
@@ -91,17 +92,12 @@ export default function ConversationRow({ conversation, currentUserId, onPress, 
             <MaterialCommunityIcons name="pin" size={18} color="#9CA3AF" style={{ marginLeft: 4 }} />
           )}
         </View>
-        <Text style={[styles.preview, customPreview ? { fontStyle: 'italic', color: '#9ca3af' } : {}]} numberOfLines={1}>
+        <Text style={[styles.preview, customPreview ? { fontStyle: 'italic', color: '#9ca3af' } : {}, isUnread && !customPreview && styles.previewUnread]} numberOfLines={1}>
           {customPreview ?? conversation.last_message ?? 'No messages yet'}
         </Text>
       </View>
       <View style={styles.right}>
         <Text style={styles.time}>{formatTime(conversation.last_message_at)}</Text>
-        {!customPreview && conversation.unread_count > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{conversation.unread_count}</Text>
-          </View>
-        )}
       </View>
     </Pressable>
   );
@@ -134,14 +130,6 @@ const styles = StyleSheet.create({
   preview: { fontSize: 13, color: '#6b7280' },
   right: { alignItems: 'flex-end', gap: 4 },
   time: { fontSize: 11, color: '#9CA3AF' },
-  badge: {
-    backgroundColor: '#FF6B6B',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 5,
-  },
-  badgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  nameUnread: { fontWeight: '700' },
+  previewUnread: { fontWeight: '600', color: '#111827' },
 });

@@ -56,7 +56,7 @@ export default function CommentRow({ comment, currentUserId, onEdit, onDelete, o
               </>
             )}
             <Pressable style={styles.menuRow} onPress={() => { onDelete(comment); setShowMenu(false); }}>
-              <Ionicons name="trash-outline" size={15} color="#ef4444" />
+              <Ionicons name="trash-outline" size={15} color="#FF3B30" />
               <Text style={styles.menuTextRed}>Delete</Text>
             </Pressable>
           </View>
@@ -127,6 +127,6 @@ const styles = StyleSheet.create({
   menu: { position: 'absolute', bottom: '100%', right: 14, backgroundColor: '#1a1a1a', borderRadius: 12, paddingVertical: 4, zIndex: 1000, minWidth: 160, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8 },
   menuRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10 },
   menuTextWhite: { color: '#fff', fontSize: 14, fontWeight: '500' },
-  menuTextRed: { color: '#ef4444', fontSize: 14, fontWeight: '500' },
+  menuTextRed: { color: '#FF3B30', fontSize: 14, fontWeight: '500' },
   menuDivider: { height: 1, backgroundColor: '#333', marginHorizontal: 8 },
 });

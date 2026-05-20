@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
 export type SavablePhoto = { id: string; url: string };
@@ -95,19 +95,27 @@ export async function savePhotosToCameraRoll(args: {
   const successIds: string[] = [];
 
   for (const photo of candidates) {
-    const tmpUri = `${FileSystem.cacheDirectory}momento_save_${photo.id}.jpg`;
+    let downloadedFile: File | null = null;
     try {
-      const { uri } = await FileSystem.downloadAsync(photo.url, tmpUri);
-      await MediaLibrary.saveToLibraryAsync(uri);
+      downloadedFile = await File.downloadFileAsync(photo.url, Paths.cache);
+      if (!downloadedFile || !downloadedFile.exists) {
+        failedCount++;
+        continue;
+      }
+      await MediaLibrary.saveToLibraryAsync(downloadedFile.uri);
       successIds.push(photo.id);
       savedCount++;
     } catch (e) {
       console.warn('[photoSave] failed to save photo', photo.id, e);
       failedCount++;
     } finally {
-      FileSystem.deleteAsync(tmpUri, { idempotent: true }).catch((e) =>
-        console.warn('[photoSave] cleanup failed', tmpUri, e),
-      );
+      try {
+        if (downloadedFile && downloadedFile.exists) {
+          downloadedFile.delete();
+        }
+      } catch (cleanupErr) {
+        console.warn('[photoSave] cleanup failed:', cleanupErr);
+      }
     }
   }
 
@@ -121,32 +129,37 @@ export async function savePhotosToCameraRoll(args: {
 export async function sharePhotos(photos: SavablePhoto[]): Promise<{ shared: boolean }> {
   if (!Array.isArray(photos) || photos.length === 0) throw new Error('No photos to share');
 
-  const results = await Promise.allSettled(
-    photos.map(async (p) => {
-      const uri = `${FileSystem.cacheDirectory}momento_share_${p.id}.jpg`;
-      await FileSystem.downloadAsync(p.url, uri);
-      return uri;
-    }),
+  const downloadResults = await Promise.allSettled(
+    photos.map((p) => File.downloadFileAsync(p.url, Paths.cache)),
   );
 
-  const tmpUris = results
-    .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+  const downloadedFiles = downloadResults
+    .filter((r): r is PromiseFulfilledResult<File> => r.status === 'fulfilled')
     .map((r) => r.value);
 
-  if (tmpUris.length === 0) return { shared: false };
+  if (downloadedFiles.length === 0) return { shared: false };
 
   let sharedCount = 0;
-  for (const uri of tmpUris) {
-    try {
-      await Sharing.shareAsync(uri);
-      sharedCount++;
-    } catch {
-      break;
+  try {
+    for (const file of downloadedFiles) {
+      if (!file.exists) continue;
+      try {
+        await Sharing.shareAsync(file.uri);
+        sharedCount++;
+      } catch {
+        break;
+      }
     }
-  }
-
-  for (const uri of tmpUris) {
-    try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
+  } finally {
+    for (const file of downloadedFiles) {
+      try {
+        if (file && file.exists) {
+          file.delete();
+        }
+      } catch (cleanupErr) {
+        console.warn('[photoSave] cleanup failed:', cleanupErr);
+      }
+    }
   }
 
   return { shared: sharedCount > 0 };

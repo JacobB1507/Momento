@@ -16,7 +16,7 @@ export default StyleSheet.create({
     justifyContent: 'center',
   },
   removalButton: { position: 'relative', borderWidth: 1.5, borderColor: '#F59E0B', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' },
-  removalDot: { position: 'absolute', top: 3, right: 3, width: 7, height: 7, borderRadius: 4, backgroundColor: '#ef4444' },
+  removalDot: { position: 'absolute', top: 3, right: 3, width: 7, height: 7, borderRadius: 4, backgroundColor: '#FF3B30' },
   inviteButton: { position: 'relative', flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1a1a', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 10 },
   contributorBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#FF6B6B', borderRadius: 8, paddingHorizontal: 4, paddingVertical: 1, minWidth: 16, alignItems: 'center' },
   contributorBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
@@ -38,7 +38,7 @@ export default StyleSheet.create({
     elevation: 5,
   },
   emptyButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  errorText: { color: '#EF4444', fontSize: 15, marginBottom: 12, textAlign: 'center' },
+  errorText: { color: '#FF3B30', fontSize: 15, marginBottom: 12, textAlign: 'center' },
   retryButton: { borderWidth: 1.5, borderColor: '#FF6B6B', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 28 },
   retryText: { color: '#FF6B6B', fontWeight: '600' },
   fab: {

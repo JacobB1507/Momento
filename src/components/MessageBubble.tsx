@@ -12,6 +12,8 @@ type MessageItem = {
   created_at: string;
   edited?: boolean;
   deleted?: boolean;
+  read?: boolean;
+  read_at?: string | null;
 };
 
 type Props = {
@@ -28,10 +30,26 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+function formatReadTime(readAtIso: string): string {
+  const readMs = new Date(readAtIso).getTime();
+  if (isNaN(readMs)) return 'Read';
+  const diffSec = Math.floor((Date.now() - readMs) / 1000);
+  if (diffSec < 60) return 'Read just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `Read ${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `Read ${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `Read ${diffDay}d ago`;
+  const d = new Date(readAtIso);
+  return `Read ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+}
+
 export default function MessageBubble({ message, currentUserId, onEdit, onDelete, isLast, activeMessageId, setActiveMessageId }: Props) {
   const navigation = useNavigation<any>();
   const isOwn = message.sender_id === currentUserId;
   const isMenuOpen = activeMessageId === message.id;
+  const showReadIndicator = isOwn && isLast && message.read === true && !!message.read_at;
   const [within2Mins, setWithin2Mins] = useState(false);
 
   const handleLongPress = async () => {
@@ -78,7 +96,7 @@ export default function MessageBubble({ message, currentUserId, onEdit, onDelete
                   </Pressable>
                   <View style={styles.menuDivider} />
                   <Pressable style={styles.menuRow} onPress={() => { onDelete(message); setActiveMessageId?.(null); }}>
-                    <Ionicons name="trash-outline" size={15} color="#ef4444" />
+                    <Ionicons name="trash-outline" size={15} color="#FF3B30" />
                     <Text style={styles.menuTextRed}>Delete</Text>
                   </Pressable>
                 </>
@@ -102,6 +120,9 @@ export default function MessageBubble({ message, currentUserId, onEdit, onDelete
       </Pressable>
       {message.edited && !message.deleted && <Text style={styles.edited}>edited</Text>}
       {isLast && <Text style={styles.time}>{formatTime(message.created_at)}</Text>}
+      {showReadIndicator && message.read_at ? (
+        <Text style={styles.readIndicator}>{formatReadTime(message.read_at)}</Text>
+      ) : null}
     </View>
   );
 }
@@ -114,7 +135,7 @@ const styles = StyleSheet.create({
   menu: { position: 'absolute', top: '100%', right: 0, backgroundColor: '#1a1a1a', borderRadius: 12, paddingVertical: 4, zIndex: 1000, minWidth: 160, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8 },
   menuRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10 },
   menuTextWhite: { color: '#fff', fontSize: 14, fontWeight: '500' },
-  menuTextRed: { color: '#ef4444', fontSize: 14, fontWeight: '500' },
+  menuTextRed: { color: '#FF3B30', fontSize: 14, fontWeight: '500' },
   menuTextGrey: { color: '#9ca3af', fontSize: 12, paddingHorizontal: 14, paddingVertical: 10 },
   menuDivider: { height: 1, backgroundColor: '#333', marginHorizontal: 8 },
   bubble: { maxWidth: '75%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
@@ -127,4 +148,12 @@ const styles = StyleSheet.create({
   image: { width: 200, height: 200, borderRadius: 12 },
   edited: { fontSize: 10, color: '#9ca3af', marginTop: 2, marginHorizontal: 4 },
   time: { fontSize: 10, color: '#9CA3AF', marginTop: 2, marginHorizontal: 4 },
+  readIndicator: {
+    color: '#8E8E93',
+    fontSize: 11,
+    fontWeight: '400',
+    marginTop: 2,
+    marginRight: 4,
+    textAlign: 'right',
+  },
 });

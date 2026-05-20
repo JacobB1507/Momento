@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { AppState, StyleSheet, Text, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { clearDraft } from '../lib/createGalleryDraft';
@@ -10,6 +10,8 @@ import ProfileScreen from '../screens/ProfileScreen';
 import MessagesScreen from '../screens/MessagesScreen';
 import { useTutorial } from '../tutorial/TutorialContext';
 import TabBarIcon from '../components/TabBarIcon';
+import { useAuth } from '../context/AuthContext';
+import { getTotalUnreadCount } from '../lib/messages';
 
 const Tab = createBottomTabNavigator();
 
@@ -23,6 +25,33 @@ function CreateTabIcon({ focused }: { focused: boolean }) {
 
 export default function TabNavigator() {
   const tutorial = useTutorial();
+  const { user } = useAuth();
+  const [messagesBadge, setMessagesBadge] = useState<number>(0);
+
+  const refreshMessagesBadge = useCallback(async () => {
+    if (!user?.id) {
+      setMessagesBadge(0);
+      return;
+    }
+    const count = await getTotalUnreadCount(user.id);
+    setMessagesBadge(count);
+  }, [user?.id]);
+
+  useEffect(() => {
+    refreshMessagesBadge();
+    const interval = setInterval(refreshMessagesBadge, 30000);
+    return () => clearInterval(interval);
+  }, [refreshMessagesBadge]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        refreshMessagesBadge();
+      }
+    });
+    return () => sub.remove();
+  }, [refreshMessagesBadge]);
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -111,7 +140,7 @@ export default function TabNavigator() {
         name="Messages"
         component={MessagesScreen}
         listeners={{
-          focus: () => clearDraft(),
+          focus: () => { clearDraft(); refreshMessagesBadge(); },
           tabPress: (e) => {
             if (tutorial.active && tutorial.currentStep?.targetTab && tutorial.currentStep.targetTab !== 'Messages') {
               e.preventDefault();
@@ -131,6 +160,8 @@ export default function TabNavigator() {
               Messages
             </Text>
           ),
+          tabBarBadge: messagesBadge > 0 ? messagesBadge : undefined,
+          tabBarBadgeStyle: { backgroundColor: '#FF3B30', color: '#FFFFFF', fontSize: 11, minWidth: 18, height: 18 },
         }}
       />
       <Tab.Screen

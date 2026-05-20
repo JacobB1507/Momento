@@ -18,7 +18,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { RouteProp } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
-import { fetchMessages, sendMessage, editMessage, deleteMessage, sendImageMessage, requestMessagePermission, clearConversationForUser, respondToMessageRequest } from '../lib/messages';
+import { fetchMessages, sendMessage, editMessage, deleteMessage, sendImageMessage, requestMessagePermission, clearConversationForUser, respondToMessageRequest, markConversationRead } from '../lib/messages';
 import { getMutualFriends } from '../lib/friends';
 import type { Message } from '../lib/messages';
 import MessageBubble from '../components/MessageBubble';
@@ -74,6 +74,7 @@ export default function ChatScreen() {
   useEffect(() => {
     if (route.params?.isPendingRequest) isRequestConversation.current = true;
     load().finally(() => setLoading(false));
+    markConversationRead(conversationId, currentUserId);
     (async () => {
       const { data } = await supabase.from('profiles').select('avatar_url, username, display_name').eq('id', otherUserId).single();
       setOtherAvatar(data?.avatar_url ?? null);
@@ -112,11 +113,15 @@ export default function ChatScreen() {
         { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
+            const newMsg = payload.new as Message;
             setMessages((prev) => {
-              const all = [...prev, payload.new as Message];
+              const all = [...prev, newMsg];
               return Array.from(new Map(all.map(m => [m.id, m])).values());
             });
             setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+            if (newMsg.sender_id !== currentUserId) {
+              markConversationRead(conversationId, currentUserId);
+            }
           } else if (payload.eventType === 'UPDATE') {
             setMessages((prev) => prev.map((m) => (m.id === payload.new.id ? (payload.new as Message) : m)));
           } else if (payload.eventType === 'DELETE') {

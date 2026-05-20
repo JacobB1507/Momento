@@ -5,11 +5,12 @@ import {
   Text,
   FlatList,
   Pressable,
-  Image,
   Alert,
   StyleSheet,
   SafeAreaView,
+  Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 
 export type ReviewablePhoto = {
@@ -165,7 +166,7 @@ export function PhotoUploadReviewModal({
             )
           ) : (
             <Pressable onPress={onCancel} hitSlop={8}>
-              <Text style={styles.headerAction}>Cancel</Text>
+              <Text style={styles.headerActionDestructive}>Cancel</Text>
             </Pressable>
           )}
 
@@ -213,7 +214,7 @@ export function PhotoUploadReviewModal({
             data={workingSet}
             keyExtractor={(item) => item.uri}
             renderItem={renderItem}
-            numColumns={2}
+            numColumns={3}
             columnWrapperStyle={styles.row}
             contentContainerStyle={styles.gridContent}
           />
@@ -243,6 +244,12 @@ export function PhotoUploadReviewModal({
 }
 
 const TILE_GAP = 8;
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const NUM_COLUMNS = 3;
+const CONTAINER_PADDING = 8;
+const TILE_SIZE = Math.floor(
+  (SCREEN_WIDTH - CONTAINER_PADDING * 2 - TILE_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS
+);
 
 const styles = StyleSheet.create({
   container: {
@@ -264,7 +271,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   headerActionDestructive: {
-    color: '#ef4444',
+    color: '#FF3B30',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -282,10 +289,11 @@ const styles = StyleSheet.create({
   },
   row: {
     gap: TILE_GAP,
+    justifyContent: 'flex-start',
   },
   tile: {
-    flex: 1,
-    aspectRatio: 1,
+    width: TILE_SIZE,
+    height: TILE_SIZE,
     marginBottom: TILE_GAP,
     borderRadius: 8,
     overflow: 'hidden',

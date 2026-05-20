@@ -66,6 +66,8 @@ export async function uploadGalleryPhoto({
   width,
   height,
   onProgress,
+  contentHash,
+  sourceAssetId,
 }: {
   galleryId: string;
   uri: string;
@@ -73,6 +75,8 @@ export async function uploadGalleryPhoto({
   width?: number;
   height?: number;
   onProgress?: (bytesUploaded: number, bytesTotal: number) => void;
+  contentHash?: string;
+  sourceAssetId?: string | null;
 }): Promise<void> {
   if (mimeType && !mimeType.startsWith('image/')) throw new Error('Only image files are supported.');
 
@@ -97,6 +101,9 @@ export async function uploadGalleryPhoto({
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not signed in');
 
+  if (contentHash !== undefined && !/^[a-f0-9]{64}$/.test(contentHash)) throw new Error('Invalid contentHash');
+  if (sourceAssetId != null && (sourceAssetId.length === 0 || sourceAssetId.length > 255)) throw new Error('Invalid sourceAssetId');
+
   const response = await fetch(compressed.uri);
   const arrayBuffer = await response.arrayBuffer();
 
@@ -110,7 +117,14 @@ export async function uploadGalleryPhoto({
   const { data: urlData } = supabase.storage.from('gallery-photos').getPublicUrl(storagePath);
   const { error: dbError } = await supabase
     .from('gallery_photos')
-    .insert({ gallery_id: galleryId, storage_path: storagePath, url: urlData.publicUrl, uploaded_by: session.user.id });
+    .insert({
+      gallery_id: galleryId,
+      storage_path: storagePath,
+      url: urlData.publicUrl,
+      uploaded_by: session.user.id,
+      content_hash: contentHash ?? null,
+      source_asset_id: (sourceAssetId && sourceAssetId.length > 0) ? sourceAssetId : null,
+    });
   if (dbError) throw dbError;
 
   onProgress?.(1, 1);

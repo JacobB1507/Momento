@@ -31,6 +31,9 @@ import styles from '../styles/galleryDetailStyles';
 import SelectionActionBar from '../components/SelectionActionBar';
 import SaveConfirmSheet from '../components/SaveConfirmSheet';
 import { savePhotosToCameraRoll, sharePhotos, type SavablePhoto } from '../lib/photoSave';
+import DuplicatesAlert from '../components/DuplicatesAlert';
+import { hashPhotoFile } from '../lib/photoHash';
+import { classifyForDuplicates, type PickedPhoto, type ClassifiedPhoto } from '../lib/duplicateCheck';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'GalleryDetail'>;
 type RouteProps = RouteProp<RootStackParamList, 'GalleryDetail'>;
@@ -60,6 +63,10 @@ export default function GalleryDetailScreen() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [saveConfirmVisible, setSaveConfirmVisible] = useState(false);
   const [saveInProgress, setSaveInProgress] = useState(false);
+  const [duplicatesAlertVisible, setDuplicatesAlertVisible] = useState(false);
+  const [pendingClassified, setPendingClassified] = useState<ClassifiedPhoto[]>([]);
+  const [pendingUniqueCount, setPendingUniqueCount] = useState(0);
+  const [pendingDuplicateCount, setPendingDuplicateCount] = useState(0);
   const highlightConsumed = useRef(false);
 
   const isOwner = !!session?.user.id && session.user.id === galleryMeta?.created_by;
@@ -149,26 +156,29 @@ export default function GalleryDetailScreen() {
     }
   };
 
-  const runUploadLoop = async (assets: any[]) => {
-    setPendingReviewPhotos(null);
-    if (assets.length === 0) return;
-
-    const total = assets.length;
+  const performUpload = async (toUpload: ClassifiedPhoto[]) => {
+    if (toUpload.length === 0) {
+      Alert.alert('Nothing to upload', 'All selected photos are already in this gallery.');
+      await load();
+      setUploading(false);
+      setUploadState(prev => ({ ...prev, inProgress: false }));
+      return;
+    }
+    const total = toUpload.length;
     let completed = 0;
     let failed = 0;
     setUploading(true);
     setUploadState({ total, completed: 0, failed: 0, currentIndex: 0, inProgress: true });
-
-    for (let i = 0; i < assets.length; i++) {
-      const asset = assets[i];
+    for (let i = 0; i < toUpload.length; i++) {
+      const p = toUpload[i];
       setUploadState(prev => ({ ...prev, currentIndex: i + 1 }));
       try {
         await uploadGalleryPhoto({
           galleryId,
-          uri: asset.uri,
-          mimeType: asset.mimeType ?? undefined,
-          width: asset.width ?? undefined,
-          height: asset.height ?? undefined,
+          uri: p.uri,
+          mimeType: p.mimeType,
+          contentHash: p.contentHash,
+          sourceAssetId: p.assetId,
         });
         completed++;
         setUploadState(prev => ({ ...prev, completed }));
@@ -177,13 +187,51 @@ export default function GalleryDetailScreen() {
         setUploadState(prev => ({ ...prev, failed }));
       }
     }
-
     await load();
     setUploading(false);
     setUploadState(prev => ({ ...prev, inProgress: false }));
     if (failed > 0) {
       Alert.alert('Upload complete', `Uploaded ${completed} of ${total} photos. ${failed} failed.`);
     }
+  };
+
+  const runUploadLoop = async (assets: any[]) => {
+    setPendingReviewPhotos(null);
+    if (assets.length === 0) return;
+    setUploading(true);
+    let picked: PickedPhoto[];
+    try {
+      picked = await Promise.all(
+        assets.map(async (asset) => ({
+          uri: asset.uri,
+          mimeType: asset.mimeType ?? undefined,
+          assetId: asset.assetId ?? null,
+          contentHash: await hashPhotoFile(asset.uri),
+        })),
+      );
+    } catch {
+      Alert.alert('Upload failed', "Couldn't read one or more photos. Please try again.");
+      setUploading(false);
+      return;
+    }
+    let classification;
+    try {
+      classification = await classifyForDuplicates(galleryId, picked);
+    } catch {
+      Alert.alert('Upload check failed', "Couldn't check for duplicates. Please try again.");
+      setUploading(false);
+      return;
+    }
+    const { classified, duplicateCount, uniqueCount } = classification;
+    if (duplicateCount === 0) {
+      await performUpload(classified);
+      return;
+    }
+    setPendingClassified(classified);
+    setPendingDuplicateCount(duplicateCount);
+    setPendingUniqueCount(uniqueCount);
+    setUploading(false);
+    setDuplicatesAlertVisible(true);
   };
 
   const handleUpload = async () => {
@@ -450,6 +498,14 @@ export default function GalleryDetailScreen() {
         userId={session?.user?.id ?? ''}
         onCancel={() => setSaveConfirmVisible(false)}
         onConfirm={handleSaveConfirm}
+      />
+      <DuplicatesAlert
+        visible={duplicatesAlertVisible}
+        duplicateCount={pendingDuplicateCount}
+        uniqueCount={pendingUniqueCount}
+        onUploadAnyway={() => { setDuplicatesAlertVisible(false); performUpload(pendingClassified); }}
+        onSkipDuplicates={() => { setDuplicatesAlertVisible(false); performUpload(pendingClassified.filter(p => !p.isDuplicate)); }}
+        onCancel={() => { setDuplicatesAlertVisible(false); setPendingClassified([]); setPendingDuplicateCount(0); setPendingUniqueCount(0); }}
       />
     </SafeAreaView>
   );

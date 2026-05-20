@@ -2,6 +2,10 @@ import { supabase } from './supabase';
 import { checkRateLimit, RateLimitError } from './rateLimit';
 import { validateMessage, sanitizeText } from './sanitize';
 
+function isValidId(id: string): boolean {
+  return typeof id === 'string' && id.length > 0 && /^[a-zA-Z0-9-]+$/.test(id);
+}
+
 export type Conversation = {
   id: string;
   participant_1: string;
@@ -33,7 +37,8 @@ export async function fetchConversations(userId: string): Promise<Conversation[]
     .or(`participant_1.eq.${userId},participant_2.eq.${userId}`);
 
   if (error) throw error;
-  return (data ?? [])
+
+  const conversations = (data ?? [])
     .filter(c => {
       if (c.participant_1 === userId && c.cleared_by_1) return false;
       if (c.participant_2 === userId && c.cleared_by_2) return false;
@@ -51,6 +56,28 @@ export async function fetchConversations(userId: string): Promise<Conversation[]
       }
       return new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime();
     });
+
+  if (conversations.length === 0) return conversations;
+
+  const convIds = conversations.map(c => c.id);
+  const { data: unreadRows, error: unreadError } = await supabase
+    .from('messages')
+    .select('conversation_id')
+    .in('conversation_id', convIds)
+    .neq('sender_id', userId)
+    .eq('read', false);
+
+  if (unreadError) {
+    console.warn('[messages] fetchConversations unread batch failed:', unreadError);
+    return conversations.map(c => ({ ...c, unread_count: 0 }));
+  }
+
+  const unreadMap = new Map<string, number>();
+  for (const row of unreadRows ?? []) {
+    unreadMap.set(row.conversation_id, (unreadMap.get(row.conversation_id) ?? 0) + 1);
+  }
+
+  return conversations.map(c => ({ ...c, unread_count: unreadMap.get(c.id) ?? 0 }));
 }
 
 export async function setConversationPinned(conversationId: string, pinned: boolean): Promise<void> {
@@ -273,4 +300,49 @@ export async function clearConversationForUser(conversationId: string, userId: s
     .eq('id', conversationId);
 
   if (error) throw error;
+}
+
+export async function markConversationRead(conversationId: string, currentUserId: string): Promise<number> {
+  if (!isValidId(conversationId) || !isValidId(currentUserId)) throw new Error('Invalid args');
+  const { data, error } = await supabase
+    .from('messages')
+    .update({ read: true, read_at: new Date().toISOString() })
+    .eq('conversation_id', conversationId)
+    .neq('sender_id', currentUserId)
+    .eq('read', false)
+    .select('id');
+  if (error) {
+    console.warn('[messages] markConversationRead failed:', error);
+    return 0;
+  }
+  return data?.length ?? 0;
+}
+
+export async function getConversationUnreadCount(conversationId: string, currentUserId: string): Promise<number> {
+  if (!isValidId(conversationId) || !isValidId(currentUserId)) throw new Error('Invalid args');
+  const { count, error } = await supabase
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversationId)
+    .neq('sender_id', currentUserId)
+    .eq('read', false);
+  if (error) {
+    console.warn('[messages] getConversationUnreadCount failed:', error);
+    return 0;
+  }
+  return count ?? 0;
+}
+
+export async function getTotalUnreadCount(currentUserId: string): Promise<number> {
+  if (!isValidId(currentUserId)) throw new Error('Invalid args');
+  const { count, error } = await supabase
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .neq('sender_id', currentUserId)
+    .eq('read', false);
+  if (error) {
+    console.warn('[messages] getTotalUnreadCount failed:', error);
+    return 0;
+  }
+  return count ?? 0;
 }
