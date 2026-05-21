@@ -4,7 +4,8 @@ import SplashScreen from '../screens/SplashScreen';
 import UsernameSetupScreen from '../screens/UsernameSetupScreen';
 import ProfileSetupScreen from '../screens/ProfileSetupScreen';
 import { Linking } from 'react-native';
-import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer } from '@react-navigation/native';
+import { navRef } from './navRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
@@ -42,6 +43,7 @@ import TrustedFriendsScreen from '../screens/TrustedFriendsScreen';
 import DefaultGalleryPrivacyScreen from '../screens/DefaultGalleryPrivacyScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
 import TransferOwnershipScreen from '../screens/TransferOwnershipScreen';
+import ManageTagsScreen from '../screens/ManageTagsScreen';
 import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 import BlockedUsersScreen from '../screens/BlockedUsersScreen';
 import PhoneVerificationScreen from '../screens/auth/PhoneVerificationScreen';
@@ -56,7 +58,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
   const { session, loading, restoringSession, profile, profileReady, profileLoaded, passwordRecoveryRequested, phoneVerificationRequired } = useAuth();
-  const navRef = useNavigationContainerRef<RootStackParamList>();
+
 
   const hasUsername = !!profile?.username;
   const hasDisplayName = !!profile?.display_name;
@@ -323,6 +325,11 @@ export default function RootNavigator() {
               name="TransferOwnership"
               component={TransferOwnershipScreen}
               options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="ManageTags"
+              component={ManageTagsScreen}
+              options={{ headerShown: true, title: 'Tags', headerBackTitle: 'Back', animation: 'slide_from_right' }}
             />
           </>
         ) : (

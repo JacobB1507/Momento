@@ -20,6 +20,9 @@ export type Conversation = {
   cleared_by_1?: boolean;
   cleared_by_2?: boolean;
   [key: string]: any;
+  last_message_sender_id?: string | null;
+  last_message_read?: boolean | null;
+  last_message_read_at?: string | null;
 };
 
 export type Message = {
@@ -77,7 +80,35 @@ export async function fetchConversations(userId: string): Promise<Conversation[]
     unreadMap.set(row.conversation_id, (unreadMap.get(row.conversation_id) ?? 0) + 1);
   }
 
-  return conversations.map(c => ({ ...c, unread_count: unreadMap.get(c.id) ?? 0 }));
+  const { data: latestMessages, error: latestError } = await supabase
+    .from('messages')
+    .select('conversation_id, sender_id, read, read_at, created_at')
+    .in('conversation_id', convIds)
+    .eq('deleted', false)
+    .order('created_at', { ascending: false });
+
+  if (latestError) {
+    console.warn('[messages] fetchConversations latest-messages batch failed:', latestError);
+  }
+
+  const latestByConv = new Map<string, { sender_id: string; read: boolean; read_at: string | null }>();
+  for (const row of latestMessages ?? []) {
+    if (!latestByConv.has(row.conversation_id)) {
+      latestByConv.set(row.conversation_id, {
+        sender_id: row.sender_id,
+        read: row.read ?? false,
+        read_at: row.read_at ?? null,
+      });
+    }
+  }
+
+  return conversations.map(c => ({
+    ...c,
+    unread_count: unreadMap.get(c.id) ?? 0,
+    last_message_sender_id: latestByConv.get(c.id)?.sender_id ?? null,
+    last_message_read: latestByConv.get(c.id)?.read ?? null,
+    last_message_read_at: latestByConv.get(c.id)?.read_at ?? null,
+  }));
 }
 
 export async function setConversationPinned(conversationId: string, pinned: boolean): Promise<void> {

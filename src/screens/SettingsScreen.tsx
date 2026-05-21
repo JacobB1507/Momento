@@ -131,6 +131,12 @@ export default function SettingsScreen() {
           <Row label="Edit Display Name" onPress={go('EditDisplayName')} />
           <Sep />
           <Row label="Edit Bio" onPress={go('EditBio')} />
+          <Sep />
+          <Row
+            label="Tags"
+            icon={<Ionicons name="pricetags-outline" size={20} color="#8E8E93" />}
+            onPress={go('ManageTags')}
+          />
         </View>
 
         <Text style={styles.sectionLabel}>GALLERIES</Text>

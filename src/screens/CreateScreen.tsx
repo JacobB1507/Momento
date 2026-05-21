@@ -21,6 +21,7 @@ import { getDraft, setDraft } from '../lib/createGalleryDraft';
 import { getDefaultGalleryPrivacy } from '../lib/galleries';
 import { checkRateLimit } from '../lib/rateLimit';
 import { validateGalleryTitle, sanitizeText } from '../lib/sanitize';
+import { getMyTags, ProfileTag, TAG_PALETTE } from '../lib/tags';
 
 const PRIVACY_OPTIONS: { value: GalleryPrivacy; label: string; description: string }[] = [
   { value: 'private', label: 'Private', description: 'Only members' },
@@ -34,6 +35,9 @@ export default function CreateScreen() {
   const [title, setTitle] = useState<string>(getDraft().title);
   const [privacy, setPrivacy] = useState<GalleryPrivacy>(getDraft().privacy ?? 'friends');
   const [loading, setLoading] = useState(false);
+  const [availableTags, setAvailableTags] = useState<ProfileTag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
+  const [tagsLoading, setTagsLoading] = useState(true);
 
   useEffect(() => {
     if (getDraft().privacy === null && session?.user.id) {
@@ -57,6 +61,27 @@ export default function CreateScreen() {
       }
     }, [])
   );
+
+  useFocusEffect(useCallback(() => {
+    let cancelled = false;
+    (async () => {
+      if (!session?.user?.id) {
+        setAvailableTags([]);
+        setTagsLoading(false);
+        return;
+      }
+      setTagsLoading(true);
+      try {
+        const data = await getMyTags(session.user.id);
+        if (!cancelled) setAvailableTags(data);
+      } catch {
+        if (!cancelled) setAvailableTags([]);
+      } finally {
+        if (!cancelled) setTagsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [session?.user?.id]));
   const handleCreate = async () => {
     const clean = sanitizeText(title);
     const validation = validateGalleryTitle(clean);
@@ -72,7 +97,7 @@ export default function CreateScreen() {
         return;
       }
       Keyboard.dismiss();
-      setDraft({ title: clean, privacy });
+      setDraft({ title: clean, privacy, selectedTagIds: Array.from(selectedTagIds) } as any);
       (navigation as any).navigate('GalleryInviteNew', { pendingCreate: true, galleryTitle: clean, privacy });
     } finally {
       setLoading(false);
@@ -85,6 +110,7 @@ export default function CreateScreen() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
+        <Pressable onPress={Keyboard.dismiss} accessible={false} style={{ flex: 1, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' }}>
         <View style={styles.iconWrap}>
           <View style={styles.iconCircle}>
             <Text style={styles.iconText}>+</Text>
@@ -133,6 +159,49 @@ export default function CreateScreen() {
           })}
         </View>
 
+        {!tagsLoading && availableTags.length > 0 && (
+          <View style={{ marginTop: 12, marginBottom: 32, width: '100%' }}>
+            <Text style={{ fontSize: 13, fontWeight: '500', color: '#8E8E93', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+              Tags (optional)
+            </Text>
+            <Text style={{ fontSize: 14, color: '#8E8E93', marginBottom: 12 }}>
+              Tap to apply your tags to this gallery.
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {availableTags.map(tag => {
+                const isSelected = selectedTagIds.has(tag.id);
+                return (
+                  <Pressable
+                    key={tag.id}
+                    onPress={() => {
+                      setSelectedTagIds(prev => {
+                        const next = new Set(prev);
+                        if (next.has(tag.id)) next.delete(tag.id);
+                        else next.add(tag.id);
+                        return next;
+                      });
+                    }}
+                    style={{
+                      height: 36,
+                      paddingHorizontal: 14,
+                      borderRadius: 18,
+                      alignItems: 'center',
+                      flexDirection: 'row',
+                      backgroundColor: isSelected ? tag.color : '#FFFFFF',
+                      borderWidth: isSelected ? 0 : 1,
+                      borderColor: '#E5E5EA',
+                    }}
+                  >
+                    <Text style={{ color: isSelected ? '#FFFFFF' : '#1C1C1E', fontSize: 14, fontWeight: '500' }}>
+                      {tag.emoji ? `${tag.emoji} ` : ''}{tag.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
         <Pressable
           style={({ pressed }) => [
             styles.button,
@@ -147,6 +216,7 @@ export default function CreateScreen() {
           ) : (
             <Text style={styles.buttonText}>Create Gallery</Text>
           )}
+        </Pressable>
         </Pressable>
       </KeyboardAvoidingView>
     </SafeAreaView>

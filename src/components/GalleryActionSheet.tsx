@@ -9,13 +9,19 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../context/AuthContext';
 import { fetchGalleryPhotos } from '../lib/galleries';
 import { supabase } from '../lib/supabase';
+import { getMyTags, getGalleryTags, applyTagToGallery, removeTagFromGallery } from '../lib/tags';
+import type { ProfileTag } from '../lib/tags';
 import type { Gallery, GalleryPrivacy, Photo } from '../types/database';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -29,7 +35,7 @@ const PRIVACY_OPTIONS: { value: GalleryPrivacy; label: string; description: stri
   { value: 'public', label: 'Public', description: 'Anyone on Momento' },
 ];
 
-type Mode = 'actions' | 'rename' | 'privacy' | 'cover';
+type Mode = 'actions' | 'rename' | 'privacy' | 'cover' | 'tags';
 
 type Props = {
   gallery: Gallery | null;
@@ -50,6 +56,9 @@ export function GalleryActionSheet({
   onDelete,
   currentUserId,
 }: Props) {
+  const navigation = useNavigation();
+  const { user } = useAuth();
+
   const [mode, setMode] = useState<Mode>('actions');
   const [renameText, setRenameText] = useState('');
   const [draftPrivacy, setDraftPrivacy] = useState<GalleryPrivacy>('friends');
@@ -57,6 +66,10 @@ export function GalleryActionSheet({
   const [coverPhotos, setCoverPhotos] = useState<Photo[]>([]);
   const [coverPhotosLoading, setCoverPhotosLoading] = useState(false);
   const [coverSaving, setCoverSaving] = useState(false);
+  const [userTags, setUserTags] = useState<ProfileTag[]>([]);
+  const [appliedTagIds, setAppliedTagIds] = useState<Set<string>>(new Set());
+  const [tagsLoading, setTagsLoading] = useState(false);
+  const [tagsSaving, setTagsSaving] = useState(false);
 
   const isOwner = !!currentUserId && !!gallery && (gallery as any).created_by === currentUserId;
   const isAdmin = gallery?.role === 'admin';
@@ -67,8 +80,32 @@ export function GalleryActionSheet({
       setMode('actions');
       setRenameText(gallery.title);
       setDraftPrivacy(gallery.privacy);
+      setUserTags([]);
+      setAppliedTagIds(new Set());
     }
   }, [gallery?.id]);
+
+  useEffect(() => {
+    if (mode !== 'tags' || !gallery || !user?.id) return;
+    let cancelled = false;
+    const loadTags = async () => {
+      setTagsLoading(true);
+      try {
+        const [tags, galleryTags] = await Promise.all([
+          getMyTags(user.id!),
+          getGalleryTags(gallery.id),
+        ]);
+        if (!cancelled) {
+          setUserTags(tags);
+          setAppliedTagIds(new Set(galleryTags.map(t => t.tag_id)));
+        }
+      } finally {
+        if (!cancelled) setTagsLoading(false);
+      }
+    };
+    loadTags();
+    return () => { cancelled = true; };
+  }, [mode, gallery?.id]);
 
   const handleSaveRename = async () => {
     const trimmed = renameText.trim();
@@ -128,6 +165,24 @@ export function GalleryActionSheet({
     );
   };
 
+  const handleToggleTag = async (tagId: string) => {
+    if (tagsSaving || !gallery) return;
+    const wasApplied = appliedTagIds.has(tagId);
+    const newSet = new Set(appliedTagIds);
+    if (wasApplied) newSet.delete(tagId); else newSet.add(tagId);
+    setAppliedTagIds(newSet);
+    setTagsSaving(true);
+    try {
+      if (wasApplied) await removeTagFromGallery(gallery.id, tagId);
+      else await applyTagToGallery(gallery.id, tagId);
+    } catch {
+      setAppliedTagIds(appliedTagIds);
+      Alert.alert("Couldn't update tags", 'Try again.');
+    } finally {
+      setTagsSaving(false);
+    }
+  };
+
   return (
     <Modal visible={gallery !== null} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView
@@ -141,16 +196,20 @@ export function GalleryActionSheet({
             <View style={styles.handle} />
             <Text style={styles.title} numberOfLines={1}>{gallery?.title}</Text>
             {([
-              { label: 'Rename', onPress: () => setMode('rename') },
-              { label: 'Change Privacy', onPress: () => setMode('privacy') },
-              ...(canManage ? [{ label: 'Change Cover Photo', onPress: handleChangeCover }] : []),
-            ] as { label: string; onPress: () => void }[]).map(opt => (
+              { label: 'Rename', icon: null as React.ReactNode, onPress: () => setMode('rename') },
+              { label: 'Tags', icon: <Ionicons name="pricetags-outline" size={20} color="#8E8E93" />, onPress: () => setMode('tags') },
+              { label: 'Change Privacy', icon: null as React.ReactNode, onPress: () => setMode('privacy') },
+              ...(canManage ? [{ label: 'Change Cover Photo', icon: null as React.ReactNode, onPress: handleChangeCover }] : []),
+            ] as { label: string; icon: React.ReactNode; onPress: () => void }[]).map(opt => (
               <Pressable
                 key={opt.label}
                 style={({ pressed }) => [styles.option, pressed && { opacity: 0.6 }]}
                 onPress={opt.onPress}
               >
-                <Text style={styles.optionText}>{opt.label}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  {opt.icon}
+                  <Text style={styles.optionText}>{opt.label}</Text>
+                </View>
               </Pressable>
             ))}
             <Pressable
@@ -274,6 +333,64 @@ export function GalleryActionSheet({
                 </Pressable>
               </View>
             )}
+          </View>
+        )}
+
+        {mode === 'tags' && (
+          <View style={[styles.card, styles.cardTall]}>
+            <View style={styles.handle} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+              <Pressable onPress={() => setMode('actions')} style={{ padding: 4, marginRight: 8 }}>
+                <Ionicons name="chevron-back" size={20} color="#007AFF" />
+              </Pressable>
+              <Text style={[styles.title, { flex: 1, textAlign: 'center', marginRight: 28 }]}>Tags</Text>
+            </View>
+            <Text style={styles.subtitle}>Tap to toggle which of your tags apply to this gallery.</Text>
+            {tagsLoading ? (
+              <ActivityIndicator color="#FF6B6B" style={{ marginVertical: 32 }} />
+            ) : userTags.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                <Text style={{ color: '#9CA3AF', fontSize: 14, marginBottom: 12 }}>You haven't created any tags yet.</Text>
+                <Pressable onPress={() => { onClose(); navigation.navigate('ManageTags' as never); }}>
+                  <Text style={{ color: '#FF6B6B', fontSize: 14, fontWeight: '500' }}>Create your first tag →</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 16 }}>
+                {userTags.map((tag) => {
+                  const applied = appliedTagIds.has(tag.id);
+                  return (
+                    <Pressable
+                      key={tag.id}
+                      disabled={tagsSaving}
+                      onPress={() => handleToggleTag(tag.id)}
+                      style={{
+                        height: 36,
+                        paddingHorizontal: 14,
+                        borderRadius: 18,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        backgroundColor: applied ? tag.color : 'white',
+                        borderWidth: applied ? 0 : 1,
+                        borderColor: '#E5E5EA',
+                        opacity: tagsSaving ? 0.6 : 1,
+                      }}
+                    >
+                      <Text style={{ color: applied ? 'white' : '#1C1C1E', fontSize: 14, fontWeight: '500' }}>
+                        {tag.emoji ? `${tag.emoji} ` : ''}{tag.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
+            <Pressable
+              style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.7 }]}
+              onPress={onClose}
+            >
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </Pressable>
           </View>
         )}
 

@@ -17,12 +17,17 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { fetchGalleryPhotos, uploadGalleryPhoto } from '../lib/galleries';
 import { requestPhotoRemoval, getRemovalRequests } from '../lib/photoRemoval';
+import { getOwnerTagsForGallery } from '../lib/tags';
+import type { GalleryTagInfo } from '../lib/tags';
 import type { RootStackParamList } from '../navigation/types';
 import type { GalleryPrivacy, Photo } from '../types/database';
 import CommentsSheet from '../components/CommentsSheet';
+import GalleryHeaderTagsRow from '../components/GalleryHeaderTagsRow';
+import TagApplyDropdown from '../components/TagApplyDropdown';
 import { ContributorsModal } from '../components/ContributorsModal';
 import { RemovalRequestsModal } from '../components/RemovalRequestsModal';
 import { SettingsModal } from '../components/SettingsModal';
+import { GalleryActionSheet } from '../components/GalleryActionSheet';
 import { PhotoGrid } from '../components/PhotoGrid';
 import UploadProgressOverlay from '../components/UploadProgressOverlay';
 import { PhotoUploadReviewModal } from '../components/PhotoUploadReviewModal';
@@ -52,6 +57,7 @@ export default function GalleryDetailScreen() {
   const [showContributors, setShowContributors] = useState(false);
   const [contributorRefreshKey, setContributorRefreshKey] = useState(0);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [actionSheetVisible, setActionSheetVisible] = useState(false);
   const [showRemovalRequests, setShowRemovalRequests] = useState(false);
   const [removalRequestCount, setRemovalRequestCount] = useState(0);
   const [contributorCount, setContributorCount] = useState(0);
@@ -67,6 +73,8 @@ export default function GalleryDetailScreen() {
   const [pendingClassified, setPendingClassified] = useState<ClassifiedPhoto[]>([]);
   const [pendingUniqueCount, setPendingUniqueCount] = useState(0);
   const [pendingDuplicateCount, setPendingDuplicateCount] = useState(0);
+  const [galleryTags, setGalleryTags] = useState<GalleryTagInfo[]>([]);
+  const [tagDropdownVisible, setTagDropdownVisible] = useState(false);
   const highlightConsumed = useRef(false);
 
   const isOwner = !!session?.user.id && session.user.id === galleryMeta?.created_by;
@@ -105,6 +113,7 @@ export default function GalleryDetailScreen() {
 
   useEffect(() => {
     Promise.all([load(), loadGalleryMeta()]).finally(() => setLoading(false));
+    getOwnerTagsForGallery(galleryId).then(setGalleryTags).catch(() => {});
     getRemovalRequests(galleryId).then(data => setRemovalRequestCount(data.length));
     supabase.from('gallery_members').select('user_id', { count: 'exact', head: true }).eq('gallery_id', galleryId).eq('status', 'accepted').then(({ count }) => setContributorCount(count ?? 0));
     if (session?.user.id) {
@@ -353,6 +362,12 @@ export default function GalleryDetailScreen() {
         </View>
       </View>
 
+      <GalleryHeaderTagsRow
+        tags={galleryTags}
+        isOwner={isOwner}
+        onPressTags={() => setTagDropdownVisible(true)}
+      />
+
       {loading ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 4 }}>
           {Array.from({ length: 9 }).map((_, i) => (
@@ -446,12 +461,45 @@ export default function GalleryDetailScreen() {
         galleryId={galleryId}
         currentPrivacy={galleryMeta?.privacy ?? 'friends'}
         onClose={() => setSettingsVisible(false)}
-        onPrivacySaved={(privacy) => setGalleryMeta(prev => prev ? { ...prev, privacy } : prev)}
+        onPrivacySaved={(privacy) => { setGalleryMeta(prev => prev ? { ...prev, privacy } : prev); getOwnerTagsForGallery(galleryId).then(setGalleryTags).catch(() => {}); }}
         onGalleryDeleted={() => navigation.goBack()}
-        onCoverPhotoUpdated={() => loadGalleryMeta()}
+        onCoverPhotoUpdated={() => { loadGalleryMeta(); getOwnerTagsForGallery(galleryId).then(setGalleryTags).catch(() => {}); }}
         onTransferOwnership={() => {
           setSettingsVisible(false);
           navigation.navigate('TransferOwnership', { galleryId, galleryTitle: galleryMeta?.title ?? '' });
+        }}
+      />
+      <GalleryActionSheet
+        gallery={actionSheetVisible && galleryMeta ? { ...galleryMeta, id: galleryId } as any : null}
+        onClose={() => {
+          setActionSheetVisible(false);
+          getOwnerTagsForGallery(galleryId).then(setGalleryTags).catch(() => {});
+        }}
+        onSaveRename={async (_title) => {
+          await loadGalleryMeta();
+          await load();
+        }}
+        onSavePrivacy={async (_privacy) => {
+          await loadGalleryMeta();
+          await load();
+        }}
+        onSelectCover={async (_photoUrl) => {
+          await loadGalleryMeta();
+          await load();
+        }}
+        onDelete={() => {
+          setActionSheetVisible(false);
+          setSettingsVisible(true);
+        }}
+        currentUserId={session?.user?.id}
+      />
+      <TagApplyDropdown
+        visible={tagDropdownVisible}
+        viewerId={session?.user?.id ?? ''}
+        galleryId={galleryId}
+        onClose={() => setTagDropdownVisible(false)}
+        onChanged={() => {
+          getOwnerTagsForGallery(galleryId).then(setGalleryTags).catch(() => {});
         }}
       />
       <UploadProgressOverlay

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -28,6 +28,9 @@ import { GalleryCard, CARD_GAP } from '../components/GalleryCard';
 import { Skeleton, SkeletonCircle, SkeletonText } from '../components/Skeleton';
 import { FriendsListModal } from '../components/FriendsListModal';
 import { GalleryLongPressSheet } from '../components/GalleryLongPressSheet';
+import TagFilterRow from '../components/TagFilterRow';
+import { getMyTags, getMyTagsAppliedToGalleries, getGalleryIdsWithMyTags } from '../lib/tags';
+import type { ProfileTag, GalleryTagInfo } from '../lib/tags';
 
 const AVATAR_SIZE = 96;
 const BADGE_SIZE = 26;
@@ -63,6 +66,23 @@ export default function ProfileScreen() {
   const [showFriendsList, setShowFriendsList] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [longPressSheetGallery, setLongPressSheetGallery] = useState<Gallery | null>(null);
+  const [ownerTags, setOwnerTags] = useState<ProfileTag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
+  const [galleryTagsMap, setGalleryTagsMap] = useState<Map<string, GalleryTagInfo[]>>(new Map());
+  const [taggedSharedGalleries, setTaggedSharedGalleries] = useState<Gallery[]>([]);
+
+  const filteredGalleries = useMemo(() => {
+    const merged = selectedTagIds.size > 0
+      ? [...galleries, ...taggedSharedGalleries]
+      : galleries;
+    const seen = new Set<string>();
+    const deduped = merged.filter(g => { if (seen.has(g.id)) return false; seen.add(g.id); return true; });
+    if (selectedTagIds.size === 0) return deduped;
+    return deduped.filter(g => {
+      const gTags = galleryTagsMap.get(g.id) ?? [];
+      return gTags.some(t => selectedTagIds.has(t.tag_id));
+    });
+  }, [galleries, taggedSharedGalleries, selectedTagIds, galleryTagsMap]);
 
   const tutorial = useTutorial();
   const friendsIconRef = useRef(null);
@@ -150,6 +170,17 @@ export default function ProfileScreen() {
 
     console.log('loadGalleries owned:', owned?.length, 'member:', memberGalleries?.length);
     setGalleries(sorted);
+
+    try {
+      const [ownerTagsData, tagsMap] = await Promise.all([
+        getMyTags(user!.id),
+        getMyTagsAppliedToGalleries(sorted.map((g: any) => g.id), user!.id),
+      ]);
+      setOwnerTags(ownerTagsData);
+      setGalleryTagsMap(tagsMap);
+    } catch {
+      // non-critical
+    }
   };
 
   const handleGalleryLongPress = (gallery: Gallery) => {
@@ -205,6 +236,33 @@ export default function ProfileScreen() {
       loadFriendCount();
     }, [user?.id])
   );
+
+  useEffect(() => {
+    if (!userId) return;
+    if (selectedTagIds.size === 0) {
+      setTaggedSharedGalleries([]);
+      return;
+    }
+    (async () => {
+      try {
+        const ids = await getGalleryIdsWithMyTags(userId, Array.from(selectedTagIds));
+        const ownedIds = new Set(galleries.map(g => g.id));
+        const nonOwnedIds = Array.from(ids).filter(id => !ownedIds.has(id));
+        if (nonOwnedIds.length === 0) { setTaggedSharedGalleries([]); return; }
+        const { data, error } = await supabase.from('galleries').select('*').in('id', nonOwnedIds);
+        if (error || !data) { setTaggedSharedGalleries([]); return; }
+        setTaggedSharedGalleries(data);
+      } catch {
+        setTaggedSharedGalleries([]);
+      }
+    })();
+  }, [selectedTagIds, userId, galleries]);
+
+  useEffect(() => {
+    if (!userId || taggedSharedGalleries.length === 0) return;
+    const allIds = [...galleries.map(g => g.id), ...taggedSharedGalleries.map(g => g.id)];
+    getMyTagsAppliedToGalleries(allIds, userId).then(setGalleryTagsMap).catch(() => {});
+  }, [taggedSharedGalleries, userId]);
 
   const handleAvatarPress = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -376,18 +434,47 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
+        <View style={{ marginTop: 12 }}>
+          {ownerTags.length > 0 && (
+            <Text style={{
+              fontSize: 13,
+              fontWeight: '500',
+              color: '#8E8E93',
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+              paddingHorizontal: 16,
+              marginBottom: 6,
+              marginTop: 4,
+            }}>
+              Tags
+            </Text>
+          )}
+          <TagFilterRow
+            tags={ownerTags}
+            selectedTagIds={selectedTagIds}
+            onToggle={(id) => setSelectedTagIds(prev => {
+              const next = new Set(prev);
+              if (next.has(id)) next.delete(id); else next.add(id);
+              return next;
+            })}
+            onClear={() => setSelectedTagIds(new Set())}
+          />
+        </View>
+
         {/* Galleries grid */}
         <View style={styles.galleriesSection}>
           <Text style={styles.galleriesSectionTitle}>My Galleries</Text>
           <FlatList
-            data={galleries}
+            data={filteredGalleries}
             keyExtractor={(item) => item.id}
             numColumns={2}
             scrollEnabled={false}
             columnWrapperStyle={styles.galleryRow}
             contentContainerStyle={styles.galleryGrid}
             ListEmptyComponent={
-              <Text style={styles.galleryEmpty}>No galleries yet.</Text>
+              selectedTagIds.size > 0
+                ? <Text style={[styles.galleryEmpty, { marginTop: 40 }]}>No galleries match this filter.</Text>
+                : <Text style={styles.galleryEmpty}>No galleries yet.</Text>
             }
             renderItem={({ item }) => (
               <GalleryCard
@@ -397,6 +484,7 @@ export default function ProfileScreen() {
                 onCommentSheetClose={loadGalleries}
                 currentUserId={user?.id}
                 friendIds={friendIds}
+                tags={galleryTagsMap.get(item.id) ?? []}
               />
             )}
           />

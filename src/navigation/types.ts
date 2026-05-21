@@ -49,6 +49,7 @@ export type RootStackParamList = {
   DefaultGalleryPrivacy: undefined;
   NotificationSettings: undefined;
   TransferOwnership: { galleryId: string; galleryTitle: string };
+  ManageTags: undefined;
 };
 
 export type MainTabParamList = {

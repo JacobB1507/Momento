@@ -21,7 +21,8 @@ import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-qr-code';
 import { supabase } from '../lib/supabase';
 import type { RootStackParamList } from '../navigation/types';
-import { clearDraft } from '../lib/createGalleryDraft';
+import { clearDraft, getDraft } from '../lib/createGalleryDraft';
+import { applyTagToGallery } from '../lib/tags';
 import { checkRateLimit } from '../lib/rateLimit';
 import { userFacingError, reportError } from '../lib/errorReport';
 import { SearchPersonRow } from '../components/SearchPersonRow';
@@ -328,6 +329,14 @@ export default function GalleryInviteNewScreen() {
       }
       setCreatedGalleryId(data.id);
       await init(data.id);
+      // Apply any tags selected during creation. Best-effort — do not block on failure.
+      const draft = getDraft();
+      const draftSelectedTagIds = (draft as any)?.selectedTagIds ?? [];
+      if (Array.isArray(draftSelectedTagIds) && draftSelectedTagIds.length > 0 && data.id) {
+        await Promise.allSettled(
+          draftSelectedTagIds.map((tagId: string) => applyTagToGallery(data.id, tagId))
+        );
+      }
       return data.id;
     } finally {
       creatingRef.current = false;
@@ -471,18 +480,20 @@ export default function GalleryInviteNewScreen() {
         </Pressable>
       </View>
 
-      <Animated.View style={[styles.contributorBanner, { opacity: bannerOpacity, transform: [{ scale: bannerScale }] }]}>
-        <View style={{ flexDirection: 'row' }}>
-          {acceptedContributorAvatars.map((uri, i) => (
-            <Image
-              key={i}
-              source={{ uri }}
-              style={[styles.bannerAvatar, i > 0 ? { marginLeft: -8 } : {}]}
-            />
-          ))}
-        </View>
-        <Text style={styles.bannerText}>{acceptedContributorCount} joined</Text>
-      </Animated.View>
+      {acceptedContributorCount > 0 && (
+        <Animated.View style={[styles.contributorBanner, { opacity: bannerOpacity, transform: [{ scale: bannerScale }] }]}>
+          <View style={{ flexDirection: 'row' }}>
+            {acceptedContributorAvatars.map((uri, i) => (
+              <Image
+                key={i}
+                source={{ uri }}
+                style={[styles.bannerAvatar, i > 0 ? { marginLeft: -8 } : {}]}
+              />
+            ))}
+          </View>
+          <Text style={styles.bannerText}>{acceptedContributorCount} joined</Text>
+        </Animated.View>
+      )}
 
       <ScrollView
         ref={scrollRef}
@@ -538,6 +549,20 @@ export default function GalleryInviteNewScreen() {
           </View>
         </View>
 
+        {/* Search bar */}
+        <View onLayout={(e) => { searchBarYRef.current = e.nativeEvent.layout.y; }}>
+          <TextInput
+            style={[styles.searchInput, { marginTop: 8 }]}
+            placeholder="Search friends by name or username..."
+            placeholderTextColor="#6B7280"
+            value={searchText}
+            onChangeText={setSearchText}
+            autoCapitalize="none"
+            autoCorrect={false}
+            onFocus={() => scrollRef.current?.scrollTo({ y: Math.max(0, searchBarYRef.current - 8), animated: true })}
+          />
+        </View>
+
         {/* Section — Friends (idle: top-5 by recency; hidden while searching) */}
         <View style={styles.friendsSection}>
           <Text style={styles.dividerLabel}>FRIENDS</Text>
@@ -562,20 +587,6 @@ export default function GalleryInviteNewScreen() {
               ))}
             </ScrollView>
           ) : null}
-        </View>
-
-        {/* Search bar */}
-        <View onLayout={(e) => { searchBarYRef.current = e.nativeEvent.layout.y; }}>
-          <TextInput
-            style={[styles.searchInput, { marginTop: 8 }]}
-            placeholder="Search friends by name or username..."
-            placeholderTextColor="#6B7280"
-            value={searchText}
-            onChangeText={setSearchText}
-            autoCapitalize="none"
-            autoCorrect={false}
-            onFocus={() => scrollRef.current?.scrollTo({ y: Math.max(0, searchBarYRef.current - 8), animated: true })}
-          />
         </View>
 
         {/* Search results — only shown when typing */}

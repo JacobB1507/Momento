@@ -7,6 +7,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { Gallery } from '../types/database';
 import { supabase } from '../lib/supabase';
 import { SkeletonCircle } from './Skeleton';
+import TagChipsRow from './TagChipsRow';
+import TagsPopover from './TagsPopover';
+import type { GalleryTagInfo } from '../lib/tags';
 
 export const CARD_GAP = 12;
 export const SCREEN_PADDING = 16;
@@ -51,6 +54,7 @@ export function GalleryCard({
   currentUserId,
   friendIds = [],
   refreshKey,
+  tags,
 }: {
   gallery: Gallery;
   onPress: () => void;
@@ -60,10 +64,12 @@ export function GalleryCard({
   currentUserId?: string;
   friendIds?: string[];
   refreshKey?: number;
+  tags?: GalleryTagInfo[];
 }) {
   const [contributors, setContributors] = useState<Contributor[]>([]);
   const [showContributors, setShowContributors] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [popoverVisible, setPopoverVisible] = useState(false);
 
   const load = useCallback(async () => {
     const { data: memberRows } = await supabase
@@ -211,6 +217,11 @@ export function GalleryCard({
             )}
           </>
         )}
+        {(tags?.length ?? 0) > 0 && (
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-start', marginTop: 6, marginBottom: 4 }}>
+            <TagChipsRow tags={tags ?? []} onOpenAll={() => setPopoverVisible(true)} />
+          </View>
+        )}
         <Pressable
           style={styles.commentRow}
           onPress={() => { setShowComments(true); onCommentPress?.(); }}
@@ -222,6 +233,7 @@ export function GalleryCard({
       </View>
     </Pressable>
     <CommentsSheet galleryId={gallery.id} visible={showComments} onClose={() => { setShowComments(false); onCommentSheetClose?.(); }} />
+    <TagsPopover visible={popoverVisible} tags={tags ?? []} onClose={() => setPopoverVisible(false)} />
   </>
   );
 }

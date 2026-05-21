@@ -50,6 +50,18 @@ export default function MessageBubble({ message, currentUserId, onEdit, onDelete
   const isOwn = message.sender_id === currentUserId;
   const isMenuOpen = activeMessageId === message.id;
   const showReadIndicator = isOwn && isLast && message.read === true && !!message.read_at;
+  if (isOwn && isLast) {
+    console.warn('[MessageBubble] last own msg state', {
+      msgId: message.id,
+      isOwn,
+      isLast,
+      read: message.read,
+      readType: typeof message.read,
+      read_at: message.read_at,
+      read_at_type: typeof message.read_at,
+      showReadIndicator,
+    });
+  }
   const [within2Mins, setWithin2Mins] = useState(false);
 
   const handleLongPress = async () => {

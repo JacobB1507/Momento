@@ -41,9 +41,53 @@ function tintForId(id: string): string {
   return `hsla(${h}, 60%, 50%, 0.08)`;
 }
 
+function formatRelativeShort(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const ms = new Date(iso).getTime();
+  if (isNaN(ms)) return '';
+  const diffSec = Math.floor((Date.now() - ms) / 1000);
+  if (diffSec < 60) return 'just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 export default function ConversationRow({ conversation, currentUserId, onPress, onLongPress, customPreview, isPinned }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const isUnread = (conversation.unread_count ?? 0) > 0;
+  const unreadDisplay = (conversation.unread_count ?? 0) > 99 ? '99+' : String(conversation.unread_count ?? 0);
+
+  const lastSenderId = conversation.last_message_sender_id ?? null;
+  const lastRead = conversation.last_message_read ?? null;
+  const lastReadAt = conversation.last_message_read_at ?? null;
+  const lastAt = conversation.last_message_at ?? null;
+
+  let previewLabel: string;
+  let previewIsUnread = false;
+  let previewIsRead = false;
+
+  if (!lastSenderId || !lastAt) {
+    previewLabel = 'No messages yet';
+  } else if (lastSenderId !== currentUserId) {
+    if (lastRead === false) {
+      previewLabel = `New message · ${formatRelativeShort(lastAt)}`;
+      previewIsUnread = true;
+    } else {
+      previewLabel = `Received · ${formatRelativeShort(lastAt)}`;
+    }
+  } else {
+    if (lastRead === true && lastReadAt) {
+      previewLabel = `Read · ${formatRelativeShort(lastReadAt)}`;
+      previewIsRead = true;
+    } else {
+      previewLabel = `Sent · ${formatRelativeShort(lastAt)}`;
+    }
+  }
+
   const otherId =
     conversation.participant_1 !== currentUserId
       ? conversation.participant_1
@@ -92,12 +136,24 @@ export default function ConversationRow({ conversation, currentUserId, onPress, 
             <MaterialCommunityIcons name="pin" size={18} color="#9CA3AF" style={{ marginLeft: 4 }} />
           )}
         </View>
-        <Text style={[styles.preview, customPreview ? { fontStyle: 'italic', color: '#9ca3af' } : {}, isUnread && !customPreview && styles.previewUnread]} numberOfLines={1}>
-          {customPreview ?? conversation.last_message ?? 'No messages yet'}
+        <Text
+          style={[
+            styles.preview,
+            customPreview ? { fontStyle: 'italic', color: '#9ca3af' } : {},
+            (isUnread || previewIsUnread) && !customPreview && styles.previewUnread,
+          ]}
+          numberOfLines={1}
+        >
+          {customPreview ?? previewLabel}
         </Text>
       </View>
-      <View style={styles.right}>
+      <View style={styles.rightColumn}>
         <Text style={styles.time}>{formatTime(conversation.last_message_at)}</Text>
+        {isUnread && !customPreview && (
+          <View style={styles.unreadBadge}>
+            <Text style={styles.unreadBadgeText}>{unreadDisplay}</Text>
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -128,8 +184,27 @@ const styles = StyleSheet.create({
   nameSkeleton: { width: 80, height: 12, borderRadius: 4, backgroundColor: '#E5E7EB' },
   username: { fontSize: 15, fontWeight: '700', color: '#111827', flexShrink: 1 },
   preview: { fontSize: 13, color: '#6b7280' },
-  right: { alignItems: 'flex-end', gap: 4 },
+  rightColumn: {
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginLeft: 8,
+  },
   time: { fontSize: 11, color: '#9CA3AF' },
   nameUnread: { fontWeight: '700' },
   previewUnread: { fontWeight: '600', color: '#111827' },
+  unreadBadge: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  unreadBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
 });
