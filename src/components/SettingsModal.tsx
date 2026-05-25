@@ -7,11 +7,13 @@ import {
   Image,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { fetchGalleryPhotos } from '../lib/galleries';
 import type { GalleryPrivacy, Photo } from '../types/database';
@@ -21,10 +23,10 @@ const GRID_GAP = 8;
 const NUM_COLS = 3;
 const GRID_ITEM_WIDTH = (WINDOW_WIDTH * 0.88 - 48 - GRID_GAP * (NUM_COLS - 1)) / NUM_COLS;
 
-const PRIVACY_OPTIONS: { value: GalleryPrivacy; label: string; description: string }[] = [
-  { value: 'private', label: 'Private', description: 'Only members' },
-  { value: 'friends', label: 'Friends', description: 'Your friends only' },
-  { value: 'public', label: 'Public', description: 'Anyone on Momento' },
+const PRIVACY_OPTIONS: { value: GalleryPrivacy; label: string; description: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
+  { value: 'private', label: 'Private', description: 'Only members', icon: 'lock-closed-outline' },
+  { value: 'friends', label: 'Friends', description: 'Your friends only', icon: 'people-outline' },
+  { value: 'public', label: 'Public', description: 'Anyone on Momento', icon: 'globe-outline' },
 ];
 
 type Props = {
@@ -48,16 +50,40 @@ export function SettingsModal({
   onTransferOwnership,
   onCoverPhotoUpdated,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const [draftPrivacy, setDraftPrivacy] = useState<GalleryPrivacy>(currentPrivacy);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<'main' | 'cover-picker'>('main');
   const [coverPhotos, setCoverPhotos] = useState<Photo[]>([]);
   const [coverState, setCoverState] = useState<'idle' | 'loading' | 'saving'>('idle');
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+  const [photoCount, setPhotoCount] = useState<number>(0);
+  const [memberCount, setMemberCount] = useState<number>(0);
+
+  const isDirty = draftPrivacy !== currentPrivacy;
 
   useEffect(() => {
     if (visible) { setDraftPrivacy(currentPrivacy); setMode('main'); }
   }, [visible, currentPrivacy]);
+
+  useEffect(() => {
+    if (!visible || !galleryId) return;
+    (async () => {
+      const [{ count: pc }, { count: mc }] = await Promise.all([
+        supabase
+          .from('gallery_photos')
+          .select('id', { count: 'exact', head: true })
+          .eq('gallery_id', galleryId),
+        supabase
+          .from('gallery_members')
+          .select('user_id', { count: 'exact', head: true })
+          .eq('gallery_id', galleryId)
+          .eq('status', 'accepted'),
+      ]);
+      setPhotoCount(pc ?? 0);
+      setMemberCount(mc ?? 0);
+    })();
+  }, [visible, galleryId]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -120,10 +146,13 @@ export function SettingsModal({
           {mode === 'cover-picker' ? (
             <>
               <View style={styles.pickerHeader}>
-                <Pressable onPress={() => setMode('main')} hitSlop={12}>
-                  <Text style={styles.pickerBack}>← Back</Text>
+                <Pressable onPress={() => setMode('main')} hitSlop={12} style={styles.pickerBackBtn}>
+                  <Ionicons name="chevron-back" size={26} color="#111827" />
                 </Pressable>
-                <Text style={styles.pickerTitle}>Choose Cover Photo</Text>
+                <Text style={styles.pickerTitle}>Choose cover photo</Text>
+                <Pressable onPress={onClose} hitSlop={12}>
+                  <Ionicons name="close" size={22} color="#111827" />
+                </Pressable>
               </View>
               {coverState === 'loading' ? (
                 <ActivityIndicator color="#FF6B6B" style={{ marginVertical: 32 }} />
@@ -152,56 +181,118 @@ export function SettingsModal({
             </>
           ) : (
             <>
-              <Text style={styles.title}>Gallery Settings</Text>
+              {/* Header */}
+              <View style={styles.mainHeader}>
+                <Text style={styles.title}>Gallery Settings</Text>
+                <Pressable onPress={onClose} hitSlop={12}>
+                  <Ionicons name="close" size={24} color="#111827" />
+                </Pressable>
+              </View>
 
-              <Pressable style={({ pressed }) => [styles.actionRow, pressed && styles.actionRowPressed]} onPress={openCoverPicker}>
-                <View style={styles.actionRowLeft}>
-                  <View style={styles.actionIcon}>
-                    <Ionicons name="image-outline" size={18} color="#374151" />
+              {/* Scrollable sections */}
+              <ScrollView bounces={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+
+                {/* STAT STRIP */}
+                <View style={styles.statStrip}>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statNumber}>{photoCount}</Text>
+                    <Text style={styles.statLabel}>{photoCount === 1 ? 'photo' : 'photos'}</Text>
                   </View>
-                  <Text style={styles.actionRowText}>Change Cover Photo</Text>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statItem}>
+                    <Text style={styles.statNumber}>{memberCount}</Text>
+                    <Text style={styles.statLabel}>{memberCount === 1 ? 'member' : 'members'}</Text>
+                  </View>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
-              </Pressable>
 
-              <Text style={styles.section}>Privacy</Text>
-              <View style={styles.privacyRow}>
-                {PRIVACY_OPTIONS.map(opt => {
+                {/* SECTION 1 — PRIVACY */}
+                <Text style={styles.sectionLabel}>PRIVACY</Text>
+                {PRIVACY_OPTIONS.map((opt, idx) => {
                   const selected = draftPrivacy === opt.value;
                   return (
-                    <Pressable
-                      key={opt.value}
-                      style={({ pressed }) => [styles.privacyOption, selected && styles.privacyOptionSelected, pressed && !selected && { opacity: 0.7 }]}
-                      onPress={() => setDraftPrivacy(opt.value)}
-                    >
-                      <Text style={[styles.privacyLabel, selected && styles.privacyLabelSelected]}>{opt.label}</Text>
-                      <Text style={[styles.privacyDesc, selected && styles.privacyDescSelected]}>{opt.description}</Text>
-                    </Pressable>
+                    <React.Fragment key={opt.value}>
+                      <Pressable
+                        style={({ pressed }) => [styles.privacyRow, pressed && styles.rowPressed]}
+                        onPress={() => setDraftPrivacy(opt.value)}
+                      >
+                        <Ionicons name={opt.icon} size={22} color="#4B5563" />
+                        <View style={styles.privacyTextCol}>
+                          <Text style={styles.privacyName}>{opt.label}</Text>
+                          <Text style={styles.privacyDesc}>{opt.description}</Text>
+                        </View>
+                        <View style={[styles.radio, selected && styles.radioSelected]}>
+                          {selected && <View style={styles.radioDot} />}
+                        </View>
+                      </Pressable>
+                      {idx < PRIVACY_OPTIONS.length - 1 && <View style={styles.separator} />}
+                    </React.Fragment>
                   );
                 })}
-              </View>
-              <View style={styles.buttons}>
+
+                {/* SECTION 2 — GALLERY */}
+                <Text style={[styles.sectionLabel, { marginTop: 20 }]}>GALLERY</Text>
                 <Pressable
-                  style={({ pressed }) => [styles.save, saving && { opacity: 0.45 }, pressed && { opacity: 0.8 }]}
-                  onPress={handleSave}
-                  disabled={saving}
+                  style={({ pressed }) => [styles.settingsRow, pressed && styles.rowPressed]}
+                  onPress={openCoverPicker}
                 >
-                  {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveText}>Save</Text>}
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="image-outline" size={22} color="#4B5563" />
+                    <Text style={styles.rowText}>Change cover photo</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
                 </Pressable>
-                <Pressable style={({ pressed }) => [styles.cancel, pressed && { opacity: 0.7 }]} onPress={onClose}>
-                  <Text style={styles.cancelText}>Cancel</Text>
+
+                {/* SECTION 3 — DANGER ZONE */}
+                <View style={styles.dangerContainer}>
+                  <Text style={styles.dangerLabel}>DANGER ZONE</Text>
+                  {onTransferOwnership && (
+                    <Pressable
+                      style={({ pressed }) => [styles.settingsRow, pressed && styles.rowPressed]}
+                      onPress={onTransferOwnership}
+                    >
+                      <View style={styles.rowLeft}>
+                        <Ionicons name="swap-horizontal-outline" size={22} color="#DC2626" />
+                        <Text style={styles.dangerRowText}>Transfer ownership</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color="#DC2626" />
+                    </Pressable>
+                  )}
+                  <Pressable
+                    style={({ pressed }) => [styles.settingsRow, pressed && styles.rowPressed]}
+                    onPress={handleDelete}
+                  >
+                    <View style={styles.rowLeft}>
+                      <Ionicons name="trash-outline" size={22} color="#DC2626" />
+                      <Text style={styles.dangerRowText}>Delete gallery</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#DC2626" />
+                  </Pressable>
+                </View>
+
+              </ScrollView>
+
+              {/* BOTTOM BAR */}
+              <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+                <Pressable
+                  style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.7 }]}
+                  onPress={() => setDraftPrivacy(currentPrivacy)}
+                >
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.saveBtn, isDirty ? styles.saveBtnActive : styles.saveBtnDisabled]}
+                  onPress={handleSave}
+                  disabled={!isDirty || saving}
+                >
+                  {saving
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={[styles.saveBtnText, isDirty ? styles.saveBtnTextActive : styles.saveBtnTextDisabled]}>Save</Text>
+                  }
                 </Pressable>
               </View>
-              {onTransferOwnership && (
-                <Pressable style={({ pressed }) => [styles.transferBtn, pressed && { opacity: 0.7 }]} onPress={onTransferOwnership}>
-                  <Text style={styles.transferText}>Transfer Ownership</Text>
-                </Pressable>
-              )}
-              <Pressable style={({ pressed }) => [styles.deleteBtn, pressed && { opacity: 0.7 }]} onPress={handleDelete}>
-                <Text style={styles.deleteText}>Delete Gallery</Text>
-              </Pressable>
             </>
           )}
+
         </Pressable>
       </Pressable>
     </Modal>
@@ -213,8 +304,9 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',
     borderRadius: 20,
-    padding: 24,
     width: '88%',
+    maxHeight: WINDOW_HEIGHT * 0.88,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
@@ -222,48 +314,157 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   cardPicker: { maxHeight: WINDOW_HEIGHT * 0.7 },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 20 },
-  section: { fontSize: 12, fontWeight: '600', color: '#6B7280', letterSpacing: 0.2, marginBottom: 10, marginTop: 4 },
-  actionRow: {
+
+  // Main mode
+  mainHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 12,
+  },
+  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  scrollContent: { paddingBottom: 8 },
+
+  // Section labels
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    paddingHorizontal: 16,
+  },
+
+  // Privacy rows
+  privacyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  privacyTextCol: { flex: 1, marginLeft: 12 },
+  privacyName: { fontSize: 15, fontWeight: '500', color: '#111827' },
+  privacyDesc: { fontSize: 13, color: '#6B7280', marginTop: 2 },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioSelected: { borderColor: '#111827' },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#111827' },
+  separator: { height: 1, backgroundColor: '#F3F4F6', marginHorizontal: 16 },
+
+  // Shared row
+  settingsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 14,
-    paddingHorizontal: 4,
-    marginBottom: 8,
-    borderRadius: 12,
+    paddingHorizontal: 16,
   },
-  actionRowPressed: { backgroundColor: '#F9FAFB' },
-  actionRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  actionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  rowText: { fontSize: 15, fontWeight: '500', color: '#111827' },
+  rowPressed: { backgroundColor: '#F9FAFB' },
+
+  // Danger zone
+  dangerContainer: {
+    marginTop: 24,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#FECACA',
+  },
+  dangerLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#DC2626',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    paddingHorizontal: 16,
+  },
+  dangerRowText: { fontSize: 15, fontWeight: '500', color: '#DC2626' },
+
+  // Bottom bar
+  bottomBar: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  cancelBtn: {
+    flex: 1,
     backgroundColor: '#F3F4F6',
+    paddingVertical: 14,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionRowText: { fontSize: 15, fontWeight: '600', color: '#111827' },
-  privacyRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
-  privacyOption: { flex: 1, borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, paddingVertical: 12, alignItems: 'center', backgroundColor: '#fff' },
-  privacyOptionSelected: { borderColor: '#FF6B6B', backgroundColor: '#FFF5F5' },
-  privacyLabel: { fontSize: 12, fontWeight: '700', color: '#374151', marginBottom: 2 },
-  privacyLabelSelected: { color: '#FF6B6B' },
-  privacyDesc: { fontSize: 10, color: '#9CA3AF' },
-  privacyDescSelected: { color: '#FF6B6B' },
-  buttons: { flexDirection: 'column' },
-  save: { height: 52, borderRadius: 14, backgroundColor: '#FF6B6B', alignItems: 'center', justifyContent: 'center', marginBottom: 12, shadowColor: '#FF6B6B', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.35, shadowRadius: 8, elevation: 4 },
-  saveText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  cancel: { height: 52, borderRadius: 14, backgroundColor: '#f0f0f0', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  cancelText: { color: '#111827', fontSize: 16, fontWeight: '600' },
-  transferBtn: { marginTop: 16, alignItems: 'center' },
-  transferText: { fontSize: 13, fontWeight: '500', color: '#FF6B6B' },
-  deleteBtn: { marginTop: 16, borderTopWidth: 1, borderTopColor: '#efefef', paddingTop: 16, alignItems: 'center' },
-  deleteText: { fontSize: 13, fontWeight: '400', color: '#999' },
-  pickerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  pickerBack: { fontSize: 14, color: '#FF6B6B', fontWeight: '600', marginRight: 12 },
+  cancelBtnText: { fontSize: 15, fontWeight: '600', color: '#111827' },
+  saveBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveBtnActive: { backgroundColor: '#111827' },
+  saveBtnDisabled: { backgroundColor: '#E5E7EB' },
+  saveBtnText: { fontSize: 15, fontWeight: '600' },
+  saveBtnTextActive: { color: '#FFFFFF' },
+  saveBtnTextDisabled: { color: '#9CA3AF' },
+
+  statStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    gap: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    marginBottom: 8,
+  },
+  statItem: {
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  statNumber: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#E5E7EB',
+  },
+
+  // Cover picker
+  pickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  pickerBackBtn: { marginRight: 4 },
   pickerTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: '#111827' },
-  gridContent: { paddingBottom: 16 },
+  gridContent: { paddingHorizontal: 24, paddingBottom: 16 },
   gridRow: { gap: GRID_GAP },
   coverThumb: { width: GRID_ITEM_WIDTH, height: GRID_ITEM_WIDTH, borderRadius: 6, overflow: 'hidden', marginBottom: GRID_GAP },
   coverThumbImg: { width: '100%', height: '100%' },

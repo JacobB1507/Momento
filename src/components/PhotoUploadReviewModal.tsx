@@ -7,9 +7,9 @@ import {
   Pressable,
   Alert,
   StyleSheet,
-  SafeAreaView,
   Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 

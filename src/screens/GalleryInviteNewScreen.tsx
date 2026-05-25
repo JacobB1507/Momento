@@ -27,6 +27,7 @@ import { checkRateLimit } from '../lib/rateLimit';
 import { userFacingError, reportError } from '../lib/errorReport';
 import { SearchPersonRow } from '../components/SearchPersonRow';
 import { FriendInviteCard } from '../components/FriendInviteCard';
+import LiveJoinersList from '../components/LiveJoinersList';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = RouteProp<RootStackParamList, 'GalleryInviteNew'>;
@@ -417,7 +418,7 @@ export default function GalleryInviteNewScreen() {
         <Pressable
           onPress={async () => {
             if (pendingCreate && createdGalleryId) {
-              if (acceptedContributorCount > 0) {
+              if (acceptedContributorCount > 0 || invitedIds.size > 0) {
                 clearDraft();
                 navigation.goBack();
               } else {
@@ -548,6 +549,13 @@ export default function GalleryInviteNewScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Section — Live Joiners */}
+        <LiveJoinersList
+          galleryId={createdGalleryId}
+          currentUserId={currentUserId}
+          isOwner={true}
+        />
 
         {/* Search bar */}
         <View onLayout={(e) => { searchBarYRef.current = e.nativeEvent.layout.y; }}>

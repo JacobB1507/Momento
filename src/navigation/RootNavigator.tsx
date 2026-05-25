@@ -253,6 +253,11 @@ export default function RootNavigator() {
               options={{ headerShown: false }}
             />
             <Stack.Screen
+              name="PhoneVerification"
+              component={PhoneVerificationScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
               name="ChangePassword"
               component={ChangePasswordScreen}
               options={{ animation: 'slide_from_right' }}

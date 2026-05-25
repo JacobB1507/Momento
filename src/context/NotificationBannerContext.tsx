@@ -9,9 +9,15 @@ type BannerPayload = {
 
 type BannerContextValue = {
   showBanner: (payload: BannerPayload) => void;
+  setActiveConversationId: (id: string | null) => void;
+  isConversationActive: (id: string | null | undefined) => boolean;
 };
 
-const BannerContext = createContext<BannerContextValue>({ showBanner: () => {} });
+const BannerContext = createContext<BannerContextValue>({
+  showBanner: () => {},
+  setActiveConversationId: () => {},
+  isConversationActive: () => false,
+});
 
 export function useBanner(): BannerContextValue {
   return useContext(BannerContext);
@@ -19,6 +25,7 @@ export function useBanner(): BannerContextValue {
 
 export default function NotificationBannerProvider({ children }: { children: React.ReactNode }) {
   const [banner, setBanner] = useState<BannerPayload | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
   const showBanner = useCallback((payload: BannerPayload) => {
     setBanner(payload);
@@ -35,8 +42,13 @@ export default function NotificationBannerProvider({ children }: { children: Rea
     }
   }, [banner]);
 
+  const isConversationActive = useCallback(
+    (id: string | null | undefined) => id != null && id === activeConversationId,
+    [activeConversationId]
+  );
+
   return (
-    <BannerContext.Provider value={{ showBanner }}>
+    <BannerContext.Provider value={{ showBanner, setActiveConversationId, isConversationActive }}>
       {children}
       <NotificationBanner
         visible={banner !== null}

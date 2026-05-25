@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { RouteProp } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
@@ -25,8 +25,9 @@ import MessageBubble from '../components/MessageBubble';
 import MessageInputBar from '../components/MessageInputBar';
 import { supabase } from '../lib/supabase';
 import styles from '../styles/chatStyles';
+import { useBanner } from '../context/NotificationBannerContext';
 
-type RouteParams = { conversationId: string; otherUserId: string; otherUsername: string; isPendingRequest?: boolean };
+type RouteParams = { conversationId: string; otherUserId?: string; otherUsername: string; isPendingRequest?: boolean };
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -35,7 +36,7 @@ function formatTime(iso: string) {
 export default function ChatScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteProp<{ Chat: RouteParams }, 'Chat'>>();
-  const { conversationId, otherUserId } = route.params;
+  const { conversationId } = route.params;
   const { session } = useAuth();
   const currentUserId = session?.user.id ?? '';
 
@@ -44,6 +45,7 @@ export default function ChatScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [otherUserId, setOtherUserId] = useState<string | null>(route.params.otherUserId ?? null);
   const [otherAvatar, setOtherAvatar] = useState<string | null>(null);
   const [otherUsername, setOtherUsername] = useState<string>(route.params.otherUsername ?? '');
   const [editingMessage, setEditingMessage] = useState<any | null>(null);
@@ -61,9 +63,18 @@ export default function ChatScreen() {
   const [mutualsExpanded, setMutualsExpanded] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
+  const { setActiveConversationId } = useBanner();
+
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setActiveConversationId(conversationId);
+      return () => setActiveConversationId(null);
+    }, [conversationId, setActiveConversationId])
+  );
 
   const load = useCallback(async () => {
     const data = await fetchMessages(conversationId);
@@ -72,10 +83,36 @@ export default function ChatScreen() {
   }, [conversationId]);
 
   useEffect(() => {
+    if (otherUserId) return;
+    if (!conversationId || !currentUserId) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('id', conversationId)
+        .maybeSingle();
+      if (error || !data) return;
+      const candidates = Object.entries(data)
+        .filter(([k, v]) =>
+          typeof v === 'string'
+          && v !== currentUserId
+          && v !== conversationId
+          && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
+          && (k.includes('user') || k.includes('participant') || k.includes('member'))
+        )
+        .map(([, v]) => v as string);
+      if (candidates.length > 0) {
+        setOtherUserId(candidates[0]);
+      }
+    })();
+  }, [otherUserId, conversationId, currentUserId]);
+
+  useEffect(() => {
     if (route.params?.isPendingRequest) isRequestConversation.current = true;
     load().finally(() => setLoading(false));
     markConversationRead(conversationId, currentUserId);
     (async () => {
+      if (!otherUserId) return;
       const { data } = await supabase.from('profiles').select('avatar_url, username, display_name').eq('id', otherUserId).single();
       setOtherAvatar(data?.avatar_url ?? null);
       setOtherUsername(data?.display_name || data?.username || otherUsername);
@@ -103,7 +140,7 @@ export default function ChatScreen() {
         }
       }
     })();
-  }, [conversationId]);
+  }, [conversationId, otherUserId]);
 
   useEffect(() => {
     const channel = supabase
@@ -146,7 +183,7 @@ export default function ChatScreen() {
           <Ionicons name="chevron-back" size={26} color="#111827" />
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => navigation.navigate('FriendProfile', { userId: otherUserId, username: otherUsername })}
+          onPress={() => { if (!otherUserId) return; navigation.navigate('FriendProfile', { userId: otherUserId, username: otherUsername }); }}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
         >
           {otherAvatar
@@ -298,7 +335,7 @@ export default function ChatScreen() {
           <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#E5E7EB', backgroundColor: 'white' }}>
             <TouchableOpacity
               onPress={async () => {
-                await respondToMessageRequest(pendingRequestId!, true, otherUserId, currentUserId);
+                await respondToMessageRequest(pendingRequestId!, true, otherUserId!, currentUserId);
                 setIsPending(false);
                 setIsReceiver(false);
               }}
@@ -308,7 +345,7 @@ export default function ChatScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               onPress={async () => {
-                await respondToMessageRequest(pendingRequestId!, false, otherUserId, currentUserId);
+                await respondToMessageRequest(pendingRequestId!, false, otherUserId!, currentUserId);
                 navigation.goBack();
               }}
               style={{ flex: 1, backgroundColor: '#EF4444', borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
@@ -333,7 +370,7 @@ export default function ChatScreen() {
               if (isPending && !requestSent) {
                 requestSentRef.current = true;
                 setRequestSent(true);
-                await requestMessagePermission(currentUserId, otherUserId, text);
+                await requestMessagePermission(currentUserId, otherUserId!, text);
                 navigation.setParams({ _refresh: Date.now() });
               }
             }

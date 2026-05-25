@@ -208,9 +208,9 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   createButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#FF6B6B',
     alignItems: 'center',
     justifyContent: 'center',
@@ -222,5 +222,5 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   createButtonActive: { backgroundColor: '#E85555' },
-  createIcon: { fontSize: 32, color: '#fff', fontWeight: '300', lineHeight: 38 },
+  createIcon: { fontSize: 30, color: '#fff', fontWeight: '300' },
 });

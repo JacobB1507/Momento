@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { ActivityIndicator, Alert, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { syncContacts, type MatchedContact, type UnmatchedContact, type ContactSyncResult } from '../lib/contacts';
 import { sendFriendRequestById, createInviteLink } from '../lib/friends';
 
@@ -14,7 +13,8 @@ type Props = {
 };
 
 export default function ContactsOnMomentoSection({ currentUserId, friendIds, pendingRequestIds, refreshKey, onFriendRequestSent, onPress }: Props) {
-  const [expanded, setExpanded] = useState(false);
+  const ROW_HEIGHT = 64;
+  const VISIBLE_ROWS = 5;
   const [loading, setLoading] = useState(true);
   const [syncResult, setSyncResult] = useState<ContactSyncResult | null>(null);
   const [inviteLink, setInviteLink] = useState('');
@@ -81,39 +81,31 @@ export default function ContactsOnMomentoSection({ currentUserId, friendIds, pen
   ];
   if (allRows.length === 0) return null;
 
-  const visibleRows = expanded ? allRows : allRows.slice(0, 5);
-
   return (
     <View style={styles.section}>
-      <Pressable style={styles.sectionHeaderRow} onPress={() => setExpanded(v => !v)}>
+      <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionHeader}>CONTACTS ON MOMENTO</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Text style={styles.countText}>{allRows.length}</Text>
-          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color="#9CA3AF" />
-        </View>
-      </Pressable>
-      <View style={styles.card}>
-        {visibleRows.map((row, idx) => (
-          <View key={row.type === 'matched' ? row.item.id : row.item.phoneE164}>
-            {idx > 0 && <View style={styles.separator} />}
-            <ContactRow
-              row={row}
-              isPending={row.type === 'matched' && pendingRequestIds.includes(row.item.id)}
-              isRequesting={row.type === 'matched' && requestingUserIds.has(row.item.id)}
-              canInvite={!!inviteLink}
-              isInviting={row.type === 'unmatched' && invitingPhones.has(row.item.phoneE164)}
-              onAdd={() => { if (row.type === 'matched') handleAdd(row.item); }}
-              onInvite={() => { if (row.type === 'unmatched') handleInvite(row.item.phoneE164); }}
-              onPress={() => { if (row.type === 'matched') onPress(row.item.id); }}
-            />
-          </View>
-        ))}
+        <Text style={styles.countText}>{allRows.length}</Text>
       </View>
-      {allRows.length > 5 && (
-        <Pressable onPress={() => setExpanded(v => !v)} style={({ pressed }) => [styles.toggleBtn, pressed && { opacity: 0.6 }]}>
-          <Text style={styles.toggleText}>{expanded ? 'Show less' : `Show all (${allRows.length})`}</Text>
-        </Pressable>
-      )}
+      <View style={[styles.card, { height: ROW_HEIGHT * VISIBLE_ROWS }]}>
+        <ScrollView showsVerticalScrollIndicator={true} nestedScrollEnabled={true}>
+          {allRows.map((row, idx) => (
+            <View key={row.type === 'matched' ? row.item.id : row.item.phoneE164}>
+              {idx > 0 && <View style={styles.separator} />}
+              <ContactRow
+                row={row}
+                isPending={row.type === 'matched' && pendingRequestIds.includes(row.item.id)}
+                isRequesting={row.type === 'matched' && requestingUserIds.has(row.item.id)}
+                canInvite={!!inviteLink}
+                isInviting={row.type === 'unmatched' && invitingPhones.has(row.item.phoneE164)}
+                onAdd={() => { if (row.type === 'matched') handleAdd(row.item); }}
+                onInvite={() => { if (row.type === 'unmatched') handleInvite(row.item.phoneE164); }}
+                onPress={() => { if (row.type === 'matched') onPress(row.item.id); }}
+              />
+            </View>
+          ))}
+        </ScrollView>
+      </View>
     </View>
   );
 }

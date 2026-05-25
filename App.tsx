@@ -7,9 +7,9 @@ import NotificationBannerProvider, { useBanner } from './src/context/Notificatio
 import { setupForegroundListener, setupResponseListener } from './src/lib/pushNotifications';
 
 function NotificationListeners() {
-  const { showBanner } = useBanner();
+  const { showBanner, isConversationActive } = useBanner();
   useEffect(() => {
-    const unsubFg = setupForegroundListener(showBanner);
+    const unsubFg = setupForegroundListener(showBanner, isConversationActive);
     const unsubResp = setupResponseListener();
     return () => {
       unsubFg();

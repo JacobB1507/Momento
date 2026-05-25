@@ -61,14 +61,22 @@ export async function unregisterPushNotifications(userId: string): Promise<void>
 }
 
 type ShowBanner = (p: { title: string; body: string; onTap: () => void }) => void;
+type IsConversationActive = (id: string | null | undefined) => boolean;
 
-export function setupForegroundListener(showBanner: ShowBanner): () => void {
+export function setupForegroundListener(
+  showBanner: ShowBanner,
+  isConversationActive: IsConversationActive
+): () => void {
   const sub = Notifications.addNotificationReceivedListener((notification) => {
     try {
       const content = notification.request.content;
       const title = content.title ?? 'Momento';
       const body = content.body ?? '';
       const data = (content.data ?? {}) as { type?: string; related_id?: string };
+      // Suppress in-app banner if user is already inside this conversation
+      if ((data.type === 'message' || data.type === 'message_request') && isConversationActive(data.related_id)) {
+        return;
+      }
       showBanner({
         title,
         body,

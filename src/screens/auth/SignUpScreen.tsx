@@ -21,6 +21,7 @@ import { userFacingError, reportError } from '../../lib/errorReport';
 import type { SignUpNavigationProp } from '../../navigation/types';
 import PasswordInput from '../../components/PasswordInput';
 import { AppleSignInButton } from '../../components/AppleSignInButton';
+import AuthBackButton from '../../components/AuthBackButton';
 import { setPendingPhone } from '../../lib/pendingPhone';
 import { formatPhone } from '../../lib/phoneFormat';
 
@@ -174,9 +175,7 @@ export default function SignUpScreen({ navigation }: Props) {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <Pressable style={styles.backButton} onPress={() => navigation.goBack()} hitSlop={8}>
-          <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
-        </Pressable>
+        <AuthBackButton onPress={() => navigation.goBack()} color="#FFFFFF" />
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
@@ -396,13 +395,6 @@ export default function SignUpScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#FF6B6B' },
   flex: { flex: 1 },
-  backButton: {
-    position: 'absolute',
-    top: 12,
-    left: 20,
-    zIndex: 10,
-    padding: 4,
-  },
   scroll: { flexGrow: 1 },
 
   hero: {

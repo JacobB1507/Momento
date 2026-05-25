@@ -37,6 +37,7 @@ export default function CommentsSheet({ galleryId, visible, onClose, highlightUs
   const [replyRefreshKey, setReplyRefreshKey] = useState(0);
   const [expandedCommentId, setExpandedCommentId] = useState<string | null>(null);
   const [activeHighlightId, setActiveHighlightId] = useState<string | null>(highlightUserId ?? null);
+  const [galleryOwnerId, setGalleryOwnerId] = useState<string | null>(null);
   const inputRef = useRef<any>(null);
   const listRef = useRef<FlatList>(null);
 
@@ -47,6 +48,18 @@ export default function CommentsSheet({ galleryId, visible, onClose, highlightUs
 
   useEffect(() => {
     if (visible) load();
+  }, [visible, galleryId]);
+
+  useEffect(() => {
+    if (!visible || !galleryId) return;
+    supabase
+      .from('galleries')
+      .select('created_by')
+      .eq('id', galleryId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.created_by) setGalleryOwnerId(data.created_by);
+      });
   }, [visible, galleryId]);
 
   useEffect(() => {
@@ -136,6 +149,7 @@ export default function CommentsSheet({ galleryId, visible, onClose, highlightUs
               <CommentRow
                 comment={item}
                 currentUserId={currentUserId}
+                galleryOwnerId={galleryOwnerId ?? undefined}
                 onEdit={setEditingComment}
                 onReply={(comment) => {
                   setReplyingTo(comment);
@@ -144,8 +158,8 @@ export default function CommentsSheet({ galleryId, visible, onClose, highlightUs
                 refreshKey={replyRefreshKey}
                 expandedCommentId={expandedCommentId}
                 onDelete={async (c) => {
-                  await deleteComment(c.id);
-                  setComments(prev => prev.filter(x => x.id !== c.id));
+                  await deleteComment(c.id, currentUserId);
+                  await load();
                 }}
               />
               </View>

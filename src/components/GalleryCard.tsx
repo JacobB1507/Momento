@@ -3,7 +3,9 @@ import { Dimensions, Image, Pressable, ScrollView, StyleSheet, Text, View } from
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Ionicons } from '@expo/vector-icons';
 import CommentsSheet from './CommentsSheet';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
 import type { Gallery } from '../types/database';
 import { supabase } from '../lib/supabase';
 import { SkeletonCircle } from './Skeleton';
@@ -66,6 +68,7 @@ export function GalleryCard({
   refreshKey?: number;
   tags?: GalleryTagInfo[];
 }) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [contributors, setContributors] = useState<Contributor[]>([]);
   const [showContributors, setShowContributors] = useState(false);
   const [showComments, setShowComments] = useState(false);
@@ -197,7 +200,16 @@ export function GalleryCard({
               <View style={styles.dropdown}>
                 <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled showsVerticalScrollIndicator={false}>
                   {contributors.map(c => (
-                    <View key={c.user_id} style={styles.dropdownRow}>
+                    <Pressable
+                      key={c.user_id}
+                      style={({ pressed }) => [styles.dropdownRow, pressed && { opacity: 0.7 }]}
+                      onPress={() => {
+                        if (!c.user_id || !c.username) return;
+                        if (c.user_id === currentUserId) return;
+                        navigation.navigate('FriendProfile', { userId: c.user_id, username: c.username });
+                        setShowContributors(false);
+                      }}
+                    >
                       {c.avatar_url ? (
                         <Image source={{ uri: c.avatar_url }} style={styles.dropdownAvatar} />
                       ) : (
@@ -210,7 +222,7 @@ export function GalleryCard({
                       <Text style={styles.dropdownUsername} numberOfLines={1}>
                         {c.display_name || c.username}
                       </Text>
-                    </View>
+                    </Pressable>
                   ))}
                 </ScrollView>
               </View>

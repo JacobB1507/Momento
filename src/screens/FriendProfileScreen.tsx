@@ -28,7 +28,7 @@ import type { RootStackParamList } from '../navigation/types';
 import type { Gallery } from '../types/database';
 import styles, { AVATAR_SIZE } from '../styles/friendProfileStyles';
 import TagFilterRow from '../components/TagFilterRow';
-import { getMyTags, getOwnerTagsForGalleries, getMyTagsAppliedToGalleries } from '../lib/tags';
+import { getTagsForUser, getMyTagsAppliedToGalleries } from '../lib/tags';
 import type { ProfileTag, GalleryTagInfo } from '../lib/tags';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'FriendProfile'>;
@@ -59,15 +59,14 @@ export default function FriendProfileScreen() {
   const [ownerTags, setOwnerTags] = useState<ProfileTag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [galleryTagsMap, setGalleryTagsMap] = useState<Map<string, GalleryTagInfo[]>>(new Map());
-  const [myAppliedMap, setMyAppliedMap] = useState<Map<string, GalleryTagInfo[]>>(new Map());
 
   const filteredGalleries = useMemo(() => {
     if (selectedTagIds.size === 0) return galleries;
     return galleries.filter(g => {
-      const myTagsOnIt = myAppliedMap.get(g.id) ?? [];
+      const myTagsOnIt = galleryTagsMap.get(g.id) ?? [];
       return myTagsOnIt.some(t => selectedTagIds.has(t.tag_id));
     });
-  }, [galleries, selectedTagIds, myAppliedMap]);
+  }, [galleries, selectedTagIds, galleryTagsMap]);
 
   const load = useCallback(async () => {
     const [profileRes, ownedRes, membershipsRes, statusRes, myFriendsRes] =
@@ -100,14 +99,12 @@ export default function FriendProfileScreen() {
 
     try {
       const galleryIds = uniqueGalleries.map((g: any) => g.id);
-      const [myFilterTags, ownerTagsMap, myApplied] = await Promise.all([
-        getMyTags(currentUserId),
-        getOwnerTagsForGalleries(galleryIds),
-        getMyTagsAppliedToGalleries(galleryIds, currentUserId),
+      const [profileOwnerTags, profileOwnerAppliedMap] = await Promise.all([
+        getTagsForUser(userId),
+        getMyTagsAppliedToGalleries(galleryIds, userId),
       ]);
-      setOwnerTags(myFilterTags);
-      setGalleryTagsMap(ownerTagsMap);
-      setMyAppliedMap(myApplied);
+      setOwnerTags(profileOwnerTags);
+      setGalleryTagsMap(profileOwnerAppliedMap);
     } catch {
       // non-critical
     }

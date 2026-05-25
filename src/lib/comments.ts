@@ -68,10 +68,44 @@ export function canEditComment(createdAt: string): boolean {
   return Date.now() - new Date(createdAt).getTime() <= 2 * 60 * 1000;
 }
 
-export async function deleteComment(commentId: string): Promise<void> {
-  const { error } = await supabase
+export async function deleteComment(commentId: string, currentUserId: string): Promise<void> {
+  if (!commentId || !currentUserId) throw new Error('deleteComment: missing required args');
+
+  const { data: row, error: fetchErr } = await supabase
     .from('comments')
-    .delete()
-    .eq('id', commentId);
-  if (error) throw error;
+    .select('reply_count')
+    .eq('id', commentId)
+    .maybeSingle();
+  if (fetchErr) throw fetchErr;
+  if (!row) return; // already gone — idempotent
+
+  const hasReplies = (row.reply_count ?? 0) > 0;
+
+  if (hasReplies) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || user.id !== currentUserId) throw new Error('Auth mismatch');
+    const { error } = await supabase
+      .from('comments')
+      .update({ deleted_at: new Date().toISOString(), deleted_by: currentUserId })
+      .eq('id', commentId);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from('comments')
+      .delete()
+      .eq('id', commentId);
+    if (error) throw error;
+  }
+}
+
+export function canDeleteComment(
+  comment: { user_id: string; deleted_at?: string | null },
+  currentUserId: string,
+  galleryOwnerId: string | undefined
+): boolean {
+  if (!currentUserId) return false;
+  if (comment.deleted_at) return false;
+  if (comment.user_id === currentUserId) return true;
+  if (galleryOwnerId && currentUserId === galleryOwnerId) return true;
+  return false;
 }
