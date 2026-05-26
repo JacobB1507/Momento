@@ -24,6 +24,7 @@ import { AppleSignInButton } from '../../components/AppleSignInButton';
 import AuthBackButton from '../../components/AuthBackButton';
 import { setPendingPhone } from '../../lib/pendingPhone';
 import { formatPhone } from '../../lib/phoneFormat';
+import { signInWithApple } from '../../lib/appleAuth';
 
 type Props = { navigation: SignUpNavigationProp };
 
@@ -42,6 +43,7 @@ export default function SignUpScreen({ navigation }: Props) {
   const [inviteCodeError, setInviteCodeError] = useState<string | null>(null);
   const [phoneDigits, setPhoneDigits] = useState('');
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
 
   const handleSignUp = async () => {
     if (!inviteCode.trim()) {
@@ -167,6 +169,43 @@ export default function SignUpScreen({ navigation }: Props) {
     }
     setPendingPhone(phoneDigits);
     setLoading(false);
+  };
+
+  const handleApplePress = async () => {
+    if (!inviteCode.trim()) {
+      Alert.alert('Invite code required', 'Please enter your invite code first.');
+      return;
+    }
+    setIsAppleLoading(true);
+    try {
+      const { data: codeValid, error: codeError } = await supabase.rpc(
+        'validate_invite_code',
+        { p_code: inviteCode.trim() }
+      );
+      if (codeError) {
+        setInviteCodeError('Could not validate code. Please try again.');
+        reportError('SignUpScreen.validateInviteCode (apple)', codeError);
+        return;
+      }
+      if (!codeValid) {
+        setInviteCodeError('Invalid or already-used invite code');
+        return;
+      }
+      const result = await signInWithApple();
+      if (!result.ok) {
+        if (result.reason !== 'cancelled') Alert.alert('Sign in failed', result.reason);
+        return;
+      }
+      const { data: redeemed, error: redeemError } = await supabase.rpc(
+        'redeem_invite_code',
+        { p_code: inviteCode.trim() }
+      );
+      if (redeemError || !redeemed) {
+        reportError('SignUpScreen.redeemInviteCode (apple)', redeemError ?? new Error('Redeem returned false'));
+      }
+    } finally {
+      setIsAppleLoading(false);
+    }
   };
 
   return (
@@ -373,10 +412,21 @@ export default function SignUpScreen({ navigation }: Props) {
               <Text style={styles.orText}>or</Text>
               <View style={styles.orLine} />
             </View>
-            <AppleSignInButton
-              onSuccess={() => {}}
-              onError={(reason) => { if (reason !== 'cancelled') Alert.alert('Sign in failed', reason); }}
-            />
+            <View style={{ position: 'relative' }}>
+              <View pointerEvents="none">
+                <AppleSignInButton onSuccess={() => {}} onError={() => {}} />
+              </View>
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={handleApplePress}
+                disabled={isAppleLoading}
+              />
+              {isAppleLoading && (
+                <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 12 }]}>
+                  <ActivityIndicator color="#fff" />
+                </View>
+              )}
+            </View>
 
             <View style={styles.switchRow}>
               <Text style={styles.switchText}>Already have an account? </Text>

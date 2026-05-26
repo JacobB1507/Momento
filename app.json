@@ -17,6 +17,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "app.momento",
       "usesAppleSignIn": true,
+      "minimumOsVersion": "16.0",
       "config": {
         "usesNonExemptEncryption": false
       },

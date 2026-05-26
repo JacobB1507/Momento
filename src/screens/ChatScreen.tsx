@@ -8,6 +8,7 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  StyleSheet,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
@@ -19,6 +20,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import type { RouteProp } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { fetchMessages, sendMessage, editMessage, deleteMessage, sendImageMessage, requestMessagePermission, clearConversationForUser, respondToMessageRequest, markConversationRead } from '../lib/messages';
+import { blockUser, reportUser, type ReportReason } from '../lib/blocks';
 import { getMutualFriends } from '../lib/friends';
 import type { Message } from '../lib/messages';
 import MessageBubble from '../components/MessageBubble';
@@ -32,6 +34,53 @@ type RouteParams = { conversationId: string; otherUserId?: string; otherUsername
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
+
+function shouldShowDivider(prevCreatedAt: string | null, currentCreatedAt: string): boolean {
+  if (!prevCreatedAt) return true;
+  const prev = new Date(prevCreatedAt).getTime();
+  const curr = new Date(currentCreatedAt).getTime();
+  return (curr - prev) >= 6 * 60 * 60 * 1000;
+}
+
+function formatDividerLabel(createdAt: string): string {
+  if (!createdAt) return 'Now';
+  const d = new Date(createdAt);
+  const now = new Date();
+  const timeStr = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const isSameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (isSameDay(d, now)) return `Today ${timeStr}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (isSameDay(d, yesterday)) return `Yesterday ${timeStr}`;
+  if (now.getTime() - d.getTime() < 7 * 24 * 60 * 60 * 1000) {
+    return `${d.toLocaleDateString(undefined, { weekday: 'short' })} ${timeStr}`;
+  }
+  if (d.getFullYear() === now.getFullYear()) {
+    return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${timeStr}`;
+  }
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+const dividerStyles = StyleSheet.create({
+  timeDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+    paddingHorizontal: 16,
+  },
+  timeDividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E5E5EA',
+  },
+  timeDividerText: {
+    color: '#8E8E93',
+    fontSize: 12,
+    fontWeight: '500',
+    marginHorizontal: 12,
+  },
+});
 
 export default function ChatScreen() {
   const navigation = useNavigation<any>();
@@ -176,6 +225,67 @@ export default function ChatScreen() {
     setRefreshing(false);
   }, [load]);
 
+  const submitReport = async (reason: ReportReason) => {
+    Alert.alert(
+      'Submit report?',
+      `This report will be reviewed by the Momento team. We'll act on it as quickly as we can.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Submit',
+          style: 'destructive',
+          onPress: async () => {
+            if (!otherUserId) return;
+            const { error } = await reportUser(otherUserId, reason, 'chat', conversationId);
+            if (error) {
+              Alert.alert('Report failed', error);
+              return;
+            }
+            Alert.alert('Report submitted', 'Thank you. The Momento team will review this report.', [{ text: 'OK' }]);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReportUser = () => {
+    Alert.alert(
+      `Report ${otherUsername}?`,
+      'What is the issue?',
+      [
+        { text: 'Spam',                   onPress: () => submitReport('spam') },
+        { text: 'Harassment',             onPress: () => submitReport('harassment') },
+        { text: 'Inappropriate content',  onPress: () => submitReport('inappropriate_content') },
+        { text: 'Impersonation',          onPress: () => submitReport('impersonation') },
+        { text: 'Underage user',          onPress: () => submitReport('underage') },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleBlockUser = () => {
+    Alert.alert(
+      `Block ${otherUsername}?`,
+      'They will not be able to see your profile or message you. You can unblock them later from Settings.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            if (!otherUserId) return;
+            const { error } = await blockUser(otherUserId);
+            if (error) {
+              Alert.alert('Block failed', error);
+              return;
+            }
+            navigation.goBack();
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', backgroundColor: '#fff', gap: 10 }}>
@@ -253,7 +363,7 @@ export default function ChatScreen() {
               onPress={() => {
                 setShowChatMenu(false);
                 Alert.alert(
-                  'Clear Conversation',
+                  'Clear from feed',
                   'Remove this conversation from your view?',
                   [
                     { text: 'Cancel', style: 'cancel' },
@@ -269,7 +379,21 @@ export default function ChatScreen() {
                 );
               }}
             >
-              <Text style={{ color: '#ef4444', fontSize: 15, fontWeight: '500' }}>Clear Conversation</Text>
+              <Text style={{ color: '#ef4444', fontSize: 15, fontWeight: '500' }}>Clear from feed</Text>
+            </Pressable>
+            <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: 12 }} />
+            <Pressable
+              style={{ paddingHorizontal: 16, paddingVertical: 12 }}
+              onPress={() => { setShowChatMenu(false); handleBlockUser(); }}
+            >
+              <Text style={{ color: '#ef4444', fontSize: 15, fontWeight: '500' }}>Block user</Text>
+            </Pressable>
+            <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: 12 }} />
+            <Pressable
+              style={{ paddingHorizontal: 16, paddingVertical: 12 }}
+              onPress={() => { setShowChatMenu(false); handleReportUser(); }}
+            >
+              <Text style={{ color: '#ef4444', fontSize: 15, fontWeight: '500' }}>Report user</Text>
             </Pressable>
           </View>
         </>
@@ -304,26 +428,39 @@ export default function ChatScreen() {
           <FlatList
             data={messages}
             keyExtractor={m => m.id}
-            renderItem={({ item, index }) => (
-              <View style={{ opacity: editingMessage && item.id !== editingMessage.id ? 0.25 : 1 }}>
-                <MessageBubble
-                  message={item}
-                  currentUserId={currentUserId}
-                  isLast={index === messages.length - 1}
-                  activeMessageId={activeMessageId}
-                  setActiveMessageId={setActiveMessageId}
-                  onEdit={(msg) => setEditingMessage(msg)}
-                  onDelete={async (msg) => {
-                    await deleteMessage(msg.id);
-                    setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, deleted: true, content: '' } : m));
-                    if (requestSent) {
-                      await supabase.from('message_requests').delete().eq('requester_id', currentUserId).eq('target_user_id', otherUserId).eq('status', 'pending');
-                      setRequestSent(false);
-                    }
-                  }}
-                />
-              </View>
-            )}
+            renderItem={({ item, index }) => {
+              const prevMessage = messages[index - 1];
+              const showDivider = shouldShowDivider(prevMessage?.created_at ?? null, item.created_at);
+              return (
+                <>
+                  {showDivider && (
+                    <View style={dividerStyles.timeDivider}>
+                      <View style={dividerStyles.timeDividerLine} />
+                      <Text style={dividerStyles.timeDividerText}>{formatDividerLabel(item.created_at)}</Text>
+                      <View style={dividerStyles.timeDividerLine} />
+                    </View>
+                  )}
+                  <View style={{ opacity: editingMessage && item.id !== editingMessage.id ? 0.25 : 1 }}>
+                    <MessageBubble
+                      message={item}
+                      currentUserId={currentUserId}
+                      isLast={index === messages.length - 1}
+                      activeMessageId={activeMessageId}
+                      setActiveMessageId={setActiveMessageId}
+                      onEdit={(msg) => setEditingMessage(msg)}
+                      onDelete={async (msg) => {
+                        await deleteMessage(msg.id);
+                        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, deleted: true, content: '' } : m));
+                        if (requestSent) {
+                          await supabase.from('message_requests').delete().eq('requester_id', currentUserId).eq('target_user_id', otherUserId).eq('status', 'pending');
+                          setRequestSent(false);
+                        }
+                      }}
+                    />
+                  </View>
+                </>
+              );
+            }}
             ref={flatListRef}
             contentContainerStyle={styles.list}
             keyboardShouldPersistTaps="handled"

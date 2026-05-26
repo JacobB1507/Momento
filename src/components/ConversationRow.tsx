@@ -132,6 +132,11 @@ export default function ConversationRow({ conversation, currentUserId, onPress, 
               {profile.display_name || profile.username || ''}
             </Text>
           )}
+          {isUnread && !customPreview && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText} allowFontScaling={false}>{unreadDisplay}</Text>
+            </View>
+          )}
           {(isPinned || conversation.is_pinned) && (
             <MaterialCommunityIcons name="pin" size={18} color="#9CA3AF" style={{ marginLeft: 4 }} />
           )}
@@ -149,11 +154,6 @@ export default function ConversationRow({ conversation, currentUserId, onPress, 
       </View>
       <View style={styles.rightColumn}>
         <Text style={styles.time}>{formatTime(conversation.last_message_at)}</Text>
-        {isUnread && !customPreview && (
-          <View style={styles.unreadBadge}>
-            <Text style={styles.unreadBadgeText}>{unreadDisplay}</Text>
-          </View>
-        )}
       </View>
     </Pressable>
   );
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   },
   avatarLetter: { color: '#fff', fontSize: 18, fontWeight: '700' },
   center: { flex: 1 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2, flex: 1 },
   nameSkeleton: { width: 80, height: 12, borderRadius: 4, backgroundColor: '#E5E7EB' },
   username: { fontSize: 15, fontWeight: '700', color: '#111827', flexShrink: 1 },
   preview: { fontSize: 13, color: '#6b7280' },
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
+    marginLeft: 6,
   },
   unreadBadgeText: {
     color: '#FFFFFF',

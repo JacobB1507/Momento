@@ -2,6 +2,34 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
+export function SelectionHeader({
+  selectedCount,
+  onCancel,
+  onDeleteRequest,
+}: {
+  selectedCount: number;
+  onCancel: () => void;
+  onDeleteRequest?: () => void;
+}) {
+  return (
+    <View style={headerStyles.container}>
+      <Pressable onPress={onCancel} hitSlop={12} style={headerStyles.leftSection}>
+        <Text style={headerStyles.cancelText}>Cancel</Text>
+      </Pressable>
+      <View style={headerStyles.centerSection}>
+        <Text style={headerStyles.countText}>{selectedCount} selected</Text>
+      </View>
+      {onDeleteRequest ? (
+        <Pressable onPress={onDeleteRequest} hitSlop={12} style={headerStyles.rightSection}>
+          <Text style={headerStyles.deleteText}>Delete</Text>
+        </Pressable>
+      ) : (
+        <View style={{ flex: 1 }} />
+      )}
+    </View>
+  );
+}
+
 type Props = {
   selectedCount: number;
   totalCount: number;
@@ -23,59 +51,110 @@ export default function SelectionActionBar({
   const actionDisabled = noSelection || disabled;
 
   return (
-    <View style={[styles.container, disabled && styles.containerDisabled]}
-      pointerEvents={disabled ? 'none' : 'auto'}>
-      <Text style={styles.label}>
-        {noSelection ? 'Select photos' : `${selectedCount} selected`}
-      </Text>
-      <View style={styles.row}>
-        <Pressable onPress={onCancel} style={styles.textBtn}>
-          <Text style={styles.textBtnLabel}>Cancel</Text>
-        </Pressable>
-        <Pressable
-          onPress={allSelected ? onDeselectAll : onSelectAll}
-          style={styles.textBtn}>
-          <Text style={styles.textBtnLabel}>
-            {allSelected ? 'Deselect All' : 'Select All'}
-          </Text>
-        </Pressable>
-        <View style={styles.iconGroup}>
-          <View style={actionDisabled ? styles.iconWrapDisabled : styles.iconWrap}
-            pointerEvents={actionDisabled ? 'none' : 'auto'}>
-            <Pressable onPress={onSave}>
-              <Ionicons name="download-outline" size={24} color="#1C1C1E" />
-            </Pressable>
-          </View>
-          <View style={actionDisabled ? styles.iconWrapDisabled : styles.iconWrap}
-            pointerEvents={actionDisabled ? 'none' : 'auto'}>
-            <Pressable onPress={onShare}>
-              <Ionicons name="share-outline" size={24} color="#1C1C1E" />
-            </Pressable>
-          </View>
+    <View
+      style={[styles.container, disabled && styles.containerDisabled]}
+      pointerEvents={disabled ? 'none' : 'auto'}
+    >
+      <Pressable
+        onPress={allSelected ? onDeselectAll : onSelectAll}
+        style={styles.selectAllBtn}
+      >
+        <Text style={styles.selectAllText}>
+          {allSelected ? 'Deselect All' : 'Select All'}
+        </Text>
+      </Pressable>
+      <View style={styles.iconGroup}>
+        <View
+          style={actionDisabled ? styles.iconWrapDisabled : styles.iconWrap}
+          pointerEvents={actionDisabled ? 'none' : 'auto'}
+        >
+          <Pressable onPress={onSave}>
+            <Ionicons name="download-outline" size={24} color="#1C1C1E" />
+          </Pressable>
+        </View>
+        <View
+          style={actionDisabled ? styles.iconWrapDisabled : styles.iconWrap}
+          pointerEvents={actionDisabled ? 'none' : 'auto'}
+        >
+          <Pressable onPress={onShare}>
+            <Ionicons name="share-outline" size={24} color="#1C1C1E" />
+          </Pressable>
         </View>
       </View>
     </View>
   );
 }
 
-const RED = '#FF3B30';
+const headerStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 52,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  leftSection: {
+    flex: 1,
+    paddingLeft: 16,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  centerSection: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rightSection: {
+    flex: 1,
+    paddingRight: 16,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  cancelText: {
+    color: '#8E8E93',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  countText: {
+    color: '#111',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deleteText: {
+    color: '#FF3B30',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: '#fff',
-    borderTopWidth: 1, borderTopColor: '#E5E5EA',
-    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 28,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.08)',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
+    alignItems: 'center',
   },
   containerDisabled: { opacity: 0.6 },
-  label: {
-    fontSize: 13, color: '#8E8E93', fontWeight: '500',
-    textAlign: 'center', marginBottom: 8,
+  selectAllBtn: {
+    marginBottom: 8,
   },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  textBtn: { paddingVertical: 4 },
-  textBtnLabel: { color: RED, fontSize: 16 },
-  iconGroup: { flexDirection: 'row', gap: 16 },
+  selectAllText: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  iconGroup: {
+    flexDirection: 'row',
+    gap: 32,
+  },
   iconWrap: { opacity: 1 },
   iconWrapDisabled: { opacity: 0.35 },
 });

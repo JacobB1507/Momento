@@ -3,7 +3,7 @@ import { supabase } from './supabase';
 import { reportError } from './errorReport';
 import type { Gallery, Photo } from '../types/database';
 
-export async function fetchUserGalleries(userId: string): Promise<Gallery[]> {
+export async function fetchUserGalleries(userId: string, viewerUserId?: string): Promise<Gallery[]> {
   const { data: owned, error: ownedError } = await supabase
     .from('galleries')
     .select('*')
@@ -45,6 +45,21 @@ export async function fetchUserGalleries(userId: string): Promise<Gallery[]> {
     }
     return a.pinned ? -1 : 1;
   });
+
+  if (viewerUserId && viewerUserId !== userId && all.length > 0) {
+    const galleryIds = all.map(g => g.id);
+    const { data: photoRows, error: photosErr } = await supabase
+      .from('gallery_photos')
+      .select('gallery_id')
+      .in('gallery_id', galleryIds);
+    if (photosErr) return all;
+    const nonEmpty = new Set<string>();
+    for (const row of (photoRows ?? [])) {
+      if (row?.gallery_id) nonEmpty.add(row.gallery_id);
+    }
+    return all.filter(g => nonEmpty.has(g.id));
+  }
+
   return all;
 }
 
@@ -144,6 +159,48 @@ export async function uploadGalleryPhoto({
   } catch (coverErr) {
     reportError('uploadGalleryPhoto.autoSetCover', coverErr);
   }
+}
+
+export async function deleteGalleryPhotosBatch(
+  galleryId: string,
+  photoIds: string[],
+): Promise<number> {
+  if (!photoIds || photoIds.length === 0) return 0;
+
+  const { data: rows, error: selectError } = await supabase
+    .from('gallery_photos')
+    .select('id, storage_path')
+    .eq('gallery_id', galleryId)
+    .in('id', photoIds);
+
+  if (selectError) throw selectError;
+  if (!rows || rows.length === 0) return 0;
+
+  const storagePaths = rows
+    .map(r => r.storage_path)
+    .filter((p): p is string => typeof p === 'string' && p.length > 0);
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  // Storage deleted before DB rows — losing the path would make orphaned files unrecoverable.
+  if (storagePaths.length > 0) {
+    const { error: storageError } = await supabase.storage
+      .setHeader('Authorization', `Bearer ${session.access_token}`)
+      .from('gallery-photos')
+      .remove(storagePaths);
+    if (storageError) throw storageError;
+  }
+
+  const idsToDelete = rows.map(r => r.id);
+  const { error: deleteError, count } = await supabase
+    .from('gallery_photos')
+    .delete({ count: 'exact' })
+    .eq('gallery_id', galleryId)
+    .in('id', idsToDelete);
+
+  if (deleteError) throw deleteError;
+  return count ?? 0;
 }
 
 function describeAvatarError(label: string, e: unknown): string {

@@ -66,3 +66,50 @@ export async function fetchBlockedUsers(): Promise<Array<{
   if (error) return [];
   return data ?? [];
 }
+
+export type ReportReason =
+  | 'spam'
+  | 'harassment'
+  | 'inappropriate_content'
+  | 'impersonation'
+  | 'underage'
+  | 'other';
+
+export type ReportContext =
+  | 'chat'
+  | 'profile'
+  | 'gallery'
+  | 'comment'
+  | 'photo'
+  | 'other';
+
+export async function reportUser(
+  reportedUserId: string,
+  reason: ReportReason,
+  context: ReportContext = 'other',
+  contextId?: string | null,
+  notes?: string | null,
+): Promise<{ error: string | null }> {
+  const VALID_REASONS: ReportReason[] = ['spam', 'harassment', 'inappropriate_content', 'impersonation', 'underage', 'other'];
+  const VALID_CONTEXTS: ReportContext[] = ['chat', 'profile', 'gallery', 'comment', 'photo', 'other'];
+
+  if (!VALID_REASONS.includes(reason)) return { error: 'Invalid reason' };
+  if (!VALID_CONTEXTS.includes(context)) return { error: 'Invalid context' };
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+  if (user.id === reportedUserId) return { error: 'Cannot report yourself' };
+
+  const trimmedNotes = notes ? notes.trim().substring(0, 1000) : null;
+
+  const { error } = await supabase.from('reports').insert({
+    reporter_id: user.id,
+    reported_user_id: reportedUserId,
+    reason,
+    context,
+    context_id: contextId ?? null,
+    notes: trimmedNotes,
+  });
+
+  return { error: error?.message ?? null };
+}

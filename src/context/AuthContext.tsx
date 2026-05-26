@@ -31,6 +31,15 @@ const AuthContext = createContext<AuthContextType>({
   phoneVerificationRequired: false,
 });
 
+// Returns true if the access token is at or past expiry (30s safety buffer).
+function isAccessTokenExpired(session: any): boolean {
+  if (!session?.expires_at) return false;
+  // expires_at is seconds since epoch
+  const nowSec = Math.floor(Date.now() / 1000);
+  // Treat anything within 30s of expiry as expired to avoid races
+  return nowSec >= (session.expires_at - 30);
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,6 +99,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!error) {
         setProfile(data);
         setPhoneVerificationRequired(false); // BETA BYPASS — re-enable before public launch
+        if (data?.id) {
+          registerPushNotifications(data.id).catch(err => console.warn('Push registration failed:', err));
+        }
       }
       setProfileReady(true);
       setProfileLoaded(true);
@@ -100,6 +112,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
 
       if (session) {
+        if (isAccessTokenExpired(session)) {
+          try {
+            const { data: refreshed, error } = await supabase.auth.refreshSession();
+            if (error || !refreshed?.session) {
+              // Refresh failed — treat as logged out, do not keep stale session.
+              setSession(null);
+              setProfile(null);
+              setProfileReady(true);
+              resolveRestore();
+              return;
+            }
+            setSession(refreshed.session);
+            resolveRestore();
+            fetchProfile(refreshed.session.user.id);
+            return;
+          } catch {
+            setSession(null);
+            setProfile(null);
+            setProfileReady(true);
+            resolveRestore();
+            return;
+          }
+        }
+        // Token still valid — existing path.
         resolveRestore();
         fetchProfile(session.user.id);
         return;
@@ -120,12 +156,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Stored token exists but no live session yet (likely cold-start with no network).
-      // Wait up to 3 s for onAuthStateChange to deliver a refreshed session.
+      // Wait up to 8 s for onAuthStateChange to deliver a refreshed session.
       restoreTimer = setTimeout(() => {
         setProfile(null);
         setProfileReady(true);
         resolveRestore();
-      }, 3000);
+      }, 8000);
     }).catch((err: any) => {
       const isStaleToken =
         err?.message?.includes('Refresh Token Not Found') ||
@@ -152,7 +188,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         lastUserIdRef.current = newSession.user.id;
         resolveRestore(); // valid session arrived — cancel grace period
         fetchProfile(newSession.user.id);
-        registerPushNotifications(newSession.user.id).catch(err => console.warn('Push registration failed:', err));
       } else if (_event === 'SIGNED_OUT') {
         const previousUserId = lastUserIdRef.current;
         if (previousUserId) {

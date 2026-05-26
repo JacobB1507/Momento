@@ -25,7 +25,7 @@ export async function registerPushNotifications(userId: string): Promise<void> {
   }
   if (finalStatus !== 'granted') return;
 
-  const tokenData = await Notifications.getExpoPushTokenAsync({ projectId: undefined });
+  const tokenData = await Notifications.getExpoPushTokenAsync({ projectId: '36bec53d-4086-43bd-b9d1-5f39aafe0ada' });
   const expoPushToken = tokenData.data;
 
   await supabase.from('push_tokens').upsert(
@@ -50,7 +50,7 @@ export async function registerPushNotifications(userId: string): Promise<void> {
 export async function unregisterPushNotifications(userId: string): Promise<void> {
   if (!Device.isDevice) return;
 
-  const tokenData = await Notifications.getExpoPushTokenAsync({ projectId: undefined }).catch(() => null);
+  const tokenData = await Notifications.getExpoPushTokenAsync({ projectId: '36bec53d-4086-43bd-b9d1-5f39aafe0ada' }).catch(() => null);
   if (!tokenData) return;
 
   await supabase

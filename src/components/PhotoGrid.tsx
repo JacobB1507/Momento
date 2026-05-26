@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { deleteOwnPhoto } from '../lib/photoRemoval';
 import { Skeleton, SkeletonCircle } from './Skeleton';
 
-type UploaderProfile = { id: string; username: string | null; avatar_url: string | null };
+type UploaderProfile = { id: string; username: string | null; display_name: string | null; avatar_url: string | null };
 
 const AVATAR_BADGE = 28;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -45,6 +45,7 @@ export function PhotoGrid({
   const [uploaderProfiles, setUploaderProfiles] = useState<Record<string, UploaderProfile>>({});
   const [hiddenPhotoIds, setHiddenPhotoIds] = useState<string[]>([]);
   const [loadedPhotoIds, setLoadedPhotoIds] = useState<Set<string>>(new Set());
+  const [pinnedBannerPhotoId, setPinnedBannerPhotoId] = useState<string | null>(null);
 
   const markLoaded = useCallback((photoId: string) => {
     setLoadedPhotoIds((prev) => {
@@ -60,7 +61,7 @@ export function PhotoGrid({
     if (uniqueIds.length === 0) return;
     supabase
       .from('profiles')
-      .select('id, username, avatar_url')
+      .select('id, username, display_name, avatar_url')
       .in('id', uniqueIds)
       .then(({ data }) => {
         if (!data) return;
@@ -105,6 +106,7 @@ export function PhotoGrid({
   const selectedSet = new Set(selectedIds);
 
   return (
+    <Pressable style={{ flex: 1 }} onPress={() => setPinnedBannerPhotoId(null)}>
     <FlatList
       data={visiblePhotos}
       keyExtractor={(item) => item.id}
@@ -117,8 +119,10 @@ export function PhotoGrid({
           <Pressable
             style={({ pressed }) => [styles.cell, pressed && styles.cellPressed]}
             onPress={selectionMode && isMember
-              ? () => onToggleSelect?.(item.id)
-              : onPhotoPress ? () => onPhotoPress(item, index) : undefined}
+              ? () => { setPinnedBannerPhotoId(null); onToggleSelect?.(item.id); }
+              : onPhotoPress
+                ? () => { setPinnedBannerPhotoId(null); onPhotoPress(item, index); }
+                : () => setPinnedBannerPhotoId(null)}
             onLongPress={!selectionMode && canInteract ? () => handleLongPress(item) : undefined}
             delayLongPress={400}
           >
@@ -136,19 +140,35 @@ export function PhotoGrid({
             />
             {isSelected && <View style={styles.selOverlay} />}
             {item.uploaded_by && (
-              <View style={styles.avatarBadge}>
-                {uploader ? (
-                  uploader.avatar_url ? (
-                    <Image source={{ uri: uploader.avatar_url }} style={styles.avatarImage} />
-                  ) : (
-                    <View style={styles.avatarPlaceholder}>
-                      <Text style={styles.avatarLetter}>{(uploader.username ?? '?').charAt(0).toUpperCase()}</Text>
-                    </View>
-                  )
-                ) : (
-                  <SkeletonCircle size={AVATAR_BADGE} />
+              <>
+                {pinnedBannerPhotoId === item.id && (
+                  <View style={styles.uploaderBanner}>
+                    <Text style={styles.uploaderBannerText} numberOfLines={1} ellipsizeMode="tail">
+                      {uploader?.display_name || (uploader?.username ? `@${uploader.username}` : 'Unknown user')}
+                    </Text>
+                  </View>
                 )}
-              </View>
+                <Pressable
+                  style={styles.avatarBadge}
+                  hitSlop={6}
+                  onPress={() => {
+                    if (selectionMode) return;
+                    setPinnedBannerPhotoId(item.id);
+                  }}
+                >
+                  {uploader ? (
+                    uploader.avatar_url ? (
+                      <Image source={{ uri: uploader.avatar_url }} style={styles.avatarImage} />
+                    ) : (
+                      <View style={styles.avatarPlaceholder}>
+                        <Text style={styles.avatarLetter}>{(uploader.username ?? '?').charAt(0).toUpperCase()}</Text>
+                      </View>
+                    )
+                  ) : (
+                    <SkeletonCircle size={AVATAR_BADGE} />
+                  )}
+                </Pressable>
+              </>
             )}
             {selectionMode && isMember && (
               <View style={styles.selCircleWrap}><SelectionCircle selected={isSelected} /></View>
@@ -161,6 +181,7 @@ export function PhotoGrid({
       columnWrapperStyle={{ justifyContent: 'flex-start', gap: GAP }}
       ItemSeparatorComponent={() => <View style={{ height: GAP }} />}
     />
+    </Pressable>
   );
 }
 
@@ -191,4 +212,21 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   selCircleActive: { backgroundColor: SELECT_RED, borderColor: '#fff' },
+
+  uploaderBanner: {
+    position: 'absolute',
+    bottom: 38,
+    right: 4,
+    maxWidth: 180,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    zIndex: 10,
+  },
+  uploaderBannerText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '500',
+  },
 });

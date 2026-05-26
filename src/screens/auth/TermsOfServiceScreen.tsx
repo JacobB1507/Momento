@@ -27,48 +27,97 @@ export default function TermsOfServiceScreen({ navigation }: Props) {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        <Text style={styles.lastUpdated}>Last Updated: May 25, 2026</Text>
+
         <Section
-          heading="Acceptance of Terms"
-          body="By creating a Momento account you agree to these Terms of Service. If you do not agree, do not use the app. We may update these terms from time to time; continued use of the app after changes constitutes acceptance."
-        />
-        <Section
-          heading="Eligibility"
-          body="You must be at least 13 years old to use Momento. By registering, you confirm that you meet this requirement. Accounts found to belong to users under 13 will be terminated."
-        />
-        <Section
-          heading="Your Account"
-          body="You are responsible for maintaining the security of your account credentials. You must provide accurate information at signup. You may not share your account or use another person's account without their permission."
-        />
-        <Section
-          heading="Acceptable Use"
-          body="You agree not to upload content that is illegal, harassing, abusive, or infringes on another person's rights. You may not use Momento to spam, impersonate others, or engage in any activity that disrupts the service or other users."
-        />
-        <Section
-          heading="Content You Upload"
-          body="You retain ownership of photos and content you upload. By uploading to Momento you grant us a limited license to store and display that content to users you have permitted. We do not claim ownership of your content."
-        />
-        <Section
-          heading="Content Removal"
-          body="We reserve the right to remove content that violates these terms or that we determine is harmful to the community, without prior notice."
-        />
-        <Section
-          heading="Private Beta"
-          body="Momento is currently in private beta. Features may change, be removed, or be unavailable at any time. We are not liable for any data loss during this beta period, though we take reasonable precautions to protect your data."
-        />
-        <Section
-          heading="Account Termination"
-          body="We may suspend or terminate your account if you violate these terms. You may delete your account at any time from Settings, which will permanently remove your data."
-        />
-        <Section
-          heading="Disclaimers"
-          body="Momento is provided 'as is' without warranties of any kind. We are not responsible for content uploaded by other users. Our liability to you is limited to the maximum extent permitted by applicable law."
-        />
-        <Section
-          heading="Contact"
-          body="Questions about these terms? Email us at getmomentoapp@gmail.com"
+          heading="Introduction"
+          body={'These Terms of Service ("Terms") govern your use of the Momento mobile application ("App") operated by Momento ("we," "us," or "our"). By creating an account or using the App, you agree to these Terms. If you do not agree, do not use the App.'}
         />
 
-        <Text style={styles.lastUpdated}>Last updated: May 11, 2026</Text>
+        <Section
+          heading="1. Eligibility"
+          body={"• You must be at least 13 years old to use Momento. Users between 13 and 17 require verifiable parental or guardian consent.\n• By using Momento, you represent that you meet the age requirement above and that all information you provide is accurate.\n• Momento is currently available by invitation only during our beta period. Creating an account requires a valid invite code."}
+        />
+
+        <Section
+          heading="2. Your Account"
+          body={"• You are responsible for maintaining the confidentiality of your account credentials. Do not share your password with anyone.\n• You are responsible for all activity that occurs under your account, whether or not you authorized it.\n• You must provide accurate information when creating your account. Impersonating another person or entity is prohibited.\n• You may only create one account per person. Creating duplicate accounts to circumvent bans or restrictions is prohibited.\n• Notify us immediately at getmomentoapp@gmail.com if you believe your account has been compromised."}
+        />
+
+        <Section
+          heading="3. Acceptable Use"
+          body={"You agree not to use Momento to:\n• Post, upload, or share content that is illegal, harmful, threatening, abusive, harassing, defamatory, obscene, or otherwise objectionable.\n• Upload or share any content depicting nudity, sexual acts, or explicit material.\n• Upload or share content that exploits or harms minors in any way. This includes content that sexualizes minors. Violations will be reported to the National Center for Missing and Exploited Children (NCMEC) and law enforcement.\n• Harass, bully, stalk, or intimidate other users.\n• Impersonate any person or entity, or misrepresent your affiliation with a person or entity.\n• Spam other users, including sending unsolicited messages or repeatedly sending the same content.\n• Upload content you do not have the right to share, including copyrighted material owned by others without permission.\n• Use the App for any commercial purpose without our written consent.\n• Attempt to gain unauthorized access to any part of the App, our servers, or another user's account.\n• Use automated tools, bots, or scripts to interact with the App.\n• Interfere with or disrupt the integrity or performance of the App or its servers.\n• Reverse engineer, decompile, or disassemble any part of the App.\n• Violate any applicable law or regulation."}
+        />
+
+        <Section
+          heading="4. Content You Post"
+          body={"You retain ownership of content you upload to Momento (photos, comments, messages, gallery titles).\n\nBy uploading content, you grant Momento a non-exclusive, royalty-free, worldwide license to store, display, and distribute that content solely for the purpose of operating and providing the App to you and other users. This license ends when you delete the content or your account.\n\nYou represent and warrant that: (a) you own or have the necessary rights to the content you upload; (b) your content does not infringe any third-party intellectual property, privacy, or other rights; and (c) your content complies with these Terms.\n\nWe reserve the right (but have no obligation) to review, remove, or restrict access to content that violates these Terms or our community guidelines, at our sole discretion and without prior notice."}
+        />
+
+        <Section
+          heading="5. Privacy Settings and Content Visibility"
+          body={"You control who sees your galleries via three privacy settings: Private (gallery members only), Friends Only (confirmed friends), and Public (all Momento users).\n\nYou are responsible for setting appropriate privacy levels for your content. Momento is not liable for content you make publicly visible.\n\nEven private galleries are stored on our servers. Refer to our Privacy Policy for how we protect your data."}
+        />
+
+        <Section
+          heading="6. Photo Removal"
+          body={"• You may delete any photo you have uploaded at any time.\n• You may request removal of a photo uploaded by another gallery member. The original uploader must approve, or a majority (>50%) of gallery members must vote to approve removal, after which the photo is automatically deleted.\n• Momento may remove content at any time that violates these Terms, without requiring a vote."}
+        />
+
+        <Section
+          heading="7. Reporting and Moderation"
+          body={"• You may report users or content you believe violates these Terms using the in-app report feature.\n• We review reports and take action at our discretion, which may include content removal, account warnings, temporary suspension, or permanent ban.\n• We do not guarantee that all reported content will be reviewed or removed.\n• False or malicious reports submitted in bad faith may result in action against the reporting account."}
+        />
+
+        <Section
+          heading="8. Blocking and Safety"
+          body={"• You may block any user at any time. Blocked users cannot see your profile, message you, or interact with your content.\n• Blocking is not a guarantee of complete isolation — for example, content in shared public galleries may still be visible."}
+        />
+
+        <Section
+          heading="9. Intellectual Property"
+          body={"The Momento app, including its design, code, trademarks, logos, and all content created by us, is owned by Momento and protected by intellectual property laws.\n\nYou may not copy, reproduce, distribute, modify, or create derivative works of the App or its content without our written permission.\n\nIf you believe content on Momento infringes your copyright, contact us at getmomentoapp@gmail.com with: (a) identification of the copyrighted work; (b) identification of the allegedly infringing content; (c) your contact information; (d) a statement of good faith belief; and (e) a statement of accuracy under penalty of perjury."}
+        />
+
+        <Section
+          heading="10. Third-Party Services"
+          body={"Momento uses third-party services including Supabase (database/storage) and Expo (push notifications). Your use of the App is also subject to those providers' terms. The App allows sharing via third-party platforms (SMS, WhatsApp, email). We are not responsible for those platforms."}
+        />
+
+        <Section
+          heading="11. Disclaimers"
+          body={`THE APP IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT. We do not guarantee that the App will be uninterrupted or error-free. We are not responsible for content posted by users.`}
+        />
+
+        <Section
+          heading="12. Limitation of Liability"
+          body={"TO THE MAXIMUM EXTENT PERMITTED BY LAW, MOMENTO SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING LOSS OF PROFITS, DATA, OR GOODWILL, ARISING OUT OF OR RELATED TO YOUR USE OF THE APP, EVEN IF WE HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.\n\nOUR TOTAL LIABILITY FOR ANY CLAIM ARISING OUT OF THESE TERMS OR YOUR USE OF THE APP SHALL NOT EXCEED THE GREATER OF (A) $100 USD OR (B) THE AMOUNT YOU PAID US IN THE 12 MONTHS PRECEDING THE CLAIM."}
+        />
+
+        <Section
+          heading="13. Indemnification"
+          body="You agree to indemnify and hold harmless Momento and its officers, directors, employees, and agents from any claims, damages, losses, liabilities, and expenses (including reasonable legal fees) arising out of: (a) your use of the App; (b) your content; (c) your violation of these Terms; or (d) your violation of any third-party rights."
+        />
+
+        <Section
+          heading="14. Termination"
+          body={"• You may stop using the App and delete your account at any time from Settings → Delete Account.\n• We may suspend or terminate your account at any time, with or without notice, if we believe you have violated these Terms or for any other reason at our discretion.\n• Upon termination, your right to use the App ceases. Sections 4, 9, 11, 12, 13, and 15 survive termination."}
+        />
+
+        <Section
+          heading="15. Governing Law and Disputes"
+          body={"• These Terms are governed by the laws of the Province of British Columbia, Canada, without regard to conflict of law principles.\n• Any disputes arising under these Terms shall be resolved in the courts located in Vancouver, British Columbia, Canada.\n• To the extent permitted by law, you waive any right to a jury trial or class action proceeding."}
+        />
+
+        <Section
+          heading="16. Changes to These Terms"
+          body={'We may update these Terms at any time. We will notify you of material changes by updating the "Last Updated" date and, where appropriate, by sending an in-app notification. Continued use of the App after changes become effective constitutes your acceptance of the revised Terms.'}
+        />
+
+        <Section
+          heading="17. Contact"
+          body="For all inquiries including privacy, legal, and support: getmomentoapp@gmail.com"
+        />
       </ScrollView>
     </SafeAreaView>
   );

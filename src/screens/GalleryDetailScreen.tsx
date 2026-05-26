@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActionSheetIOS,
   ActivityIndicator,
   Alert,
   Platform,
@@ -12,10 +13,11 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
+import * as MediaLibrary from 'expo-media-library';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { fetchGalleryPhotos, uploadGalleryPhoto } from '../lib/galleries';
+import { fetchGalleryPhotos, uploadGalleryPhoto, deleteGalleryPhotosBatch } from '../lib/galleries';
 import { requestPhotoRemoval, getRemovalRequests } from '../lib/photoRemoval';
 import { getMyTagsAppliedToGallery, getOwnerTagsForGallery } from '../lib/tags';
 import type { GalleryTagInfo } from '../lib/tags';
@@ -35,7 +37,7 @@ import UploadProgressOverlay from '../components/UploadProgressOverlay';
 import { PhotoUploadReviewModal } from '../components/PhotoUploadReviewModal';
 import { Skeleton } from '../components/Skeleton';
 import styles from '../styles/galleryDetailStyles';
-import SelectionActionBar from '../components/SelectionActionBar';
+import SelectionActionBar, { SelectionHeader } from '../components/SelectionActionBar';
 import SaveConfirmSheet from '../components/SaveConfirmSheet';
 import { savePhotosToCameraRoll, sharePhotos, type SavablePhoto } from '../lib/photoSave';
 import DuplicatesAlert from '../components/DuplicatesAlert';
@@ -258,7 +260,35 @@ export default function GalleryDetailScreen() {
     setDuplicatesAlertVisible(true);
   };
 
-  const handleUpload = async () => {
+  const getRecentCameraRollPhotos = async (hoursBack: number = 6): Promise<Array<{ uri: string; assetId: string; creationTime: number; mimeType: string; width: number; height: number }>> => {
+    const permission = await MediaLibrary.requestPermissionsAsync();
+    if (permission.status !== 'granted') return [];
+    const cutoff = Date.now() - hoursBack * 60 * 60 * 1000;
+    const { assets } = await MediaLibrary.getAssetsAsync({
+      mediaType: MediaLibrary.MediaType.photo,
+      createdAfter: cutoff,
+      first: 500,
+    });
+    const sorted = assets.slice().sort((a, b) => b.creationTime - a.creationTime);
+    const results = await Promise.allSettled(
+      sorted.map(async (asset) => {
+        const info = await MediaLibrary.getAssetInfoAsync(asset);
+        return {
+          uri: info.localUri || asset.uri,
+          assetId: asset.id,
+          creationTime: asset.creationTime,
+          mimeType: 'image/jpeg' as const,
+          width: asset.width,
+          height: asset.height,
+        };
+      }),
+    );
+    return results
+      .filter((r): r is PromiseFulfilledResult<{ uri: string; assetId: string; creationTime: number; mimeType: string; width: number; height: number }> => r.status === 'fulfilled')
+      .map(r => r.value);
+  };
+
+  const launchImagePickerFlow = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission needed', 'Allow Momento to access your photos in Settings.', [{ text: 'OK' }]);
@@ -272,6 +302,37 @@ export default function GalleryDetailScreen() {
     });
     if (result.canceled || !result.assets || result.assets.length === 0) return;
     setPendingReviewPhotos(result.assets);
+  };
+
+  const handleUpload = async () => {
+    const recent = await getRecentCameraRollPhotos(6);
+    if (recent.length === 0) {
+      await launchImagePickerFlow();
+      return;
+    }
+    const label = `Add ${recent.length} photo${recent.length === 1 ? '' : 's'} from last 6 hours`;
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: [label, 'Choose photos…', 'Cancel'], cancelButtonIndex: 2 },
+        async (buttonIndex) => {
+          if (buttonIndex === 0) {
+            setPendingReviewPhotos(recent.map(a => ({ uri: a.uri, assetId: a.assetId, mimeType: a.mimeType, width: a.width, height: a.height })));
+          } else if (buttonIndex === 1) {
+            await launchImagePickerFlow();
+          }
+        },
+      );
+    } else {
+      Alert.alert(
+        'Add Photos',
+        undefined,
+        [
+          { text: label, onPress: () => setPendingReviewPhotos(recent.map(a => ({ uri: a.uri, assetId: a.assetId, mimeType: a.mimeType, width: a.width, height: a.height }))) },
+          { text: 'Choose photos…', onPress: launchImagePickerFlow },
+          { text: 'Cancel', style: 'cancel' },
+        ],
+      );
+    }
   };
 
   const enterSelectionMode = () => { setSelectionMode(true); setSelectedIds([]); };
@@ -316,6 +377,33 @@ export default function GalleryDetailScreen() {
     } finally {
       setSaveInProgress(false);
     }
+  };
+
+  const handleDeleteSelectedRequest = () => {
+    const count = selectedIds.length;
+    if (count === 0) return;
+    Alert.alert(
+      `Delete ${count} photo${count === 1 ? '' : 's'}?`,
+      'This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const ids = [...selectedIds];
+            if (ids.length === 0) return;
+            try {
+              await deleteGalleryPhotosBatch(galleryId, ids);
+              exitSelectionMode();
+              await load();
+            } catch (err: any) {
+              Alert.alert('Delete failed', err?.message ?? 'Could not delete photos. Please try again.');
+            }
+          },
+        },
+      ],
+    );
   };
 
   const shouldShowOwnerTags = !isOwner && ownerTags.length > 0;
@@ -382,11 +470,19 @@ export default function GalleryDetailScreen() {
           />
         </View>
       )}
-      <GalleryHeaderTagsRow
-        tags={galleryTags}
-        isOwner={canTag}
-        onPressTags={() => setTagDropdownVisible(true)}
-      />
+      {selectionMode ? (
+        <SelectionHeader
+          selectedCount={selectedIds.length}
+          onCancel={exitSelectionMode}
+          onDeleteRequest={isOwner ? handleDeleteSelectedRequest : undefined}
+        />
+      ) : (
+        <GalleryHeaderTagsRow
+          tags={galleryTags}
+          isOwner={canTag}
+          onPressTags={() => setTagDropdownVisible(true)}
+        />
+      )}
 
       {loading ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 4 }}>

@@ -30,6 +30,7 @@ import styles, { AVATAR_SIZE } from '../styles/friendProfileStyles';
 import TagFilterRow from '../components/TagFilterRow';
 import { getTagsForUser, getMyTagsAppliedToGalleries } from '../lib/tags';
 import type { ProfileTag, GalleryTagInfo } from '../lib/tags';
+import ReportSheet from '../components/ReportSheet';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList, 'FriendProfile'>;
 type RouteProps = RouteProp<RootStackParamList, 'FriendProfile'>;
@@ -59,6 +60,7 @@ export default function FriendProfileScreen() {
   const [ownerTags, setOwnerTags] = useState<ProfileTag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [galleryTagsMap, setGalleryTagsMap] = useState<Map<string, GalleryTagInfo[]>>(new Map());
+  const [reportSheetVisible, setReportSheetVisible] = useState(false);
 
   const filteredGalleries = useMemo(() => {
     if (selectedTagIds.size === 0) return galleries;
@@ -95,7 +97,25 @@ export default function FriendProfileScreen() {
       : { data: [] };
     const all = [...(ownedRes.data ?? []), ...(collab ?? [])];
     const uniqueGalleries = all.filter((g, i, arr) => arr.findIndex((x: any) => x.id === g.id) === i);
-    setGalleries(uniqueGalleries);
+
+    if (currentUserId && currentUserId !== userId && uniqueGalleries.length > 0) {
+      const galleryIds = uniqueGalleries.map((g: any) => g.id);
+      const { data: photoRows, error: photosErr } = await supabase
+        .from('gallery_photos')
+        .select('gallery_id')
+        .in('gallery_id', galleryIds);
+      if (photosErr) {
+        setGalleries(uniqueGalleries);
+      } else {
+        const nonEmpty = new Set<string>();
+        for (const row of (photoRows ?? [])) {
+          if (row?.gallery_id) nonEmpty.add(row.gallery_id);
+        }
+        setGalleries(uniqueGalleries.filter((g: any) => nonEmpty.has(g.id)));
+      }
+    } else {
+      setGalleries(uniqueGalleries);
+    }
 
     try {
       const galleryIds = uniqueGalleries.map((g: any) => g.id);
@@ -284,14 +304,28 @@ export default function FriendProfileScreen() {
           <TouchableOpacity style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 998 }} onPress={() => setShowMenu(false)} activeOpacity={1} />
           <View style={{ position: 'absolute', top: 56, right: 16, backgroundColor: '#1a1a1a', borderRadius: 12, zIndex: 999, minWidth: 180, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 8 }}>
             {blocked ? (
-              <Pressable
-                style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}
-                onPress={() => { setShowMenu(false); handleUnblock(); }}
-              >
-                <Text style={{ color: '#ef4444', fontSize: 15, fontWeight: '500' }}>Unblock</Text>
-              </Pressable>
+              <>
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}
+                  onPress={() => { setShowMenu(false); handleUnblock(); }}
+                >
+                  <Text style={{ color: '#ef4444', fontSize: 15, fontWeight: '500' }}>Unblock</Text>
+                </Pressable>
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}
+                  onPress={() => { setShowMenu(false); setReportSheetVisible(true); }}
+                >
+                  <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '500' }}>Report User</Text>
+                </Pressable>
+              </>
             ) : (
               <>
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}
+                  onPress={() => { setShowMenu(false); setReportSheetVisible(true); }}
+                >
+                  <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '500' }}>Report User</Text>
+                </Pressable>
                 <Pressable
                   style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}
                   onPress={() => {
@@ -422,6 +456,12 @@ export default function FriendProfileScreen() {
         mutuals={mutuals}
         currentUserId={currentUserId}
         onFriendRequestSent={() => {}}
+      />
+      <ReportSheet
+        visible={reportSheetVisible}
+        onClose={() => setReportSheetVisible(false)}
+        reportedUserId={userId}
+        contentType="user"
       />
     </SafeAreaView>
   );

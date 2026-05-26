@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { clearDraft } from '../lib/createGalleryDraft';
@@ -27,6 +28,8 @@ export default function TabNavigator() {
   const tutorial = useTutorial();
   const { user } = useAuth();
   const [messagesBadge, setMessagesBadge] = useState<number>(0);
+  const [acknowledgedCount, setAcknowledgedCount] = useState<number>(0);
+  const showRedMessagesIcon = messagesBadge > 0 && messagesBadge > acknowledgedCount;
 
   const refreshMessagesBadge = useCallback(async () => {
     if (!user?.id) {
@@ -51,6 +54,22 @@ export default function TabNavigator() {
     });
     return () => sub.remove();
   }, [refreshMessagesBadge]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    AsyncStorage.getItem(`momento:messagesAcknowledgedCount:${user.id}`)
+      .then(val => { if (val !== null) setAcknowledgedCount(parseInt(val, 10) || 0); })
+      .catch(() => {});
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (messagesBadge < acknowledgedCount) {
+      setAcknowledgedCount(messagesBadge);
+      if (user?.id) {
+        AsyncStorage.setItem(`momento:messagesAcknowledgedCount:${user.id}`, String(messagesBadge)).catch(() => {});
+      }
+    }
+  }, [messagesBadge, acknowledgedCount, user?.id]);
 
   return (
     <Tab.Navigator
@@ -144,15 +163,20 @@ export default function TabNavigator() {
           tabPress: (e) => {
             if (tutorial.active && tutorial.currentStep?.targetTab && tutorial.currentStep.targetTab !== 'Messages') {
               e.preventDefault();
+              return;
             } else if (tutorial.active && tutorial.currentStep?.targetTab === 'Messages') {
               if (tutorial.currentStep?.kind === 'navigate') setTimeout(() => tutorial.nextStep(), 350);
+            }
+            if (messagesBadge > 0 && user?.id) {
+              setAcknowledgedCount(messagesBadge);
+              AsyncStorage.setItem(`momento:messagesAcknowledgedCount:${user.id}`, String(messagesBadge)).catch(() => {});
             }
           },
         }}
         options={{
           tabBarIcon: ({ focused, color }: { focused: boolean; color: string; size: number }) => (
-            <TabBarIcon tabKey="messages">
-              <Ionicons name={focused ? 'paper-plane' : 'paper-plane-outline'} size={26} color={color} />
+            <TabBarIcon tabKey="messages" badgeCount={messagesBadge} badgeActive={showRedMessagesIcon}>
+              <Ionicons name={focused ? 'paper-plane' : 'paper-plane-outline'} size={26} color={showRedMessagesIcon ? '#FF3B30' : color} />
             </TabBarIcon>
           ),
           tabBarLabel: ({ color }) => (
@@ -160,8 +184,6 @@ export default function TabNavigator() {
               Messages
             </Text>
           ),
-          tabBarBadge: messagesBadge > 0 ? messagesBadge : undefined,
-          tabBarBadgeStyle: { backgroundColor: '#FF3B30', color: '#FFFFFF', fontSize: 11, minWidth: 18, height: 18 },
         }}
       />
       <Tab.Screen
