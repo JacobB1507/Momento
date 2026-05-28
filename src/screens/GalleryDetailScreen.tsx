@@ -17,7 +17,8 @@ import * as MediaLibrary from 'expo-media-library';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { fetchGalleryPhotos, uploadGalleryPhoto, deleteGalleryPhotosBatch } from '../lib/galleries';
+import { fetchGalleryPhotos, uploadGalleryPhoto, deleteGalleryPhotosBatch, getRecentUploadWindowHours } from '../lib/galleries';
+import { getPrepped } from '../lib/uploadPrep';
 import { requestPhotoRemoval, getRemovalRequests } from '../lib/photoRemoval';
 import { getMyTagsAppliedToGallery, getOwnerTagsForGallery } from '../lib/tags';
 import type { GalleryTagInfo } from '../lib/tags';
@@ -82,6 +83,7 @@ export default function GalleryDetailScreen() {
   const [ownerTagsPopoverVisible, setOwnerTagsPopoverVisible] = useState(false);
   const [tagDropdownVisible, setTagDropdownVisible] = useState(false);
   const highlightConsumed = useRef(false);
+  const [recentWindowHours, setRecentWindowHours] = useState<number>(6);
 
   const isOwner = !!session?.user.id && session.user.id === galleryMeta?.created_by;
   const [isMember, setIsMember] = useState(false);
@@ -144,6 +146,15 @@ export default function GalleryDetailScreen() {
     if (galleryMeta.created_by === session.user.id) setCanTag(true);
   }, [galleryMeta, session?.user?.id]);
 
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    let cancelled = false;
+    getRecentUploadWindowHours(session.user.id).then(h => {
+      if (!cancelled) setRecentWindowHours(h);
+    });
+    return () => { cancelled = true; };
+  }, [session?.user?.id]);
+
   const handleDeletePhoto = (photo: Photo) => {
     setPhotos(prev => prev.filter(p => p.id !== photo.id));
   };
@@ -182,6 +193,8 @@ export default function GalleryDetailScreen() {
     }
   };
 
+  const CONCURRENCY = 4;
+
   const performUpload = async (toUpload: ClassifiedPhoto[]) => {
     if (toUpload.length === 0) {
       Alert.alert('Nothing to upload', 'All selected photos are already in this gallery.');
@@ -195,24 +208,35 @@ export default function GalleryDetailScreen() {
     let failed = 0;
     setUploading(true);
     setUploadState({ total, completed: 0, failed: 0, currentIndex: 0, inProgress: true });
-    for (let i = 0; i < toUpload.length; i++) {
-      const p = toUpload[i];
-      setUploadState(prev => ({ ...prev, currentIndex: i + 1 }));
-      try {
-        await uploadGalleryPhoto({
-          galleryId,
-          uri: p.uri,
-          mimeType: p.mimeType,
-          contentHash: p.contentHash,
-          sourceAssetId: p.assetId,
-        });
-        completed++;
-        setUploadState(prev => ({ ...prev, completed }));
-      } catch {
-        failed++;
-        setUploadState(prev => ({ ...prev, failed }));
+
+    let nextIndex = 0;
+    const workers = Array.from({ length: Math.min(CONCURRENCY, total) }, async () => {
+      while (true) {
+        const i = nextIndex++;
+        if (i >= total) return;
+        const p = toUpload[i];
+        setUploadState(prev => ({ ...prev, currentIndex: i + 1 }));
+        try {
+          const prepped = getPrepped(p.uri);
+          await uploadGalleryPhoto({
+            galleryId,
+            uri: p.uri,
+            mimeType: p.mimeType,
+            contentHash: p.contentHash,
+            sourceAssetId: p.assetId,
+            preppedBytes: prepped?.bytes,
+            preppedContentType: prepped?.contentType,
+          });
+          completed++;
+          setUploadState(prev => ({ ...prev, completed }));
+        } catch {
+          failed++;
+          setUploadState(prev => ({ ...prev, failed }));
+        }
       }
-    }
+    });
+    await Promise.all(workers);
+
     await load();
     setUploading(false);
     setUploadState(prev => ({ ...prev, inProgress: false }));
@@ -224,7 +248,11 @@ export default function GalleryDetailScreen() {
   const runUploadLoop = async (assets: any[]) => {
     setPendingReviewPhotos(null);
     if (assets.length === 0) return;
+    // Show the progress overlay immediately — before hashing / network work starts.
     setUploading(true);
+    setUploadState({ total: assets.length, completed: 0, failed: 0, currentIndex: 0, inProgress: true });
+    // Yield one tick so the progress bar and modal dismiss render before heavy work.
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
     let picked: PickedPhoto[];
     try {
       picked = await Promise.all(
@@ -238,6 +266,7 @@ export default function GalleryDetailScreen() {
     } catch {
       Alert.alert('Upload failed', "Couldn't read one or more photos. Please try again.");
       setUploading(false);
+      setUploadState(prev => ({ ...prev, inProgress: false }));
       return;
     }
     let classification;
@@ -246,6 +275,7 @@ export default function GalleryDetailScreen() {
     } catch {
       Alert.alert('Upload check failed', "Couldn't check for duplicates. Please try again.");
       setUploading(false);
+      setUploadState(prev => ({ ...prev, inProgress: false }));
       return;
     }
     const { classified, duplicateCount, uniqueCount } = classification;
@@ -257,6 +287,7 @@ export default function GalleryDetailScreen() {
     setPendingDuplicateCount(duplicateCount);
     setPendingUniqueCount(uniqueCount);
     setUploading(false);
+    setUploadState(prev => ({ ...prev, inProgress: false }));
     setDuplicatesAlertVisible(true);
   };
 
@@ -305,12 +336,12 @@ export default function GalleryDetailScreen() {
   };
 
   const handleUpload = async () => {
-    const recent = await getRecentCameraRollPhotos(6);
+    const recent = await getRecentCameraRollPhotos(recentWindowHours);
     if (recent.length === 0) {
       await launchImagePickerFlow();
       return;
     }
-    const label = `Add ${recent.length} photo${recent.length === 1 ? '' : 's'} from last 6 hours`;
+    const label = `Add ${recent.length} photo${recent.length === 1 ? '' : 's'} from last ${recentWindowHours} hours`;
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         { options: [label, 'Choose photos…', 'Cancel'], cancelButtonIndex: 2 },

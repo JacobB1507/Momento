@@ -41,6 +41,7 @@ import GalleryInviteNewScreen from '../screens/GalleryInviteNewScreen';
 import GalleryInvitePromptScreen from '../screens/GalleryInvitePromptScreen';
 import TrustedFriendsScreen from '../screens/TrustedFriendsScreen';
 import DefaultGalleryPrivacyScreen from '../screens/DefaultGalleryPrivacyScreen';
+import RecentUploadWindowScreen from '../screens/RecentUploadWindowScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
 import TransferOwnershipScreen from '../screens/TransferOwnershipScreen';
 import ManageTagsScreen from '../screens/ManageTagsScreen';
@@ -322,6 +323,11 @@ export default function RootNavigator() {
               options={{ animation: 'slide_from_right' }}
             />
             <Stack.Screen
+              name="RecentUploadWindow"
+              component={RecentUploadWindowScreen}
+              options={{ headerShown: true, title: 'Recent Photos Shortcut', animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
               name="NotificationSettings"
               component={NotificationSettingsScreen}
               options={{ animation: 'slide_from_right' }}
@@ -336,6 +342,8 @@ export default function RootNavigator() {
               component={ManageTagsScreen}
               options={{ headerShown: true, title: 'Tags', headerBackTitle: 'Back', animation: 'slide_from_right' }}
             />
+            <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ animation: 'slide_from_right', gestureEnabled: true }} />
+            <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} options={{ animation: 'slide_from_right', gestureEnabled: true }} />
           </>
         ) : (
           <>

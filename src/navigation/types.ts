@@ -47,6 +47,7 @@ export type RootStackParamList = {
   GalleryInviteNew: { galleryId?: string; galleryTitle: string; privacy?: string; pendingCreate?: boolean };
   TrustedFriends: undefined;
   DefaultGalleryPrivacy: undefined;
+  RecentUploadWindow: undefined;
   NotificationSettings: undefined;
   TransferOwnership: { galleryId: string; galleryTitle: string };
   ManageTags: undefined;

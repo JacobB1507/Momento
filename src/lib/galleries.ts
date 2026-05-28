@@ -3,6 +3,8 @@ import { supabase } from './supabase';
 import { reportError } from './errorReport';
 import type { Gallery, Photo } from '../types/database';
 
+const recentUploadWindowCache = new Map<string, number>();
+
 export async function fetchUserGalleries(userId: string, viewerUserId?: string): Promise<Gallery[]> {
   const { data: owned, error: ownedError } = await supabase
     .from('galleries')
@@ -83,6 +85,8 @@ export async function uploadGalleryPhoto({
   onProgress,
   contentHash,
   sourceAssetId,
+  preppedBytes,
+  preppedContentType,
 }: {
   galleryId: string;
   uri: string;
@@ -92,23 +96,10 @@ export async function uploadGalleryPhoto({
   onProgress?: (bytesUploaded: number, bytesTotal: number) => void;
   contentHash?: string;
   sourceAssetId?: string | null;
+  preppedBytes?: ArrayBuffer;
+  preppedContentType?: string;
 }): Promise<void> {
   if (mimeType && !mimeType.startsWith('image/')) throw new Error('Only image files are supported.');
-
-  const MAX_DIM = 2048;
-  const actions: Array<{ resize: { width?: number; height?: number } }> = [];
-  if (width && height) {
-    const longer = Math.max(width, height);
-    if (longer > MAX_DIM) {
-      const scale = MAX_DIM / longer;
-      actions.push({ resize: { width: Math.round(width * scale), height: Math.round(height * scale) } });
-    }
-  } else {
-    actions.push({ resize: { width: MAX_DIM } });
-  }
-  const compressed = await ImageManipulator.manipulateAsync(
-    uri, actions, { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
-  );
 
   // StorageClient has no setAuth method in storage-js v2.x — use setHeader instead.
   // This also guards against the startup race where onAuthStateChange hasn't fired
@@ -119,14 +110,37 @@ export async function uploadGalleryPhoto({
   if (contentHash !== undefined && !/^[a-f0-9]{64}$/.test(contentHash)) throw new Error('Invalid contentHash');
   if (sourceAssetId != null && (sourceAssetId.length === 0 || sourceAssetId.length > 255)) throw new Error('Invalid sourceAssetId');
 
-  const response = await fetch(compressed.uri);
-  const arrayBuffer = await response.arrayBuffer();
+  let uploadBytes: ArrayBuffer;
+  let uploadContentType: string;
+
+  if (preppedBytes) {
+    uploadBytes = preppedBytes;
+    uploadContentType = preppedContentType ?? 'image/jpeg';
+  } else {
+    const MAX_DIM = 2048;
+    const actions: Array<{ resize: { width?: number; height?: number } }> = [];
+    if (width && height) {
+      const longer = Math.max(width, height);
+      if (longer > MAX_DIM) {
+        const scale = MAX_DIM / longer;
+        actions.push({ resize: { width: Math.round(width * scale), height: Math.round(height * scale) } });
+      }
+    } else {
+      actions.push({ resize: { width: MAX_DIM } });
+    }
+    const compressed = await ImageManipulator.manipulateAsync(
+      uri, actions, { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+    );
+    const response = await fetch(compressed.uri);
+    uploadBytes = await response.arrayBuffer();
+    uploadContentType = 'image/jpeg';
+  }
 
   const storagePath = `${galleryId}/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
   const { error: uploadError } = await supabase.storage
     .setHeader('Authorization', `Bearer ${session.access_token}`)
     .from('gallery-photos')
-    .upload(storagePath, arrayBuffer, { contentType: 'image/jpeg', upsert: false });
+    .upload(storagePath, uploadBytes, { contentType: uploadContentType, upsert: false });
   if (uploadError) throw uploadError;
 
   const { data: urlData } = supabase.storage.from('gallery-photos').getPublicUrl(storagePath);
@@ -384,6 +398,59 @@ export async function setDefaultGalleryPrivacy(userId: string, privacy: 'private
     .update({ default_gallery_privacy: privacy })
     .eq('id', userId);
   if (error) throw error;
+}
+
+export async function getRecentUploadWindowHours(userId: string): Promise<number> {
+  const cached = recentUploadWindowCache.get(userId);
+  if (typeof cached === 'number') {
+    return cached;
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('recent_upload_window_hours')
+    .eq('id', userId)
+    .maybeSingle();
+
+  let resolved = 6;
+  if (!error && data && typeof data.recent_upload_window_hours === 'number') {
+    const n = data.recent_upload_window_hours;
+    if (n >= 1 && n <= 168) {
+      resolved = n;
+    }
+  }
+
+  recentUploadWindowCache.set(userId, resolved);
+  return resolved;
+}
+
+export async function setRecentUploadWindowHours(
+  userId: string,
+  hours: number
+): Promise<{ error: string | null }> {
+  if (!Number.isInteger(hours) || hours < 1 || hours > 168) {
+    return { error: 'Hours must be a whole number between 1 and 168' };
+  }
+  const { error } = await supabase
+    .from('profiles')
+    .update({ recent_upload_window_hours: hours })
+    .eq('id', userId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  recentUploadWindowCache.set(userId, hours);
+  return { error: null };
+}
+
+export function clearRecentUploadWindowCache(): void {
+  recentUploadWindowCache.clear();
+}
+
+export function peekRecentUploadWindowHours(userId: string): number | null {
+  const cached = recentUploadWindowCache.get(userId);
+  return typeof cached === 'number' ? cached : null;
 }
 
 export async function promoteToAdmin(galleryId: string, userId: string): Promise<void> {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Dimensions,
   FlatList,
@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { beginPrepSession, cancelAllPrep, dropPrepped, ensurePrepped } from '../lib/uploadPrep';
 
 export type ReviewablePhoto = {
   uri: string;
@@ -25,6 +26,40 @@ type Props = {
   onConfirm: (finalPhotos: ReviewablePhoto[]) => void;
 };
 
+type TileProps = {
+  photo: ReviewablePhoto;
+  onRemove: (uri: string) => void;
+  onOpenEnlarged: (uri: string) => void;
+};
+
+const PhotoTile = React.memo(function PhotoTile({
+  photo,
+  onRemove,
+  onOpenEnlarged,
+}: TileProps) {
+  return (
+    <View style={styles.tile}>
+      <Pressable
+        style={StyleSheet.absoluteFillObject}
+        onPress={() => onOpenEnlarged(photo.uri)}
+      >
+        <Image
+          source={{ uri: photo.uri }}
+          style={styles.tileImage}
+          cachePolicy="memory-disk"
+        />
+      </Pressable>
+      <Pressable
+        style={styles.tileXBtn}
+        onPress={() => onRemove(photo.uri)}
+        hitSlop={8}
+      >
+        <Ionicons name="close" size={16} color="#fff" />
+      </Pressable>
+    </View>
+  );
+});
+
 export function PhotoUploadReviewModal({
   visible,
   photos,
@@ -35,6 +70,10 @@ export function PhotoUploadReviewModal({
   const [total, setTotal] = useState(photos.length);
   const [enlargedIndex, setEnlargedIndex] = useState<number | null>(null);
 
+  const workingSetRef = useRef(workingSet);
+  workingSetRef.current = workingSet;
+  const sessionRef = useRef<number>(0);
+
   React.useEffect(() => {
     if (visible) {
       setWorkingSet(photos);
@@ -43,9 +82,34 @@ export function PhotoUploadReviewModal({
     }
   }, [visible, photos]);
 
-  const removePhoto = (uri: string) => {
+  useEffect(() => {
+    if (!visible) return;
+    const gen = beginPrepSession();
+    sessionRef.current = gen;
+    for (const p of workingSet) {
+      ensurePrepped(p.uri, gen, p.width as number | undefined, p.height as number | undefined, p.mimeType as string | undefined);
+    }
+    return () => {
+      cancelAllPrep();
+    };
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!visible) return;
+    for (const p of workingSet) {
+      ensurePrepped(p.uri, sessionRef.current, p.width as number | undefined, p.height as number | undefined, p.mimeType as string | undefined);
+    }
+  }, [workingSet, visible]);
+
+  const handleRemove = useCallback((uri: string) => {
+    dropPrepped(uri);
     setWorkingSet((prev) => prev.filter((p) => p.uri !== uri));
-  };
+  }, []);
+
+  const handleOpenEnlarged = useCallback((uri: string) => {
+    const idx = workingSetRef.current.findIndex((p) => p.uri === uri);
+    if (idx !== -1) setEnlargedIndex(idx);
+  }, []);
 
   const removeEnlargedPhoto = () => {
     if (enlargedIndex === null) return;
@@ -64,22 +128,12 @@ export function PhotoUploadReviewModal({
     onConfirm(workingSet);
   };
 
-  const renderItem = ({ item, index }: { item: ReviewablePhoto; index: number }) => (
-    <View style={styles.tile}>
-      <Pressable
-        style={StyleSheet.absoluteFillObject}
-        onPress={() => setEnlargedIndex(index)}
-      >
-        <Image source={{ uri: item.uri }} style={styles.tileImage} />
-      </Pressable>
-      <Pressable
-        style={styles.tileXBtn}
-        onPress={() => removePhoto(item.uri)}
-        hitSlop={8}
-      >
-        <Ionicons name="close" size={16} color="#fff" />
-      </Pressable>
-    </View>
+  const renderItem = ({ item }: { item: ReviewablePhoto }) => (
+    <PhotoTile
+      photo={item}
+      onRemove={handleRemove}
+      onOpenEnlarged={handleOpenEnlarged}
+    />
   );
 
   const enlargedPhoto = enlargedIndex !== null ? workingSet[enlargedIndex] : null;
@@ -143,6 +197,7 @@ export function PhotoUploadReviewModal({
             source={{ uri: enlargedPhoto.uri }}
             style={styles.enlargedImage}
             contentFit="contain"
+            cachePolicy="memory-disk"
           />
 
           <View style={styles.enlargedTopBar}>

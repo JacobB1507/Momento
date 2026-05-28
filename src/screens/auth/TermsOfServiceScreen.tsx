@@ -96,7 +96,12 @@ export default function TermsOfServiceScreen({ navigation }: Props) {
 
         <Section
           heading="13. Indemnification"
-          body="You agree to indemnify and hold harmless Momento and its officers, directors, employees, and agents from any claims, damages, losses, liabilities, and expenses (including reasonable legal fees) arising out of: (a) your use of the App; (b) your content; (c) your violation of these Terms; or (d) your violation of any third-party rights."
+          body={
+            "You agree to indemnify and hold harmless Momento and its officers, directors, employees, and agents from any claims, liabilities, damages, losses, and expenses (including legal fees) arising from:\n\n" +
+            "• Your use of the app.\n\n" +
+            "• Your user content.\n\n" +
+            "• Your violation of these Terms."
+          }
         />
 
         <Section

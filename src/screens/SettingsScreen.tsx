@@ -5,7 +5,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { getDefaultGalleryPrivacy } from '../lib/galleries';
+import { getDefaultGalleryPrivacy, getRecentUploadWindowHours } from '../lib/galleries';
 import { hasContactsPermission, requestContactsPermission } from '../lib/contacts';
 import * as Contacts from 'expo-contacts';
 import { reportError } from '../lib/errorReport';
@@ -44,6 +44,7 @@ export default function SettingsScreen() {
   const { session, profile } = useAuth();
   const userId = session?.user.id ?? '';
   const [defaultPrivacy, setDefaultPrivacy] = useState<string>('friends');
+  const [recentWindowHours, setRecentWindowHours] = useState<number>(6);
   const [syncingContacts, setSyncingContacts] = useState(false);
   const [contactsPermissionGranted, setContactsPermissionGranted] = useState(false);
 
@@ -51,6 +52,7 @@ export default function SettingsScreen() {
     useCallback(() => {
       if (!userId) return;
       getDefaultGalleryPrivacy(userId).then(setDefaultPrivacy);
+      getRecentUploadWindowHours(userId).then(setRecentWindowHours);
       (async () => {
         try {
           const { status } = await Contacts.getPermissionsAsync();
@@ -84,6 +86,12 @@ export default function SettingsScreen() {
 
   const go = (screen: string) => () => navigation.navigate(screen as never);
   const privacyLabel = defaultPrivacy.charAt(0).toUpperCase() + defaultPrivacy.slice(1);
+  const recentWindowLabel = (() => {
+    if ([6, 12, 24, 48].includes(recentWindowHours)) {
+      return `${recentWindowHours} hours`;
+    }
+    return `Custom - ${recentWindowHours} hours`;
+  })();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -111,7 +119,19 @@ export default function SettingsScreen() {
 
         <Text style={styles.sectionLabel}>PROFILE</Text>
         <View style={styles.card}>
+          <Row label="Edit Display Name" onPress={go('EditDisplayName')} />
+          <Sep />
           <Row label="Change Username" onPress={go('ChangeUsername')} />
+          <Sep />
+          <Row label="Edit Bio" onPress={go('EditBio')} />
+          <Sep />
+          <Row
+            label="Tags"
+            icon={<Ionicons name="pricetags-outline" size={20} color="#8E8E93" />}
+            onPress={go('ManageTags')}
+          />
+          <Sep />
+          <Row label="Change Password" onPress={go('ChangePassword')} />
           <Sep />
           <Row label="Change Email" onPress={go('ChangeEmail')} />
           <Sep />
@@ -125,30 +145,20 @@ export default function SettingsScreen() {
               />
             </>
           )}
-          <Sep />
-          <Row label="Change Password" onPress={go('ChangePassword')} />
-          <Sep />
-          <Row label="Edit Display Name" onPress={go('EditDisplayName')} />
-          <Sep />
-          <Row label="Edit Bio" onPress={go('EditBio')} />
-          <Sep />
-          <Row
-            label="Tags"
-            icon={<Ionicons name="pricetags-outline" size={20} color="#8E8E93" />}
-            onPress={go('ManageTags')}
-          />
         </View>
 
         <Text style={styles.sectionLabel}>GALLERIES</Text>
         <View style={styles.card}>
-          <Row label="Default Gallery Privacy" subtitle={privacyLabel} onPress={go('DefaultGalleryPrivacy')} />
-          <Sep />
           <Row
             label="Trusted Friends"
             subtitle="Auto-accept gallery invites from trusted friends"
             icon={<Ionicons name="star-outline" size={18} color="#111827" />}
             onPress={go('TrustedFriends')}
           />
+          <Sep />
+          <Row label="Recent Photos Shortcut" subtitle={recentWindowLabel} onPress={go('RecentUploadWindow')} />
+          <Sep />
+          <Row label="Default Gallery Privacy" subtitle={privacyLabel} onPress={go('DefaultGalleryPrivacy')} />
         </View>
 
         <Text style={styles.sectionLabel}>OTHER</Text>
@@ -165,6 +175,13 @@ export default function SettingsScreen() {
           >
             <Text style={styles.signOutText}>Sign Out</Text>
           </Pressable>
+        </View>
+
+        <Text style={styles.sectionLabel}>LEGAL</Text>
+        <View style={styles.card}>
+          <Row label="Privacy Policy" onPress={go('PrivacyPolicy')} />
+          <Sep />
+          <Row label="Terms of Service" onPress={go('TermsOfService')} />
         </View>
 
         <View style={styles.deleteSection}>
