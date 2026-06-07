@@ -1,3 +1,11 @@
+// ============================================================
+// RETIRED 2026-06-07 — NOT REGISTERED IN NAVIGATION.
+// Superseded by GalleryInvitePromptScreen. Kept intentionally
+// in case we need to restore the simple invite screen.
+// To re-enable: re-add the 'GalleryInvite' route to
+// navigation/types.ts + RootNavigator.tsx and repoint the
+// gallery_invite tap in hooks/useNotifications.ts.
+// ============================================================
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,

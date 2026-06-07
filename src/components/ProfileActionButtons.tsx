@@ -1,67 +1,144 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { supabase } from '../lib/supabase';
 import { createConversation } from '../lib/messages';
 import type { RootStackParamList } from '../navigation/types';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
+type RelationshipState = 'none' | 'outgoing' | 'incoming' | 'friends' | 'blocked';
 
 type Props = {
   userId: string;
   currentUserId: string;
-  isFriend: boolean;
-  hasPendingRequest: boolean;
-  onFriendPress: () => void;
   onMessagePress: () => void;
 };
 
-export default function ProfileActionButtons({ userId, currentUserId, isFriend, hasPendingRequest, onFriendPress, onMessagePress }: Props) {
+export default function ProfileActionButtons({ userId, currentUserId, onMessagePress }: Props) {
   const navigation = useNavigation<NavProp>();
+  const [relationship, setRelationship] = useState<RelationshipState>('none');
+  const [mutating, setMutating] = useState(false);
+  const [msgSubmitting, setMsgSubmitting] = useState(false);
 
-  const friendLabel = isFriend ? 'Friends ✓' : hasPendingRequest ? 'Requested' : 'Add Friend';
-  const friendDisabled = isFriend || hasPendingRequest;
+  const fetchRelationship = useCallback(async () => {
+    const { data, error } = await supabase.rpc('get_relationship_state', { p_other: userId });
+    if (!error && data != null) {
+      setRelationship(data as RelationshipState);
+    }
+  }, [userId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchRelationship();
+    }, [fetchRelationship])
+  );
+
+  const handleFriendPress = async () => {
+    if (mutating) return;
+
+    const prev = relationship;
+    let optimistic: RelationshipState;
+    let rpcName: string;
+    let params: Record<string, unknown>;
+
+    if (relationship === 'none') {
+      optimistic = 'outgoing';
+      rpcName = 'send_friend_request';
+      params = { p_receiver: userId };
+    } else if (relationship === 'outgoing') {
+      optimistic = 'none';
+      rpcName = 'cancel_friend_request';
+      params = { p_receiver: userId };
+    } else if (relationship === 'incoming') {
+      optimistic = 'friends';
+      rpcName = 'respond_friend_request';
+      params = { p_requester: userId, p_accept: true };
+    } else {
+      return;
+    }
+
+    setRelationship(optimistic);
+    setMutating(true);
+    const { error } = await supabase.rpc(rpcName, params);
+    if (error) {
+      setRelationship(prev);
+    }
+    await fetchRelationship();
+    setMutating(false);
+  };
 
   const handleMessagePress = async () => {
-    if (isFriend) {
+    if (relationship === 'friends') {
       onMessagePress();
       return;
     }
-    const conversation = await createConversation(currentUserId, userId);
-    navigation.navigate('Chat', {
-      conversationId: conversation.id,
-      otherUserId: userId,
-      otherUsername: '',
-      isPendingRequest: true,
-    });
+    setMsgSubmitting(true);
+    try {
+      const conversation = await createConversation(currentUserId, userId);
+      navigation.navigate('Chat', {
+        conversationId: conversation.id,
+        otherUserId: userId,
+        otherUsername: '',
+        isPendingRequest: true,
+      });
+    } finally {
+      setMsgSubmitting(false);
+    }
   };
 
-  const msgLabel = isFriend ? 'Message' : 'Request to Message';
+  const isFriends = relationship === 'friends';
+  const showFriendBtn = relationship !== 'blocked';
+  const friendIsOutline = relationship === 'outgoing' || relationship === 'friends';
+  const friendIsDisabled = relationship === 'friends' || mutating;
+
+  const friendLabel =
+    relationship === 'outgoing' ? 'Requested' :
+    relationship === 'incoming' ? 'Accept Request' :
+    relationship === 'friends' ? 'Friends' :
+    'Add Friend';
+
+  const msgLabel = isFriends ? 'Message' : 'Request to Message';
 
   return (
     <View style={styles.row}>
+      {showFriendBtn && (
+        <Pressable
+          style={({ pressed }) => [
+            styles.btn,
+            friendIsOutline ? styles.btnOutline : styles.btnPrimary,
+            pressed && !friendIsDisabled && { opacity: 0.8 },
+            mutating && { opacity: 0.5 },
+          ]}
+          onPress={handleFriendPress}
+          disabled={friendIsDisabled}
+        >
+          {mutating ? (
+            <ActivityIndicator size="small" color={friendIsOutline ? '#111827' : '#fff'} />
+          ) : (
+            <Text style={[styles.btnText, friendIsOutline && styles.btnTextOutline]}>
+              {friendLabel}
+            </Text>
+          )}
+        </Pressable>
+      )}
       <Pressable
         style={({ pressed }) => [
           styles.btn,
-          friendDisabled ? styles.btnOutline : styles.btnPrimary,
-          pressed && !friendDisabled && { opacity: 0.8 },
-        ]}
-        onPress={onFriendPress}
-        disabled={friendDisabled}
-      >
-        <Text style={[styles.btnText, friendDisabled && styles.btnTextOutline]}>{friendLabel}</Text>
-      </Pressable>
-      <Pressable
-        style={({ pressed }) => [
-          styles.btn,
-          isFriend ? styles.btnDark : styles.btnDarkOutline,
-          pressed && { opacity: 0.8 },
+          isFriends ? styles.btnDark : styles.btnDarkOutline,
+          pressed && !msgSubmitting && { opacity: 0.8 },
+          msgSubmitting && { opacity: 0.5 },
         ]}
         onPress={handleMessagePress}
+        disabled={msgSubmitting}
       >
-        <Text style={[styles.btnText, !isFriend && styles.btnTextDark]}>
-          {msgLabel}
-        </Text>
+        {msgSubmitting ? (
+          <ActivityIndicator size="small" color="#1a1a1a" />
+        ) : (
+          <Text style={[styles.btnText, !isFriends && styles.btnTextDark]}>
+            {msgLabel}
+          </Text>
+        )}
       </Pressable>
     </View>
   );

@@ -35,9 +35,10 @@ export default function WelcomeBetaScreen() {
           <Text style={styles.logo}>📸</Text>
           <Text style={styles.welcomeTo}>Welcome to</Text>
           <Text style={styles.appName}>Momento.</Text>
-          <View style={styles.pill}>
+          {/* === BETA GATE (disabled for public launch — uncomment to re-enable) === */}
+          {/* <View style={styles.pill}>
             <Text style={styles.pillText}>PRIVATE BETA</Text>
-          </View>
+          </View> */}
           <Text style={styles.body}>
             {"You're one of the first to try Momento.\nThings may not be perfect yet — your feedback\nhelps us build something real."}
           </Text>

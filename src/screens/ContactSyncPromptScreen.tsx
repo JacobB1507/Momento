@@ -41,24 +41,6 @@ export default function ContactSyncPromptScreen() {
     setLoading(false);
   };
 
-  const handleSkip = async () => {
-    setLoading(true);
-    try {
-      const now = new Date().toISOString();
-      await supabase
-        .from('profiles')
-        .update({
-          contacts_prompt_shown_at: now,
-          contacts_skipped_at: now,
-        })
-        .eq('id', userId);
-    } catch (e) {
-      console.warn('[ContactSyncPrompt] update failed:', e);
-    }
-    await refreshProfile();
-    setLoading(false);
-  };
-
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <StatusBar barStyle="dark-content" />
@@ -87,18 +69,8 @@ export default function ContactSyncPromptScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.primaryBtnText}>Allow Access</Text>
+              <Text style={styles.primaryBtnText}>Continue</Text>
             )}
-          </Pressable>
-
-          <Pressable
-            onPress={handleSkip}
-            disabled={loading}
-            style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.6 }]}
-          >
-            <Text style={[styles.skipText, loading && { opacity: 0.4 }]}>
-              Maybe later
-            </Text>
           </Pressable>
         </View>
       </View>

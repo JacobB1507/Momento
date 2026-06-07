@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { sendFriendRequest, getMutualFriends, removeFriend } from '../lib/friends';
 import { isTrustedFriend, addTrustedFriend, removeTrustedFriend } from '../lib/trustedFriends';
+import { hapticLight } from '../lib/haptics';
 import { blockUser, isBlocked, unblockUser } from '../lib/blocks';
 import { createConversation, requestMessagePermission, getOrCreateConversation } from '../lib/messages';
 import { GalleryCard } from '../components/GalleryCard';
@@ -61,6 +62,7 @@ export default function FriendProfileScreen() {
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [galleryTagsMap, setGalleryTagsMap] = useState<Map<string, GalleryTagInfo[]>>(new Map());
   const [reportSheetVisible, setReportSheetVisible] = useState(false);
+  const [friendActionSubmitting, setFriendActionSubmitting] = useState(false);
 
   const filteredGalleries = useMemo(() => {
     if (selectedTagIds.size === 0) return galleries;
@@ -159,9 +161,15 @@ export default function FriendProfileScreen() {
   }, [load]);
 
   const handleFriendPress = async () => {
-    const result = await sendFriendRequest(currentUserId, profileUsername);
-    if (result === 'sent') setHasPendingRequest(true);
-    else if (result === 'already_friends') setIsFriend(true);
+    if (friendActionSubmitting) return;
+    setFriendActionSubmitting(true);
+    try {
+      const result = await sendFriendRequest(currentUserId, profileUsername);
+      if (result === 'sent') { setHasPendingRequest(true); hapticLight(); }
+      else if (result === 'already_friends') setIsFriend(true);
+    } finally {
+      setFriendActionSubmitting(false);
+    }
   };
 
   const handleMessagePress = async () => {
@@ -268,6 +276,7 @@ export default function FriendProfileScreen() {
           hasPendingRequest={hasPendingRequest}
           onFriendPress={handleFriendPress}
           onMessagePress={handleMessagePress}
+          submitting={friendActionSubmitting}
         />
       )}
       <View style={{ marginTop: 12 }}>

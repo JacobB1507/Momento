@@ -152,10 +152,7 @@ export function useNotifications(navigation: any) {
         if (member) {
           navigation.navigate('GalleryDetail', { galleryId: notification.related_id });
         } else {
-          navigation.navigate('GalleryInvite', {
-            galleryId: notification.related_id,
-            notificationId: notification.id,
-          });
+          navigation.navigate('GalleryInvitePrompt', { galleryId: notification.related_id });
         }
         break;
       }

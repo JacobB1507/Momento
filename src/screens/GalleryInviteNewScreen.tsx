@@ -25,7 +25,6 @@ import { clearDraft, getDraft } from '../lib/createGalleryDraft';
 import { applyTagToGallery } from '../lib/tags';
 import { checkRateLimit } from '../lib/rateLimit';
 import { userFacingError, reportError } from '../lib/errorReport';
-import { SearchPersonRow } from '../components/SearchPersonRow';
 import { FriendInviteCard } from '../components/FriendInviteCard';
 import LiveJoinersList from '../components/LiveJoinersList';
 
@@ -66,13 +65,15 @@ function Avatar({ uri, name, username, size }: { uri: string | null; name: strin
   );
 }
 
-function InviteRow({ item, invitedIds, onInvite, subLabel }: {
+function InviteRow({ item, invitedIds, invitingIds, onInvite, subLabel }: {
   item: SmartSuggestion;
   invitedIds: Set<string>;
+  invitingIds: Set<string>;
   onInvite: (userId: string) => void;
   subLabel?: string;
 }) {
   const invited = invitedIds.has(item.user_id);
+  const inviting = invitingIds.has(item.user_id);
   return (
     <View style={styles.personRow}>
       <Avatar uri={item.avatar_url} name={item.display_name} username={item.username} size={44} />
@@ -82,13 +83,18 @@ function InviteRow({ item, invitedIds, onInvite, subLabel }: {
         {subLabel ? <Text style={styles.personRowSub}>{subLabel}</Text> : null}
       </View>
       <TouchableOpacity
-        onPress={() => !invited && onInvite(item.user_id)}
-        style={[styles.inviteBtn, invited && styles.inviteBtnInvited]}
+        onPress={() => !invited && !inviting && onInvite(item.user_id)}
+        style={[styles.inviteBtn, (invited || inviting) && styles.inviteBtnInvited]}
         activeOpacity={0.7}
+        disabled={invited || inviting}
       >
-        <Text style={[styles.inviteBtnText, invited && styles.inviteBtnTextInvited]}>
-          {invited ? 'Invited ✓' : 'Invite'}
-        </Text>
+        {inviting ? (
+          <ActivityIndicator size="small" color="#6B7280" />
+        ) : (
+          <Text style={[styles.inviteBtnText, invited && styles.inviteBtnTextInvited]}>
+            {invited ? 'Invited ✓' : 'Invite'}
+          </Text>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -105,6 +111,7 @@ export default function GalleryInviteNewScreen() {
   const [smartSuggestions, setSmartSuggestions] = useState<SmartSuggestion[]>([]);
   const [smartLoading, setSmartLoading] = useState(false);
   const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
+  const [invitingIds, setInvitingIds] = useState<Set<string>>(new Set());
   const [existingMemberIds, setExistingMemberIds] = useState<Set<string>>(new Set());
   const [searchText, setSearchText] = useState('');
   const [copied, setCopied] = useState(false);
@@ -359,6 +366,8 @@ export default function GalleryInviteNewScreen() {
   };
 
   const handleInvite = async (userId: string) => {
+    if (invitingIds.has(userId) || invitedIds.has(userId)) return;
+    setInvitingIds(prev => new Set([...prev, userId]));
     try {
       const gid = await createGallery();
       if (!gid) {
@@ -370,6 +379,8 @@ export default function GalleryInviteNewScreen() {
     } catch (err) {
       Alert.alert('Could not create gallery', userFacingError(err));
       reportError('GalleryInviteNewScreen.handleInvite', err);
+    } finally {
+      setInvitingIds(prev => { const next = new Set(prev); next.delete(userId); return next; });
     }
   };
 
@@ -603,29 +614,17 @@ export default function GalleryInviteNewScreen() {
             {displayedFriends.length === 0 ? (
               <Text style={styles.emptyText}>No friends match "{searchText}"</Text>
             ) : (
-              displayedFriends.map((f, index) => {
-                const isInvited = invitedIds.has(f.id);
-                return (
-                  <View key={f.id}>
-                    {index > 0 && <View style={styles.rowSeparator} />}
-                    <TouchableOpacity
-                      onPress={() => { if (!isInvited) handleInvite(f.id); }}
-                      activeOpacity={isInvited ? 1 : 0.8}
-                      disabled={isInvited}
-                    >
-                      <View
-                        pointerEvents="none"
-                        style={isInvited ? styles.invitedCardWrapper : undefined}
-                      >
-                        <SearchPersonRow
-                          user={{ id: f.id, username: f.username, display_name: f.display_name, avatar_url: f.avatar_url, bio: null }}
-                          currentUserId={currentUserId}
-                        />
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                );
-              })
+              displayedFriends.map((f, index) => (
+                <View key={f.id}>
+                  {index > 0 && <View style={styles.rowSeparator} />}
+                  <InviteRow
+                    item={{ user_id: f.id, username: f.username, display_name: f.display_name, avatar_url: f.avatar_url, is_friend: true, shared_gallery_count: 0, mutual_count: 0 }}
+                    invitedIds={invitedIds}
+                    invitingIds={invitingIds}
+                    onInvite={handleInvite}
+                  />
+                </View>
+              ))
             )}
           </View>
         )}

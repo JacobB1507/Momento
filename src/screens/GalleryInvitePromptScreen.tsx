@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   StyleSheet,
   Text,
@@ -13,7 +14,6 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { acceptGalleryInvite, declineGalleryInvite } from '../lib/galleries';
 import type { RootStackParamList } from '../navigation/types';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -42,64 +42,35 @@ export default function GalleryInvitePromptScreen() {
 
     (async () => {
       try {
-        const [galleryRes, membersRes, friendsRes, galleryMemberIdsRes] = await Promise.all([
-          supabase
-            .from('galleries')
-            .select('id, title, cover_photo_url, created_by')
-            .eq('id', galleryId)
-            .single(),
-          supabase
-            .from('gallery_members')
-            .select('user_id, profiles(avatar_url)', { count: 'exact' })
-            .eq('gallery_id', galleryId)
-            .eq('status', 'accepted')
-            .limit(5),
+        const [galleryRes, contributorsRes, friendsRes] = await Promise.all([
+          supabase.rpc('get_invite_gallery_meta', { p_gallery_id: galleryId }),
+          supabase.rpc('get_invite_gallery_contributors', { p_gallery_id: galleryId }),
           supabase
             .from('friends')
             .select('sender_id, receiver_id')
             .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
             .eq('status', 'accepted'),
-          supabase
-            .from('gallery_members')
-            .select('user_id')
-            .eq('gallery_id', galleryId)
-            .eq('status', 'accepted')
-            .neq('user_id', userId),
         ]);
 
-        if (galleryRes.data) {
-          setTitle(galleryRes.data.title ?? '');
-          setCoverUrl(galleryRes.data.cover_photo_url ?? null);
+        const galleryMeta = Array.isArray(galleryRes.data) ? galleryRes.data[0] : galleryRes.data;
+        if (galleryMeta) {
+          setTitle(galleryMeta.title ?? '');
+          setCoverUrl(galleryMeta.cover_photo_url ?? null);
         }
 
-        if (membersRes.data) {
-          setContributorCount(membersRes.count ?? membersRes.data.length);
-          setContributorAvatars(
-            membersRes.data.map((m: any) => (m.profiles as any)?.avatar_url ?? null)
-          );
-        }
+        type ContributorRow = { user_id: string; avatar_url: string | null };
+        const contributors: ContributorRow[] = (contributorsRes.data ?? []) as ContributorRow[];
+        setContributorCount(contributors.length);
+        setContributorAvatars(contributors.slice(0, 5).map(c => c.avatar_url ?? null));
 
         const friendIds = new Set(
           (friendsRes.data ?? []).map((r: any) =>
             r.sender_id === userId ? r.receiver_id : r.sender_id
           )
         );
-        const galleryMemberIds: string[] = (galleryMemberIdsRes.data ?? []).map((m: any) => m.user_id);
-        const allMutualIds = galleryMemberIds.filter(id => friendIds.has(id));
-        setMutualCount(allMutualIds.length);
-
-        if (allMutualIds.length > 0) {
-          const mutualIdsForAvatars = allMutualIds.slice(0, 5);
-          const { data: mutualProfiles } = await supabase
-            .from('profiles')
-            .select('id, avatar_url')
-            .in('id', mutualIdsForAvatars);
-          setMutualAvatars(
-            mutualIdsForAvatars.map(id =>
-              mutualProfiles?.find((p: any) => p.id === id)?.avatar_url ?? null
-            )
-          );
-        }
+        const mutuals = contributors.filter(c => c.user_id !== userId && friendIds.has(c.user_id));
+        setMutualCount(mutuals.length);
+        setMutualAvatars(mutuals.slice(0, 5).map(c => c.avatar_url ?? null));
       } catch {
         console.warn('[GalleryInvitePromptScreen] data load failed');
       } finally {
@@ -111,31 +82,35 @@ export default function GalleryInvitePromptScreen() {
   const actionInFlight = accepting || declining;
 
   const handleAccept = async () => {
+    if (actionInFlight) return;
     setAccepting(true);
     setActionError('');
-    try {
-      await acceptGalleryInvite(galleryId);
-      navigation.replace('GalleryDetail', { galleryId });
-    } catch {
-      console.warn('[GalleryInvitePromptScreen] accept failed');
-      setActionError('Could not accept invite. Please try again.');
-    } finally {
-      setAccepting(false);
+    const { data, error } = await supabase.rpc('respond_gallery_invite', {
+      p_gallery_id: galleryId,
+      p_accept: true,
+    });
+    setAccepting(false);
+    if (error || data === 'not_pending' || data === 'error') {
+      Alert.alert('Could not accept', 'This invite may have already been used or expired.');
+      return;
     }
+    navigation.replace('GalleryDetail', { galleryId });
   };
 
   const handleDecline = async () => {
+    if (actionInFlight) return;
     setDeclining(true);
     setActionError('');
-    try {
-      await declineGalleryInvite(galleryId);
-      navigation.goBack();
-    } catch {
-      console.warn('[GalleryInvitePromptScreen] decline failed');
-      setActionError('Could not decline invite. Please try again.');
-    } finally {
-      setDeclining(false);
+    const { data, error } = await supabase.rpc('respond_gallery_invite', {
+      p_gallery_id: galleryId,
+      p_accept: false,
+    });
+    setDeclining(false);
+    if (error || data === 'not_pending' || data === 'error') {
+      Alert.alert('Could not decline', 'This invite may have already been used or expired.');
+      return;
     }
+    navigation.goBack();
   };
 
   return (
@@ -285,8 +260,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   galleryTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
     color: '#111827',
     textAlign: 'center',
     marginBottom: 16,

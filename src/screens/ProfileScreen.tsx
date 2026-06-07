@@ -21,7 +21,7 @@ import { useTutorial } from '../tutorial/TutorialContext';
 import type { RootStackParamList } from '../navigation/types';
 import type { Gallery } from '../types/database';
 import { supabase } from '../lib/supabase';
-import { getProfile, uploadAvatarFile, setProfileAvatarUrl } from '../lib/galleries';
+import { getProfile, uploadAvatarFile, setProfileAvatarUrl, fetchUserGalleries } from '../lib/galleries';
 import { reportError } from '../lib/errorReport';
 
 import { GalleryCard, CARD_GAP } from '../components/GalleryCard';
@@ -70,19 +70,36 @@ export default function ProfileScreen() {
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
   const [galleryTagsMap, setGalleryTagsMap] = useState<Map<string, GalleryTagInfo[]>>(new Map());
   const [taggedSharedGalleries, setTaggedSharedGalleries] = useState<Gallery[]>([]);
+  const [notNowIds, setNotNowIds] = useState<Set<string>>(new Set());
+  const [pendingRejectGallery, setPendingRejectGallery] = useState<Gallery | null>(null);
+  const pendingRejectRef = useRef<{ gallery: Gallery; timer: ReturnType<typeof setTimeout> } | null>(null);
 
   const filteredGalleries = useMemo(() => {
     const merged = selectedTagIds.size > 0
       ? [...galleries, ...taggedSharedGalleries]
       : galleries;
     const seen = new Set<string>();
-    const deduped = merged.filter(g => { if (seen.has(g.id)) return false; seen.add(g.id); return true; });
-    if (selectedTagIds.size === 0) return deduped;
-    return deduped.filter(g => {
+    const deduped = merged.filter(g => {
+      if (seen.has(g.id)) return false;
+      seen.add(g.id);
+      return true;
+    }).filter(g => !notNowIds.has(g.id));
+    const pendingFirst = [...deduped].sort((a, b) => {
+      const aPending = (a as any).membershipStatus === 'pending' ? -1 : 0;
+      const bPending = (b as any).membershipStatus === 'pending' ? -1 : 0;
+      return aPending - bPending;
+    });
+    if (selectedTagIds.size === 0) return pendingFirst;
+    return pendingFirst.filter(g => {
       const gTags = galleryTagsMap.get(g.id) ?? [];
       return gTags.some(t => selectedTagIds.has(t.tag_id));
     });
-  }, [galleries, taggedSharedGalleries, selectedTagIds, galleryTagsMap]);
+  }, [galleries, taggedSharedGalleries, selectedTagIds, galleryTagsMap, notNowIds]);
+
+  const pendingCount = useMemo(
+    () => galleries.filter(g => (g as any).membershipStatus === 'pending').length,
+    [galleries],
+  );
 
   const tutorial = useTutorial();
   const friendsIconRef = useRef(null);
@@ -138,43 +155,12 @@ export default function ProfileScreen() {
 
   const loadGalleries = async () => {
     if (!user?.id) return;
-
-    // Get galleries user owns
-    const { data: owned } = await supabase
-      .from('galleries')
-      .select('*')
-      .eq('created_by', user.id);
-
-    // Get gallery_ids user is a member of
-    const { data: memberships } = await supabase
-      .from('gallery_members')
-      .select('gallery_id')
-      .eq('user_id', user.id);
-
-    const memberGalleryIds = (memberships ?? []).map((m: any) => m.gallery_id);
-
-    // Fetch those galleries separately
-    const { data: memberGalleries } = memberGalleryIds.length > 0
-      ? await supabase.from('galleries').select('*').in('id', memberGalleryIds).neq('created_by', user.id)
-      : { data: [] };
-
-    // Merge and deduplicate
-    const all = [...(owned ?? []), ...(memberGalleries ?? [])];
-    const unique = all.filter((g, i, arr) => arr.findIndex((x: any) => x.id === g.id) === i);
-    const sorted = unique.sort((a: any, b: any) => {
-      if (a.pinned === b.pinned) {
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      }
-      return a.pinned ? -1 : 1;
-    });
-
-    console.log('loadGalleries owned:', owned?.length, 'member:', memberGalleries?.length);
-    setGalleries(sorted);
-
+    const result = await fetchUserGalleries(user.id);
+    setGalleries(result);
     try {
       const [ownerTagsData, tagsMap] = await Promise.all([
         getMyTags(user!.id),
-        getMyTagsAppliedToGalleries(sorted.map((g: any) => g.id), user!.id),
+        getMyTagsAppliedToGalleries(result.map((g) => g.id), user!.id),
       ]);
       setOwnerTags(ownerTagsData);
       setGalleryTagsMap(tagsMap);
@@ -213,6 +199,37 @@ export default function ProfileScreen() {
         },
       ],
     );
+  };
+
+  const handleRejectWithUndo = (gallery: Gallery) => {
+    if (pendingRejectRef.current) {
+      clearTimeout(pendingRejectRef.current.timer);
+      const prior = pendingRejectRef.current.gallery;
+      pendingRejectRef.current = null;
+      setPendingRejectGallery(null);
+      supabase.rpc('respond_gallery_invite', { p_gallery_id: prior.id, p_accept: false }).catch(() => {});
+    }
+    setGalleries(prev => prev.filter(g => g.id !== gallery.id));
+    setPendingRejectGallery(gallery);
+    const timer = setTimeout(async () => {
+      pendingRejectRef.current = null;
+      setPendingRejectGallery(null);
+      const { data, error } = await supabase.rpc('respond_gallery_invite', { p_gallery_id: gallery.id, p_accept: false });
+      if (error || data === 'not_pending' || data === 'error') {
+        Alert.alert('Could not decline', 'Something went wrong. Please try again.');
+        setGalleries(prev => prev.some(g => g.id === gallery.id) ? prev : [...prev, gallery]);
+      }
+    }, 5000);
+    pendingRejectRef.current = { gallery, timer };
+  };
+
+  const handleUndoReject = () => {
+    if (!pendingRejectRef.current) return;
+    clearTimeout(pendingRejectRef.current.timer);
+    const { gallery } = pendingRejectRef.current;
+    pendingRejectRef.current = null;
+    setPendingRejectGallery(null);
+    setGalleries(prev => prev.some(g => g.id === gallery.id) ? prev : [...prev, gallery]);
   };
 
   const loadPhotoCount = async () => {
@@ -263,6 +280,16 @@ export default function ProfileScreen() {
     const allIds = [...galleries.map(g => g.id), ...taggedSharedGalleries.map(g => g.id)];
     getMyTagsAppliedToGalleries(allIds, userId).then(setGalleryTagsMap).catch(() => {});
   }, [taggedSharedGalleries, userId]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingRejectRef.current) {
+        clearTimeout(pendingRejectRef.current.timer);
+        const { gallery } = pendingRejectRef.current;
+        supabase.rpc('respond_gallery_invite', { p_gallery_id: gallery.id, p_accept: false }).catch(() => {});
+      }
+    };
+  }, []);
 
   const handleAvatarPress = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -359,6 +386,14 @@ export default function ProfileScreen() {
         <View style={styles.topBar}>
           <Text style={styles.topBarTitle}>Profile</Text>
           <View style={styles.topBarIcons}>
+            {(pendingCount > 0 || notNowIds.size > 0) && (
+              <Pressable
+                style={({ pressed }) => [styles.invitesButton, pressed && { opacity: 0.6 }]}
+                onPress={() => navigation.navigate('Invites')}
+              >
+                <Text style={styles.invitesButtonText}>Invites ({pendingCount})</Text>
+              </Pressable>
+            )}
             <Pressable
               ref={friendsIconRef}
               style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.6 }]}
@@ -474,22 +509,61 @@ export default function ProfileScreen() {
             ListEmptyComponent={
               selectedTagIds.size > 0
                 ? <Text style={[styles.galleryEmpty, { marginTop: 40 }]}>No galleries match this filter.</Text>
-                : <Text style={styles.galleryEmpty}>No galleries yet.</Text>
+                : galleries.length === 0 && pendingCount === 0
+                  ? (
+                    <View style={styles.firstRunPrompt}>
+                      <Text style={styles.firstRunTitle}>No galleries yet</Text>
+                      <Text style={styles.firstRunSub}>Create your first gallery and start sharing photos with friends.</Text>
+                      <Pressable
+                        style={({ pressed }) => [styles.firstRunButton, pressed && { opacity: 0.8 }]}
+                        onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Create' })}
+                      >
+                        <Text style={styles.firstRunButtonText}>Create your first gallery</Text>
+                      </Pressable>
+                    </View>
+                  )
+                  : <Text style={styles.galleryEmpty}>No galleries yet.</Text>
             }
             renderItem={({ item }) => (
               <GalleryCard
                 gallery={item}
-                onPress={() => navigation.navigate('GalleryDetail', { galleryId: item.id, galleryTitle: item.title })}
+                onPress={() => {
+                  if ((item as any).membershipStatus === 'pending') {
+                    navigation.navigate('GalleryInvitePrompt', { galleryId: item.id });
+                  } else {
+                    navigation.navigate('GalleryDetail', { galleryId: item.id, galleryTitle: item.title });
+                  }
+                }}
                 onLongPress={() => handleGalleryLongPress(item)}
                 onCommentSheetClose={loadGalleries}
                 currentUserId={user?.id}
                 friendIds={friendIds}
                 tags={galleryTagsMap.get(item.id) ?? []}
+                membershipStatus={(item as any).membershipStatus}
+                onAcceptInvite={async () => {
+                  const { data, error } = await supabase.rpc('respond_gallery_invite', { p_gallery_id: item.id, p_accept: true });
+                  if (error || data === 'not_pending' || data === 'error') {
+                    Alert.alert('Could not accept', 'This invite may have already been used or expired.');
+                    return;
+                  }
+                  loadGalleries();
+                }}
+                onRejectInvite={() => handleRejectWithUndo(item)}
+                onNotNowInvite={() => setNotNowIds(prev => { const next = new Set(prev); next.add(item.id); return next; })}
               />
             )}
           />
         </View>
       </ScrollView>
+
+      {pendingRejectGallery && (
+        <View style={styles.undoBanner}>
+          <Text style={styles.undoBannerText}>Gallery invite rejected</Text>
+          <Pressable onPress={handleUndoReject} style={styles.undoBtn} hitSlop={8}>
+            <Text style={styles.undoBtnText}>Undo</Text>
+          </Pressable>
+        </View>
+      )}
 
       <FriendsListModal
         visible={showFriendsList}
@@ -617,5 +691,34 @@ const styles = StyleSheet.create({
   galleryGrid: { gap: CARD_GAP },
   galleryRow: { gap: CARD_GAP },
   galleryEmpty: { color: '#9CA3AF', fontSize: 14, textAlign: 'center', paddingVertical: 16 },
+  firstRunPrompt: { alignItems: 'center', paddingTop: 32, paddingHorizontal: 32, paddingBottom: 16 },
+  firstRunTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 8 },
+  firstRunSub: { fontSize: 14, color: '#9CA3AF', textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+  firstRunButton: { backgroundColor: '#FF6B6B', borderRadius: 12, paddingVertical: 13, paddingHorizontal: 28 },
+  firstRunButtonText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 
+  undoBanner: {
+    position: 'absolute',
+    top: 52,
+    left: 0,
+    right: 0,
+    backgroundColor: '#1F2937',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  undoBannerText: { color: '#fff', fontSize: 14, fontWeight: '500' },
+  undoBtn: { paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#374151', borderRadius: 8 },
+  undoBtnText: { color: '#FF6B6B', fontSize: 14, fontWeight: '700' },
+
+  invitesButton: {
+    backgroundColor: '#FFF0F0',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginRight: 2,
+  },
+  invitesButtonText: { fontSize: 12, fontWeight: '600', color: '#FF3B30' },
 });

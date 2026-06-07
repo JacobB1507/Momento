@@ -34,8 +34,8 @@ export function AppleSignInButton({ onSuccess, onError, style }: Props) {
   return (
     <AppleAuthentication.AppleAuthenticationButton
       buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-      cornerRadius={14}
+      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+      cornerRadius={12}
       style={StyleSheet.flatten([styles.btn, style])}
       onPress={handlePress}
     />

@@ -204,7 +204,9 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.betaFooter}>
-          <Text style={styles.betaFooterText}>Momento · Private Beta · v1.0.0</Text>
+          {/* === BETA GATE (disabled for public launch — uncomment to re-enable) === */}
+          {/* <Text style={styles.betaFooterText}>Momento · Private Beta · v1.0.0</Text> */}
+          <Text style={styles.betaFooterText}>Momento · v1.0.0</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

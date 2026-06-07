@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { supabase } from '../lib/supabase';
+import { formatRelativeShort } from '../lib/dateUtils';
 
 function formatTime(iso: string | null): string {
   if (!iso) return '';
@@ -41,20 +42,6 @@ function tintForId(id: string): string {
   return `hsla(${h}, 60%, 50%, 0.08)`;
 }
 
-function formatRelativeShort(iso: string | null | undefined): string {
-  if (!iso) return '';
-  const ms = new Date(iso).getTime();
-  if (isNaN(ms)) return '';
-  const diffSec = Math.floor((Date.now() - ms) / 1000);
-  if (diffSec < 60) return 'just now';
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
 
 export default function ConversationRow({ conversation, currentUserId, onPress, onLongPress, customPreview, isPinned }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);

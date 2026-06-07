@@ -1,18 +1,31 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase } from './supabase';
 import { reportError } from './errorReport';
-import type { Gallery, Photo } from '../types/database';
+import { hapticSuccess } from './haptics';
+import type { Gallery, GalleryPrivacy, Photo } from '../types/database';
+
+export const GALLERY_PHOTO_LIMIT = 500;
 
 const recentUploadWindowCache = new Map<string, number>();
 
+export async function getGalleryPhotoCount(galleryId: string): Promise<number> {
+  const { count } = await supabase
+    .from('gallery_photos')
+    .select('id', { count: 'exact', head: true })
+    .eq('gallery_id', galleryId);
+  return count ?? 0;
+}
+
 export async function fetchUserGalleries(userId: string, viewerUserId?: string): Promise<Gallery[]> {
+  if (!userId) return [];
+
   const { data: owned, error: ownedError } = await supabase
     .from('galleries')
     .select('*')
     .eq('created_by', userId)
     .order('created_at', { ascending: false });
 
-  if (ownedError) throw ownedError;
+  if (ownedError) return [];
 
   const { data: memberships, error: memberError } = await supabase
     .from('gallery_members')
@@ -20,33 +33,57 @@ export async function fetchUserGalleries(userId: string, viewerUserId?: string):
     .eq('user_id', userId)
     .eq('status', 'accepted');
 
-  if (memberError) throw memberError;
+  if (memberError) return [];
 
-  const invitedIds = (memberships ?? []).map((m) => m.gallery_id);
+  const acceptedIds = (memberships ?? []).map((m) => m.gallery_id);
 
   let invited: Gallery[] = [];
-  if (invitedIds.length > 0) {
+  if (acceptedIds.length > 0) {
     const { data, error } = await supabase
       .from('galleries')
       .select('*')
-      .in('id', invitedIds)
+      .in('id', acceptedIds)
       .neq('created_by', userId)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    invited = (data ?? []).map((g) => ({ ...g, role: 'member' as const }));
+    if (error) return [];
+    invited = (data ?? []).map((g) => ({
+      ...g,
+      role: 'member' as const,
+      membershipStatus: 'accepted' as const,
+    }));
   }
 
-  const all = [
-    ...(owned ?? []).map((g) => ({ ...g, role: 'owner' as const })),
+  // Pending invites are invisible to normal table queries via RLS — must use the dedicated RPC
+  let pending: Gallery[] = [];
+  const { data: pendingData, error: pendingError } = await supabase.rpc('get_my_pending_gallery_invites');
+  if (!pendingError && pendingData) {
+    pending = (pendingData as Array<{ id: string; title: string; cover_photo_url: string | null; created_by: string; privacy: string; created_at: string }>)
+      .filter((g) => g.created_by !== userId)
+      .map((g) => ({
+        id: g.id,
+        title: g.title,
+        privacy: (g.privacy ?? 'private') as GalleryPrivacy,
+        cover_photo_url: g.cover_photo_url ?? null,
+        created_at: g.created_at ?? '',
+        created_by: g.created_by,
+        role: 'member' as const,
+        membershipStatus: 'pending' as const,
+      }));
+  }
+
+  const nonPending = [
+    ...(owned ?? []).map((g) => ({ ...g, role: 'owner' as const, membershipStatus: 'owner' as const })),
     ...invited,
   ];
-  all.sort((a, b) => {
+  nonPending.sort((a, b) => {
     if (a.pinned === b.pinned) {
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     }
     return a.pinned ? -1 : 1;
   });
+
+  const all = [...nonPending, ...pending];
 
   if (viewerUserId && viewerUserId !== userId && all.length > 0) {
     const galleryIds = all.map(g => g.id);
@@ -154,8 +191,12 @@ export async function uploadGalleryPhoto({
       content_hash: contentHash ?? null,
       source_asset_id: (sourceAssetId && sourceAssetId.length > 0) ? sourceAssetId : null,
     });
-  if (dbError) throw dbError;
+  if (dbError) {
+    if (dbError.message?.includes('GALLERY_PHOTO_LIMIT_REACHED')) throw new Error('GALLERY_FULL');
+    throw dbError;
+  }
 
+  hapticSuccess();
   onProgress?.(1, 1);
 
   try {
@@ -511,13 +552,48 @@ export async function acceptGalleryInvite(galleryId: string): Promise<void> {
     .select();
   if (error) throw error;
 
-  if (data && data.length > 0) return;
+  if (!data || data.length === 0) {
+    // No pending row found — legacy flow: insert fresh accepted row
+    const { error: insertError } = await supabase
+      .from('gallery_members')
+      .insert({ gallery_id: galleryId, user_id: user.id, role: 'member', status: 'accepted' });
+    if (insertError) throw insertError;
+  }
 
-  // No pending row found — legacy flow: insert fresh accepted row
-  const { error: insertError } = await supabase
-    .from('gallery_members')
-    .insert({ gallery_id: galleryId, user_id: user.id, role: 'member', status: 'accepted' });
-  if (insertError) throw insertError;
+  try {
+    const [galleryRes, profileRes] = await Promise.all([
+      supabase.from('galleries').select('created_by, title').eq('id', galleryId).single(),
+      supabase.from('profiles').select('username').eq('id', user.id).maybeSingle(),
+    ]);
+    const createdBy = galleryRes.data?.created_by;
+    const galleryTitle = galleryRes.data?.title ?? '';
+    if (!createdBy || createdBy === user.id) return;
+    const username = profileRes.data?.username;
+    const body = username ? `${username} joined "${galleryTitle}"` : `Someone joined "${galleryTitle}"`;
+    await supabase.from('notifications').insert({
+      type: 'gallery_joined',
+      user_id: createdBy,
+      sender_id: user.id,
+      related_id: galleryId,
+      body,
+    });
+  } catch {}
+}
+
+export async function leaveGallery(galleryId: string): Promise<{ error: string | null }> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return { error: 'Not signed in' };
+    const { error } = await supabase
+      .from('gallery_members')
+      .delete()
+      .eq('gallery_id', galleryId)
+      .eq('user_id', session.user.id);
+    if (error) return { error: error.message };
+    return { error: null };
+  } catch (e: any) {
+    return { error: e?.message ?? 'Failed to leave gallery' };
+  }
 }
 
 export async function declineGalleryInvite(galleryId: string): Promise<void> {

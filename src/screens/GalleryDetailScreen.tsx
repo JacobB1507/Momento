@@ -5,6 +5,8 @@ import {
   Alert,
   Platform,
   Pressable,
+  RefreshControl,
+  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -17,7 +19,8 @@ import * as MediaLibrary from 'expo-media-library';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { fetchGalleryPhotos, uploadGalleryPhoto, deleteGalleryPhotosBatch, getRecentUploadWindowHours } from '../lib/galleries';
+import { fetchGalleryPhotos, uploadGalleryPhoto, deleteGalleryPhotosBatch, getRecentUploadWindowHours, acceptGalleryInvite, declineGalleryInvite, GALLERY_PHOTO_LIMIT, getGalleryPhotoCount, leaveGallery } from '../lib/galleries';
+import { saveQueue, markPhotoStatus, clearQueue } from '../lib/uploadQueue';
 import { getPrepped } from '../lib/uploadPrep';
 import { requestPhotoRemoval, getRemovalRequests } from '../lib/photoRemoval';
 import { getMyTagsAppliedToGallery, getOwnerTagsForGallery } from '../lib/tags';
@@ -87,7 +90,23 @@ export default function GalleryDetailScreen() {
 
   const isOwner = !!session?.user.id && session.user.id === galleryMeta?.created_by;
   const [isMember, setIsMember] = useState(false);
+  const [memberRole, setMemberRole] = useState<string | null>(null);
   const [canTag, setCanTag] = useState(false);
+  const [pendingInvite, setPendingInvite] = useState(false);
+  const [sortMode, setSortMode] = useState<'newest' | 'oldest' | 'contributor'>('newest');
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const viewerRole: 'owner' | 'admin' | 'member' | 'viewer' = isOwner ? 'owner' : memberRole === 'admin' ? 'admin' : isMember ? 'member' : 'viewer';
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([load(), loadGalleryMeta()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load, loadGalleryMeta]);
 
   const loadGalleryMeta = useCallback(async () => {
     const { data } = await supabase
@@ -129,14 +148,17 @@ export default function GalleryDetailScreen() {
     if (session?.user.id) {
       supabase
         .from('gallery_members')
-        .select('user_id, status')
+        .select('user_id, status, role')
         .eq('gallery_id', galleryId)
         .eq('user_id', session.user.id)
         .maybeSingle()
         .then(({ data }) => {
           const isMemberAccepted = !!data && data.status === 'accepted';
+          const isPending = !!data && data.status === 'pending';
           setIsMember(isMemberAccepted);
+          setMemberRole(data?.role ?? null);
           setCanTag(isMemberAccepted);
+          setPendingInvite(isPending);
         });
     }
   }, [load, loadGalleryMeta, galleryId, session?.user.id]);
@@ -154,6 +176,19 @@ export default function GalleryDetailScreen() {
     });
     return () => { cancelled = true; };
   }, [session?.user?.id]);
+
+  const handleAcceptInvite = async () => {
+    await acceptGalleryInvite(galleryId);
+    setPendingInvite(false);
+    setIsMember(true);
+    setCanTag(true);
+    await load();
+  };
+
+  const handleRejectInvite = async () => {
+    await declineGalleryInvite(galleryId);
+    navigation.goBack();
+  };
 
   const handleDeletePhoto = (photo: Photo) => {
     setPhotos(prev => prev.filter(p => p.id !== photo.id));
@@ -203,18 +238,44 @@ export default function GalleryDetailScreen() {
       setUploadState(prev => ({ ...prev, inProgress: false }));
       return;
     }
-    const total = toUpload.length;
+    const originalN = toUpload.length;
+    setUploading(true);
+
+    const currentCount = await getGalleryPhotoCount(galleryId);
+    const remaining = Math.max(0, GALLERY_PHOTO_LIMIT - currentCount);
+
+    if (remaining <= 0) {
+      setUploading(false);
+      setUploadState(prev => ({ ...prev, inProgress: false }));
+      Alert.alert('Gallery full', `This gallery has reached its ${GALLERY_PHOTO_LIMIT} photo limit.`);
+      return;
+    }
+
+    const cappedToUpload = remaining < originalN ? toUpload.slice(0, remaining) : toUpload;
+    const wasLimited = cappedToUpload.length < originalN;
+    const total = cappedToUpload.length;
     let completed = 0;
     let failed = 0;
-    setUploading(true);
+    let galleryFullHit = false;
+    const userId = session?.user.id ?? '';
     setUploadState({ total, completed: 0, failed: 0, currentIndex: 0, inProgress: true });
+
+    if (userId) {
+      await saveQueue(userId, {
+        galleryId,
+        galleryTitle: galleryMeta?.title ?? '',
+        createdAt: Date.now(),
+        photos: cappedToUpload.map(p => ({ uri: p.uri, mimeType: p.mimeType, status: 'pending' as const })),
+      });
+    }
 
     let nextIndex = 0;
     const workers = Array.from({ length: Math.min(CONCURRENCY, total) }, async () => {
       while (true) {
+        if (galleryFullHit) return;
         const i = nextIndex++;
         if (i >= total) return;
-        const p = toUpload[i];
+        const p = cappedToUpload[i];
         setUploadState(prev => ({ ...prev, currentIndex: i + 1 }));
         try {
           const prepped = getPrepped(p.uri);
@@ -229,18 +290,27 @@ export default function GalleryDetailScreen() {
           });
           completed++;
           setUploadState(prev => ({ ...prev, completed }));
-        } catch {
+          if (userId) await markPhotoStatus(userId, p.uri, 'done');
+        } catch (err: any) {
+          if (err?.message === 'GALLERY_FULL') {
+            galleryFullHit = true;
+            return;
+          }
           failed++;
           setUploadState(prev => ({ ...prev, failed }));
+          if (userId) await markPhotoStatus(userId, p.uri, 'failed');
         }
       }
     });
     await Promise.all(workers);
+    if (userId) await clearQueue(userId);
 
     await load();
     setUploading(false);
     setUploadState(prev => ({ ...prev, inProgress: false }));
-    if (failed > 0) {
+    if (galleryFullHit || wasLimited) {
+      Alert.alert('Maximum photos reached', `Uploaded ${completed} of ${originalN} photo${originalN === 1 ? '' : 's'}.`);
+    } else if (failed > 0) {
       Alert.alert('Upload complete', `Uploaded ${completed} of ${total} photos. ${failed} failed.`);
     }
   };
@@ -439,6 +509,25 @@ export default function GalleryDetailScreen() {
 
   const shouldShowOwnerTags = !isOwner && ownerTags.length > 0;
 
+  const sortedPhotos = React.useMemo(() => {
+    if (sortMode === 'oldest') return [...photos].reverse();
+    if (sortMode === 'contributor') {
+      return [...photos].sort((a, b) => {
+        if (a.uploaded_by < b.uploaded_by) return -1;
+        if (a.uploaded_by > b.uploaded_by) return 1;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+    }
+    return photos;
+  }, [photos, sortMode]);
+
+  const showContributorNudge = React.useMemo(() => {
+    if (!isMember || isOwner || nudgeDismissed || photos.length === 0) return false;
+    const hasOwn = photos.some(p => p.uploaded_by === session?.user.id);
+    const hasOthers = photos.some(p => p.uploaded_by !== session?.user.id);
+    return !hasOwn && hasOthers;
+  }, [isMember, isOwner, nudgeDismissed, photos, session?.user.id]);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
@@ -480,18 +569,29 @@ export default function GalleryDetailScreen() {
               <View style={styles.removalDot} />
             </Pressable>
           )}
-          {isOwner && (
-            <Pressable
-              style={({ pressed }) => [styles.settingsButton, pressed && { opacity: 0.7 }]}
-              onPress={() => setSettingsVisible(true)}
-              hitSlop={8}
-            >
-              <Ionicons name="settings-outline" size={16} color="#fff" />
-            </Pressable>
-          )}
+          <Pressable
+            style={({ pressed }) => [styles.settingsButton, pressed && { opacity: 0.7 }]}
+            onPress={() => setSettingsVisible(true)}
+            hitSlop={8}
+          >
+            <Ionicons name="settings-outline" size={16} color="#fff" />
+          </Pressable>
         </View>
       </View>
 
+      {pendingInvite && (
+        <View style={bannerStyles.banner}>
+          <Text style={bannerStyles.bannerText}>You've been invited to contribute to this gallery</Text>
+          <View style={bannerStyles.bannerActions}>
+            <Pressable style={bannerStyles.bannerAccept} onPress={handleAcceptInvite}>
+              <Text style={bannerStyles.bannerAcceptText}>Accept</Text>
+            </Pressable>
+            <Pressable style={bannerStyles.bannerReject} onPress={handleRejectInvite}>
+              <Text style={bannerStyles.bannerRejectText}>Reject</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
       {shouldShowOwnerTags && (
         <View style={{ marginTop: 4, marginBottom: 8, paddingHorizontal: 16 }}>
           <TagChipsRow
@@ -554,8 +654,22 @@ export default function GalleryDetailScreen() {
           </View>
         )
       ) : (
+        <>
+          {showContributorNudge && (
+            <View style={bannerStyles.nudge}>
+              <Text style={bannerStyles.nudgeText}>You haven't added any photos yet — share yours!</Text>
+              <View style={bannerStyles.nudgeActions}>
+                <Pressable style={bannerStyles.nudgeAdd} onPress={handleUpload}>
+                  <Text style={bannerStyles.nudgeAddText}>Add Photos</Text>
+                </Pressable>
+                <Pressable style={bannerStyles.nudgeDismiss} onPress={() => setNudgeDismissed(true)} hitSlop={8}>
+                  <Text style={bannerStyles.nudgeDismissText}>✕</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
         <PhotoGrid
-          photos={photos}
+          photos={sortedPhotos}
           isOwner={isOwner}
           isMember={isOwner || isMember}
           currentUserId={session?.user.id}
@@ -572,7 +686,11 @@ export default function GalleryDetailScreen() {
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
           onEnterSelection={enterSelectionMode}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF6B6B" />
+          }
         />
+        </>
       )}
 
       <Pressable onPress={() => setShowComments(true)} style={styles.commentBtn}>
@@ -607,6 +725,30 @@ export default function GalleryDetailScreen() {
         visible={settingsVisible}
         galleryId={galleryId}
         currentPrivacy={galleryMeta?.privacy ?? 'friends'}
+        isOwner={isOwner}
+        viewerRole={viewerRole}
+        sortMode={sortMode}
+        onChangeSortMode={setSortMode}
+        onLeaveGallery={() => {
+          Alert.alert(
+            'Leave this gallery?',
+            "You'll stop seeing its photos and updates.",
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Leave',
+                style: 'destructive',
+                onPress: async () => {
+                  const { error } = await leaveGallery(galleryId);
+                  if (error) { Alert.alert('Error', error); return; }
+                  setSettingsVisible(false);
+                  navigation.goBack();
+                },
+              },
+            ],
+          );
+        }}
+        onLeft={() => navigation.goBack()}
         onClose={() => setSettingsVisible(false)}
         onPrivacySaved={(privacy) => { setGalleryMeta(prev => prev ? { ...prev, privacy } : prev); if (session?.user?.id) getMyTagsAppliedToGallery(galleryId, session.user.id).then(setGalleryTags).catch(() => {}); getOwnerTagsForGallery(galleryId).then(setOwnerTags).catch(() => {}); }}
         onGalleryDeleted={() => navigation.goBack()}
@@ -712,4 +854,53 @@ export default function GalleryDetailScreen() {
     </SafeAreaView>
   );
 }
+
+const bannerStyles = StyleSheet.create({
+  banner: {
+    backgroundColor: '#FFF0F0',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#FECACA',
+    gap: 10,
+  },
+  bannerText: { fontSize: 14, color: '#374151', fontWeight: '500' },
+  bannerActions: { flexDirection: 'row', gap: 10 },
+  bannerAccept: {
+    flex: 1,
+    backgroundColor: '#FF6B6B',
+    borderRadius: 10,
+    paddingVertical: 9,
+    alignItems: 'center',
+  },
+  bannerAcceptText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  bannerReject: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: 9,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+  },
+  bannerRejectText: { color: '#374151', fontSize: 14, fontWeight: '600' },
+  nudge: {
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#FDE68A',
+    gap: 8,
+  },
+  nudgeText: { fontSize: 13, color: '#92400E', fontWeight: '500' },
+  nudgeActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  nudgeAdd: {
+    backgroundColor: '#F59E0B',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  nudgeAddText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  nudgeDismiss: { padding: 4 },
+  nudgeDismissText: { fontSize: 14, color: '#92400E' },
+});
 

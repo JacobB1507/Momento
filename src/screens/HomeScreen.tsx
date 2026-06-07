@@ -40,14 +40,17 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [contactsModalVisible, setContactsModalVisible] = useState(false);
+  const [feedError, setFeedError] = useState<string | null>(null);
 
   const loadFriendGalleries = useCallback(async () => {
     if (!userId) return;
-    const [feedGalleries, count] = await Promise.all([
+    const [feedResult, count] = await Promise.all([
       getFeedGalleries(userId),
       getUnreadCount(userId),
     ]);
+    const { data: feedGalleries, error: feedErr } = feedResult;
     setFriendGalleries(feedGalleries);
+    setFeedError(feedErr);
     setUnreadCount(count);
 
     const { data: friendRows } = await supabase
@@ -184,9 +187,18 @@ export default function HomeScreen() {
           columnWrapperStyle={styles.galleryRow}
           contentContainerStyle={styles.galleryGrid}
           ListEmptyComponent={
-            <Text style={styles.empty}>
-              No friends yet — add some friends to see their galleries!
-            </Text>
+            feedError ? (
+              <View style={styles.errorState}>
+                <Text style={styles.errorText}>Could not load galleries</Text>
+                <Pressable onPress={loadAll} style={styles.retryButton}>
+                  <Text style={styles.retryText}>Retry</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Text style={styles.empty}>
+                No friends yet — add some friends to see their galleries!
+              </Text>
+            )
           }
           renderItem={({ item }) => (
             <GalleryCard
@@ -272,6 +284,10 @@ const styles = StyleSheet.create({
   },
   galleryGrid: { paddingHorizontal: 16, paddingBottom: 24, gap: CARD_GAP },
   galleryRow: { gap: CARD_GAP },
+  errorState: { alignItems: 'center', paddingTop: 48, paddingHorizontal: 32 },
+  errorText: { fontSize: 14, color: '#9CA3AF', marginBottom: 12 },
+  retryButton: { backgroundColor: '#FF6B6B', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 24 },
+  retryText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   bellBadge: {
     position: 'absolute',
     top: -4,

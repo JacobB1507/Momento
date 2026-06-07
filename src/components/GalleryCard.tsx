@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Dimensions, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Ionicons } from '@expo/vector-icons';
 import CommentsSheet from './CommentsSheet';
@@ -57,6 +58,10 @@ export function GalleryCard({
   friendIds = [],
   refreshKey,
   tags,
+  membershipStatus,
+  onAcceptInvite,
+  onRejectInvite,
+  onNotNowInvite,
 }: {
   gallery: Gallery;
   onPress: () => void;
@@ -67,12 +72,17 @@ export function GalleryCard({
   friendIds?: string[];
   refreshKey?: number;
   tags?: GalleryTagInfo[];
+  membershipStatus?: 'accepted' | 'pending' | 'owner';
+  onAcceptInvite?: () => Promise<void> | void;
+  onRejectInvite?: () => Promise<void> | void;
+  onNotNowInvite?: () => void;
 }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [contributors, setContributors] = useState<Contributor[]>([]);
   const [showContributors, setShowContributors] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [popoverVisible, setPopoverVisible] = useState(false);
+  const [pendingLoading, setPendingLoading] = useState(false);
 
   const load = useCallback(async () => {
     const { data: memberRows } = await supabase
@@ -133,19 +143,50 @@ export function GalleryCard({
     >
       <View style={[styles.cardImage, { backgroundColor: placeholderColor(gallery.id) }]}>
         {gallery.cover_photo_url ? (
-          <Image source={{ uri: gallery.cover_photo_url }} style={StyleSheet.absoluteFill} />
+          <ExpoImage
+            source={{ uri: gallery.cover_photo_url }}
+            style={StyleSheet.absoluteFill}
+            placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+            transition={300}
+            contentFit="cover"
+          />
         ) : (
           <Text style={styles.cardInitial}>{gallery.title.charAt(0).toUpperCase()}</Text>
         )}
         <View style={styles.cardOverlay} />
+        {membershipStatus === 'pending' && (
+          <View style={styles.pendingScrim}>
+            <Text style={styles.pendingTitle}>Pending invite</Text>
+            <Pressable
+              style={[styles.pendingAcceptBtn, pendingLoading && { opacity: 0.5 }]}
+              disabled={pendingLoading}
+              onPress={async () => {
+                if (pendingLoading) return;
+                setPendingLoading(true);
+                try { await onAcceptInvite?.(); } finally { setPendingLoading(false); }
+              }}
+            >
+              <Text style={styles.pendingAcceptText}>Accept</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.pendingRejectBtn, pendingLoading && { opacity: 0.5 }]}
+              disabled={pendingLoading}
+              onPress={async () => {
+                if (pendingLoading) return;
+                setPendingLoading(true);
+                try { await onRejectInvite?.(); } finally { setPendingLoading(false); }
+              }}
+            >
+              <Text style={styles.pendingRejectText}>Reject</Text>
+            </Pressable>
+            <Pressable onPress={onNotNowInvite} hitSlop={6} disabled={pendingLoading}>
+              <Text style={styles.pendingNotNowText}>Not now</Text>
+            </Pressable>
+          </View>
+        )}
         {gallery.pinned && (
           <View style={styles.pinBadge}>
             <MaterialCommunityIcons name="pin" size={14} color="#fff" />
-          </View>
-        )}
-        {gallery.role === 'member' && (
-          <View style={styles.memberBadge}>
-            <Text style={styles.memberBadgeText}>Invited</Text>
           </View>
         )}
       </View>
@@ -281,16 +322,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 4,
   },
-  memberBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 8,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  memberBadgeText: { color: '#fff', fontSize: 10, fontWeight: '600' },
   cardInfo: { padding: 10 },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
   cardTitle: { fontSize: 14, fontWeight: '700', color: '#111827', flexShrink: 1, marginRight: 6 },
@@ -368,4 +399,32 @@ const styles = StyleSheet.create({
   dropdownUsername: { fontSize: 12, fontWeight: '500', color: '#374151', flex: 1 },
   commentRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
   commentCount: { fontSize: 12, color: '#6b7280' },
+
+  pendingScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.60)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+  },
+  pendingTitle: { color: '#fff', fontSize: 12, fontWeight: '700', marginBottom: 2 },
+  pendingAcceptBtn: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingVertical: 6,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+  },
+  pendingAcceptText: { fontSize: 12, fontWeight: '700', color: '#111827' },
+  pendingRejectBtn: {
+    borderRadius: 8,
+    paddingVertical: 6,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+  },
+  pendingRejectText: { fontSize: 12, fontWeight: '700', color: '#EF4444' },
+  pendingNotNowText: { fontSize: 11, color: '#D1D5DB', fontWeight: '500' },
 });

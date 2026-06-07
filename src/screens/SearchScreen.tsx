@@ -176,7 +176,7 @@ export default function SearchScreen() {
 
   const runSearch = useCallback((text: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!text.trim()) {
+    if (text.trim().length < 2) {
       setPeople([]);
       setGalleries([]);
       setSearching(false);
@@ -185,12 +185,12 @@ export default function SearchScreen() {
     setSearching(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        const [userResults, galleryResults] = await Promise.all([
+        const [userRes, galleryRes] = await Promise.all([
           searchUsers(text, currentUserId),
           searchGalleries(text, currentUserId),
         ]);
-        setPeople(userResults);
-        setGalleries(galleryResults as Gallery[]);
+        setPeople(userRes.data);
+        setGalleries(galleryRes.data as Gallery[]);
       } finally {
         setSearching(false);
       }
@@ -231,7 +231,7 @@ export default function SearchScreen() {
     navigation.navigate('GalleryDetail', { galleryId, galleryTitle });
   };
 
-  const isEmpty = query.trim() === '';
+  const isEmpty = query.trim().length < 2;
   const hasNoResults = !isEmpty && (activeTab === 'people' ? people.length === 0 : galleries.length === 0);
 
   return (
@@ -299,7 +299,7 @@ export default function SearchScreen() {
         />
       )}
 
-      {query.trim() !== '' && (
+      {query.trim().length >= 2 && (
         searching ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
             {Array.from({ length: 6 }).map((_, i) => (
@@ -339,7 +339,7 @@ export default function SearchScreen() {
             )}
             {hasNoResults && (
               <View style={styles.center}>
-                <Text style={styles.hint}>No results found</Text>
+                <Text style={styles.hint}>No results for "{query.trim()}"</Text>
               </View>
             )}
           </>

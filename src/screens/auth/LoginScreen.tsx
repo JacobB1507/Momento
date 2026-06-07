@@ -89,9 +89,10 @@ export default function LoginScreen({ navigation }: Props) {
             <Text style={styles.logo}>📸</Text>
             <Text style={styles.appName}>Momento</Text>
             <Text style={styles.tagline}>Your memories, beautifully shared</Text>
-            <View style={styles.privateBetaPill}>
+            {/* === BETA GATE (disabled for public launch — uncomment to re-enable) === */}
+            {/* <View style={styles.privateBetaPill}>
               <Text style={styles.privateBetaText}>PRIVATE BETA</Text>
-            </View>
+            </View> */}
           </View>
 
           {/* Form card */}
@@ -281,18 +282,19 @@ const styles = StyleSheet.create({
   authErrorBlock: { marginTop: 14, alignItems: 'center' },
   authErrorRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 6 },
 
-  privateBetaPill: {
-    alignSelf: 'center',
-    marginTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  privateBetaText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.65)',
-    letterSpacing: 1.5,
-  },
+  // === BETA GATE (disabled for public launch — uncomment to re-enable) ===
+  // privateBetaPill: {
+  //   alignSelf: 'center',
+  //   marginTop: 10,
+  //   backgroundColor: 'rgba(255,255,255,0.15)',
+  //   borderRadius: 20,
+  //   paddingHorizontal: 12,
+  //   paddingVertical: 4,
+  // },
+  // privateBetaText: {
+  //   fontSize: 11,
+  //   fontWeight: '600',
+  //   color: 'rgba(255,255,255,0.65)',
+  //   letterSpacing: 1.5,
+  // },
 });

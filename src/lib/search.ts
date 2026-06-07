@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 
-export async function searchUsers(query: string, currentUserId: string) {
+export async function searchUsers(query: string, currentUserId: string): Promise<{ data: any[]; error: string | null }> {
   try {
     const { data, error } = await supabase
       .from('profiles')
@@ -8,14 +8,14 @@ export async function searchUsers(query: string, currentUserId: string) {
       .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
       .neq('id', currentUserId)
       .limit(20);
-    if (error || !data) return [];
-    return data;
-  } catch {
-    return [];
+    if (error) return { data: [], error: error.message };
+    return { data: data ?? [], error: null };
+  } catch (e: any) {
+    return { data: [], error: e?.message ?? 'Unknown error' };
   }
 }
 
-export async function searchGalleries(query: string, currentUserId: string) {
+export async function searchGalleries(query: string, currentUserId: string): Promise<{ data: any[]; error: string | null }> {
   try {
     const { data, error } = await supabase
       .from('galleries')
@@ -25,9 +25,9 @@ export async function searchGalleries(query: string, currentUserId: string) {
       .neq('created_by', currentUserId)
       .order('created_at', { ascending: false })
       .limit(20);
-    if (error || !data) return [];
-    return data;
-  } catch {
-    return [];
+    if (error) return { data: [], error: error.message };
+    return { data: data ?? [], error: null };
+  } catch (e: any) {
+    return { data: [], error: e?.message ?? 'Unknown error' };
   }
 }

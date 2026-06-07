@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Dimensions, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import type { Photo } from '../types/database';
 import { supabase } from '../lib/supabase';
@@ -131,10 +132,13 @@ export function PhotoGrid({
                 <Skeleton width={PHOTO_SIZE} height={PHOTO_SIZE} borderRadius={0} />
               </View>
             )}
-            <Image
+            <ExpoImage
               source={{ uri: item.url }}
               style={styles.photo}
-              resizeMode="cover"
+              contentFit="cover"
+              recyclingKey={item.id}
+              cachePolicy="memory-disk"
+              transition={150}
               onLoad={() => markLoaded(item.id)}
               onError={() => markLoaded(item.id)}
             />

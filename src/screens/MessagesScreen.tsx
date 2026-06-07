@@ -41,9 +41,14 @@ export default function MessagesScreen() {
       });
       setConversations(visibleConversations);
       setMessageRequests(requests ?? []);
-      setPendingSentIds(new Set((sentRes.data ?? []).map((r: any) => r.target_user_id)));
+      setPendingSentIds(
+        sentRes.error
+          ? new Set()
+          : new Set((sentRes.data ?? []).map((r: any) => r.target_user_id))
+      );
     } catch (e) {
       console.error('fetchConversations error:', e);
+      setPendingSentIds(new Set());
     } finally {
       setLoading(false);
       setRefreshing(false);

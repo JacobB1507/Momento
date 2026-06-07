@@ -20,7 +20,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Entypo from '@expo/vector-icons/Entypo';
 import { useAuth } from '../context/AuthContext';
 import { useTutorial } from '../tutorial/TutorialContext';
-import { createInviteLink } from '../lib/friends';
+import { createInviteLink, sendFriendRequest } from '../lib/friends';
 import { searchUsers } from '../lib/search';
 import { checkRateLimit } from '../lib/rateLimit';
 import { userFacingError, reportError } from '../lib/errorReport';
@@ -52,14 +52,36 @@ export default function AddFriendScreen() {
   const [query, setQuery] = useState('');
   const [people, setPeople] = useState<any[]>([]);
   const [sharingType, setSharingType] = useState<ShareType | null>(null);
+  const [requestingIds, setRequestingIds] = useState<Set<string>>(new Set());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleAddFriend = async (userId: string, username: string | null) => {
+    if (requestingIds.has(userId) || !username) return;
+    const allowed = await checkRateLimit('friend_request');
+    if (!allowed) {
+      Alert.alert('Slow down', 'Please wait before sending more friend requests.');
+      return;
+    }
+    setRequestingIds(prev => new Set([...prev, userId]));
+    try {
+      const result = await sendFriendRequest(currentUserId, username);
+      if (result === 'sent' || result === 'already_friends') {
+        setPeople(prev => prev.map(p => p.id === userId ? { ...p, _requested: true } : p));
+      }
+    } catch (err) {
+      Alert.alert('Friend request failed', userFacingError(err));
+      reportError('AddFriendScreen.sendFriendRequest', err);
+    } finally {
+      setRequestingIds(prev => { const next = new Set(prev); next.delete(userId); return next; });
+    }
+  };
 
   const runSearch = (text: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!text.trim()) { setPeople([]); return; }
     debounceRef.current = setTimeout(async () => {
-      const results = await searchUsers(text, currentUserId);
-      setPeople(results);
+      const { data } = await searchUsers(text, currentUserId);
+      setPeople(data);
     }, 300);
   };
 
@@ -142,7 +164,14 @@ export default function AddFriendScreen() {
         <FlatList
           data={query.trim() === '' ? [] : people}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <SearchPersonRow user={item} currentUserId={currentUserId} />}
+          renderItem={({ item }) => (
+            <SearchPersonRow
+              user={item}
+              currentUserId={currentUserId}
+              submitting={requestingIds.has(item.id)}
+              onAddFriend={() => handleAddFriend(item.id, item.username)}
+            />
+          )}
           ListHeaderComponent={listHeader}
           ListFooterComponent={listFooter}
           ListEmptyComponent={

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { addTrustedFriend } from '../lib/trustedFriends';
+import { respondToFriendRequest } from '../lib/friends';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -57,6 +58,7 @@ export default function NotificationRow({ notification, senderProfileMap, coverM
   const { body, read, created_at, type } = notification;
   const [trustedAdded, setTrustedAdded] = useState(false);
   const [actionState, setActionState] = useState<'pending' | 'accepted' | 'declined' | 'joined' | 'loading'>('loading');
+  const [accepting, setAccepting] = useState(false);
 
   useEffect(() => {
     const checkState = async () => {
@@ -112,8 +114,9 @@ export default function NotificationRow({ notification, senderProfileMap, coverM
   const swipeableRef = useRef<any>(null);
 
   const resolveNotificationImage = () => {
-    if (type === 'gallery_invite') return notification.gallery_cover_photo_url ?? null;
-    if (type === 'gallery_photo_added') return notification.related_id ? coverMap[notification.related_id] ?? null : null;
+    if (type === 'gallery_invite' || type === 'gallery_photo_added') {
+      return notification.related_id ? coverMap[notification.related_id] ?? null : null;
+    }
     return senderProfileMap[notification.sender_id ?? '']?.avatar_url ?? null;
   };
   const imageUrl = resolveNotificationImage();
@@ -164,8 +167,8 @@ export default function NotificationRow({ notification, senderProfileMap, coverM
         <View style={styles.content}>
           {type === 'gallery_invite' ? (
             <Text style={styles.body}>
-              {'You\'ve been invited to join '}
-              <Text style={{ fontWeight: '600' }}>{notification.gallery_title ?? 'a gallery'}</Text>
+              <Text style={styles.username}>{displayLabel} </Text>
+              {rest || 'invited you to join a gallery'}
             </Text>
           ) : isSystemNotification ? (
             <Text style={styles.body}>
@@ -186,15 +189,19 @@ export default function NotificationRow({ notification, senderProfileMap, coverM
             actionState === 'pending' ? (
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
                 <TouchableOpacity
+                  disabled={accepting}
                   onPress={async () => {
-                    await supabase.from('friends').update({ status: 'accepted' }).eq('id', notification.related_id);
-                    setActionState('accepted');
+                    setAccepting(true);
+                    const ok = await respondToFriendRequest(notification.related_id!, true);
+                    setAccepting(false);
+                    if (ok) setActionState('accepted');
                   }}
-                  style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, backgroundColor: '#E91E8C' }}
+                  style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, backgroundColor: accepting ? '#9CA3AF' : '#E91E8C' }}
                 >
                   <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>Accept</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
+                  disabled={accepting}
                   onPress={async () => {
                     await supabase.from('friends').update({ status: 'declined' }).eq('id', notification.related_id);
                     setActionState('declined');

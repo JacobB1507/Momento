@@ -24,7 +24,8 @@ import { AppleSignInButton } from '../../components/AppleSignInButton';
 import AuthBackButton from '../../components/AuthBackButton';
 import { setPendingPhone } from '../../lib/pendingPhone';
 import { formatPhone } from '../../lib/phoneFormat';
-import { signInWithApple } from '../../lib/appleAuth';
+// === BETA GATE (disabled for public launch — uncomment to re-enable) ===
+// import { signInWithApple } from '../../lib/appleAuth';
 
 type Props = { navigation: SignUpNavigationProp };
 
@@ -39,33 +40,38 @@ export default function SignUpScreen({ navigation }: Props) {
   const [policyError, setPolicyError] = useState('');
   const [accountExistsForEmail, setAccountExistsForEmail] = useState<string | null>(null);
   const [accountExistsForPhone, setAccountExistsForPhone] = useState<string | null>(null);
-  const [inviteCode, setInviteCode] = useState('');
-  const [inviteCodeError, setInviteCodeError] = useState<string | null>(null);
+  // === BETA GATE (disabled for public launch — uncomment to re-enable) ===
+  // const [inviteCode, setInviteCode] = useState('');
+  // const [inviteCodeError, setInviteCodeError] = useState<string | null>(null);
   const [phoneDigits, setPhoneDigits] = useState('');
   const [phoneError, setPhoneError] = useState<string | null>(null);
-  const [isAppleLoading, setIsAppleLoading] = useState(false);
+  // === BETA GATE (disabled for public launch — uncomment to re-enable) ===
+  // const [isAppleLoading, setIsAppleLoading] = useState(false);
+  const [showRequiredErrors, setShowRequiredErrors] = useState(false);
 
   const handleSignUp = async () => {
-    if (!inviteCode.trim()) {
-      setInviteCodeError('Invite code is required');
-      return;
-    }
-
-    const { data: codeValid, error: codeError } = await supabase.rpc(
-      'validate_invite_code',
-      { p_code: inviteCode.trim() }
-    );
-
-    if (codeError) {
-      setInviteCodeError('Could not validate code. Please try again.');
-      reportError('SignUpScreen.validateInviteCode', codeError);
-      return;
-    }
-
-    if (!codeValid) {
-      setInviteCodeError('Invalid or already-used invite code');
-      return;
-    }
+    setShowRequiredErrors(true);
+    // === BETA GATE (disabled for public launch — uncomment to re-enable) ===
+    // if (!inviteCode.trim()) {
+    //   setInviteCodeError('Invite code is required');
+    //   return;
+    // }
+    //
+    // const { data: codeValid, error: codeError } = await supabase.rpc(
+    //   'validate_invite_code',
+    //   { p_code: inviteCode.trim() }
+    // );
+    //
+    // if (codeError) {
+    //   setInviteCodeError('Could not validate code. Please try again.');
+    //   reportError('SignUpScreen.validateInviteCode', codeError);
+    //   return;
+    // }
+    //
+    // if (!codeValid) {
+    //   setInviteCodeError('Invalid or already-used invite code');
+    //   return;
+    // }
 
     const allowed = await checkRateLimit('signup_attempt');
     if (!allowed) {
@@ -160,53 +166,48 @@ export default function SignUpScreen({ navigation }: Props) {
       return;
     }
 
-    const { data: redeemed, error: redeemError } = await supabase.rpc(
-      'redeem_invite_code',
-      { p_code: inviteCode.trim() }
-    );
-    if (redeemError || !redeemed) {
-      reportError('SignUpScreen.redeemInviteCode', redeemError ?? new Error('Redeem returned false'));
-    }
+    // === BETA GATE (disabled for public launch — uncomment to re-enable) ===
+    // const { data: redeemed, error: redeemError } = await supabase.rpc(
+    //   'redeem_invite_code',
+    //   { p_code: inviteCode.trim() }
+    // );
+    // if (redeemError || !redeemed) {
+    //   reportError('SignUpScreen.redeemInviteCode', redeemError ?? new Error('Redeem returned false'));
+    // }
     setPendingPhone(phoneDigits);
     setLoading(false);
   };
 
-  const handleApplePress = async () => {
-    if (!inviteCode.trim()) {
-      Alert.alert('Invite code required', 'Please enter your invite code first.');
-      return;
-    }
-    setIsAppleLoading(true);
-    try {
-      const { data: codeValid, error: codeError } = await supabase.rpc(
-        'validate_invite_code',
-        { p_code: inviteCode.trim() }
-      );
-      if (codeError) {
-        setInviteCodeError('Could not validate code. Please try again.');
-        reportError('SignUpScreen.validateInviteCode (apple)', codeError);
-        return;
-      }
-      if (!codeValid) {
-        setInviteCodeError('Invalid or already-used invite code');
-        return;
-      }
-      const result = await signInWithApple();
-      if (!result.ok) {
-        if (result.reason !== 'cancelled') Alert.alert('Sign in failed', result.reason);
-        return;
-      }
-      const { data: redeemed, error: redeemError } = await supabase.rpc(
-        'redeem_invite_code',
-        { p_code: inviteCode.trim() }
-      );
-      if (redeemError || !redeemed) {
-        reportError('SignUpScreen.redeemInviteCode (apple)', redeemError ?? new Error('Redeem returned false'));
-      }
-    } finally {
-      setIsAppleLoading(false);
-    }
-  };
+  // === BETA GATE (disabled for public launch — uncomment to re-enable) ===
+  // const handleApplePress = async () => {
+  //   if (!inviteCode.trim()) {
+  //     Alert.alert('Invite code required', 'Please enter your invite code first.');
+  //     return;
+  //   }
+  //   setIsAppleLoading(true);
+  //   try {
+  //     const { data: codeValid, error: codeError } = await supabase.rpc(
+  //       'validate_invite_code',
+  //       { p_code: inviteCode.trim() }
+  //     );
+  //     if (codeError) {
+  //       setInviteCodeError('Could not validate code. Please try again.');
+  //       reportError('SignUpScreen.validateInviteCode (apple)', codeError);
+  //       return;
+  //     }
+  //     if (!codeValid) {
+  //       setInviteCodeError('Invalid or already-used invite code');
+  //       return;
+  //     }
+  //     const result = await signInWithApple();
+  //     if (!result.ok) {
+  //       if (result.reason !== 'cancelled') Alert.alert('Sign in failed', result.reason);
+  //       return;
+  //     }
+  //   } finally {
+  //     setIsAppleLoading(false);
+  //   }
+  // };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -225,16 +226,18 @@ export default function SignUpScreen({ navigation }: Props) {
             <Text style={styles.logo}>📸</Text>
             <Text style={styles.appName}>Momento</Text>
             <Text style={styles.tagline}>Start sharing your world</Text>
-            <View style={styles.privateBetaPill}>
+            {/* === BETA GATE (disabled for public launch — uncomment to re-enable) === */}
+            {/* <View style={styles.privateBetaPill}>
               <Text style={styles.privateBetaText}>PRIVATE BETA</Text>
-            </View>
+            </View> */}
           </View>
 
           {/* Form card */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Create account</Text>
 
-            <View style={styles.field}>
+            {/* === BETA GATE (disabled for public launch — uncomment to re-enable) === */}
+            {/* <View style={styles.field}>
               <Text style={styles.label}>Invite Code</Text>
               <TextInput
                 style={styles.input}
@@ -252,15 +255,14 @@ export default function SignUpScreen({ navigation }: Props) {
                 returnKeyType="next"
               />
             </View>
-
             {inviteCodeError && (
               <View style={styles.existingAccountBanner}>
                 <Text style={styles.existingAccountText}>{inviteCodeError}</Text>
               </View>
-            )}
+            )} */}
 
             <View style={styles.field}>
-              <Text style={styles.label}>Phone number</Text>
+              <Text style={styles.label}>Phone number<Text style={styles.requiredAsterisk}> *</Text></Text>
               {phoneError && (
                 <Text style={styles.errorText}>{phoneError}</Text>
               )}
@@ -278,6 +280,9 @@ export default function SignUpScreen({ navigation }: Props) {
                   onChangeText={v => { setPhoneDigits(v.replace(/\D/g, '')); setPhoneError(null); if (accountExistsForPhone !== null) setAccountExistsForPhone(null); }}
                 />
               </View>
+              {showRequiredErrors && phoneDigits === '' && !phoneError && (
+                <Text style={styles.requiredFieldMsg}>This is a required field</Text>
+              )}
             </View>
 
             {accountExistsForPhone && (
@@ -297,7 +302,7 @@ export default function SignUpScreen({ navigation }: Props) {
             )}
 
             <View style={styles.field}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={styles.label}>Email<Text style={styles.requiredAsterisk}> *</Text></Text>
               {!!emailError && <Text style={styles.fieldError}>{emailError}</Text>}
               <TextInput
                 style={styles.input}
@@ -311,6 +316,9 @@ export default function SignUpScreen({ navigation }: Props) {
                 autoComplete="email"
                 returnKeyType="next"
               />
+              {showRequiredErrors && !email.trim() && !emailError && (
+                <Text style={styles.requiredFieldMsg}>This is a required field</Text>
+              )}
             </View>
 
             {accountExistsForEmail && (
@@ -330,7 +338,7 @@ export default function SignUpScreen({ navigation }: Props) {
             )}
 
             <View style={styles.field}>
-              <Text style={styles.label}>Password</Text>
+              <Text style={styles.label}>Password<Text style={styles.requiredAsterisk}> *</Text></Text>
               <PasswordInput
                 style={[styles.input, passwordError && { borderColor: '#FF3B30', borderWidth: 1 }]}
                 placeholder="8+ characters"
@@ -343,6 +351,9 @@ export default function SignUpScreen({ navigation }: Props) {
                 passwordRules=""
                 returnKeyType="next"
               />
+              {showRequiredErrors && !password && !passwordError && (
+                <Text style={styles.requiredFieldMsg}>This is a required field</Text>
+              )}
               {passwordError && (
                 <Text style={{ color: '#FF3B30', fontSize: 13, marginTop: 6, marginLeft: 4 }}>
                   {passwordError}
@@ -351,7 +362,7 @@ export default function SignUpScreen({ navigation }: Props) {
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Confirm Password</Text>
+              <Text style={styles.label}>Confirm Password<Text style={styles.requiredAsterisk}> *</Text></Text>
               <PasswordInput
                 style={styles.input}
                 placeholder="••••••••"
@@ -367,6 +378,9 @@ export default function SignUpScreen({ navigation }: Props) {
                 returnKeyType="done"
                 onSubmitEditing={handleSignUp}
               />
+              {showRequiredErrors && !confirmPassword && !passwordError && (
+                <Text style={styles.requiredFieldMsg}>This is a required field</Text>
+              )}
             </View>
 
             <View style={styles.policyRow}>
@@ -412,7 +426,8 @@ export default function SignUpScreen({ navigation }: Props) {
               <Text style={styles.orText}>or</Text>
               <View style={styles.orLine} />
             </View>
-            <View style={{ position: 'relative' }}>
+            {/* === BETA GATE (disabled for public launch — uncomment to re-enable) === */}
+            {/* <View style={{ position: 'relative' }}>
               <View pointerEvents="none">
                 <AppleSignInButton onSuccess={() => {}} onError={() => {}} />
               </View>
@@ -426,7 +441,11 @@ export default function SignUpScreen({ navigation }: Props) {
                   <ActivityIndicator color="#fff" />
                 </View>
               )}
-            </View>
+            </View> */}
+            <AppleSignInButton
+              onSuccess={() => {}}
+              onError={(reason) => { if (reason !== 'cancelled') Alert.alert('Sign in failed', reason); }}
+            />
 
             <View style={styles.switchRow}>
               <Text style={styles.switchText}>Already have an account? </Text>
@@ -529,6 +548,8 @@ const styles = StyleSheet.create({
   orLine: { flex: 1, height: 1, backgroundColor: '#E5E7EB' },
   orText: { color: '#9CA3AF', fontSize: 14, fontWeight: '500', marginHorizontal: 12 },
   fieldError: { color: '#FF3B30', fontSize: 13, marginBottom: 8 },
+  requiredAsterisk: { color: '#FF3B30', fontWeight: '600' },
+  requiredFieldMsg: { color: '#FF3B30', fontSize: 13, marginTop: 6, marginLeft: 4 },
   errorText: {
     color: '#D32F2F',
     fontSize: 14,
@@ -600,20 +621,21 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 
-  privateBetaPill: {
-    alignSelf: 'center',
-    marginTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  privateBetaText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.65)',
-    letterSpacing: 1.5,
-  },
+  // === BETA GATE (disabled for public launch — uncomment to re-enable) ===
+  // privateBetaPill: {
+  //   alignSelf: 'center',
+  //   marginTop: 10,
+  //   backgroundColor: 'rgba(255,255,255,0.15)',
+  //   borderRadius: 20,
+  //   paddingHorizontal: 12,
+  //   paddingVertical: 4,
+  // },
+  // privateBetaText: {
+  //   fontSize: 11,
+  //   fontWeight: '600',
+  //   color: 'rgba(255,255,255,0.65)',
+  //   letterSpacing: 1.5,
+  // },
 
   phoneRow: {
     flexDirection: 'row',

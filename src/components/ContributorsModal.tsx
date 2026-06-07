@@ -16,7 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { InviteViaSection } from './InviteViaSection';
-import { searchFriendsByName } from '../lib/friends';
+import { searchUsers } from '../lib/search';
 import { ContributorRow } from './ContributorRow';
 import { SkeletonCircle, SkeletonText } from './Skeleton';
 
@@ -70,6 +70,7 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
   const [addingUser, setAddingUser] = useState(false);
   const [addSuccess, setAddSuccess] = useState('');
   const [inviteLink, setInviteLink] = useState('');
+  const [memberStatusMap, setMemberStatusMap] = useState<Map<string, string>>(new Map());
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadMembers = useCallback(async () => {
@@ -103,7 +104,7 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
           .from('profiles')
           .select('id, username, display_name, avatar_url')
           .eq('id', ownerId)
-          .single();
+          .maybeSingle();
         merged.unshift({
           user_id: ownerId,
           role: 'owner',
@@ -127,7 +128,7 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
     if (!text.trim()) { setSearchResults([]); return; }
     const currentUserId = session?.user.id ?? '';
     searchTimeoutRef.current = setTimeout(async () => {
-      const { data } = await searchFriendsByName(currentUserId, text, 20);
+      const data = await searchUsers(text, currentUserId);
       const memberIds = new Set(members.map(m => m.user_id));
       setSearchResults((data ?? []).filter(p => !memberIds.has(p.id)));
     }, 300);
@@ -146,13 +147,6 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
           Alert.alert('Error', insertError.message);
         }
       } else {
-        try {
-          await supabase.from('notifications').insert({
-            user_id: profile.id,
-            type: 'gallery_invite',
-            data: { gallery_id: galleryId },
-          });
-        } catch {}
         setAddSuccess('User added!');
         setMemberSearch('');
         setSearchResults([]);
@@ -165,6 +159,19 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
 
   useEffect(() => {
     if (visible) loadMembers();
+  }, [visible, galleryId]);
+
+  useEffect(() => {
+    if (!visible || !galleryId) return;
+    (async () => {
+      const { data, error } = await supabase.rpc('get_gallery_member_statuses', { p_gallery_id: galleryId });
+      if (error || !data) return;
+      const map = new Map<string, string>();
+      (data as Array<{ user_id: string; status: string }>).forEach(row => {
+        map.set(row.user_id, row.status);
+      });
+      setMemberStatusMap(map);
+    })();
   }, [visible, galleryId]);
 
   useEffect(() => {
@@ -186,6 +193,7 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
     setMemberSearch('');
     setSearchResults([]);
     setAddSuccess('');
+    setMemberStatusMap(new Map());
   };
 
   return (
@@ -249,7 +257,7 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
                 </View>
               )}
               {!!addSuccess && <Text style={styles.addSuccessText}>{addSuccess}</Text>}
-              <InviteViaSection senderId={session?.user.id ?? ''} visible={visible} />
+              <InviteViaSection senderId={session?.user.id ?? ''} visible={visible} galleryId={galleryId} />
               {inviteLink ? (
                 <View style={styles.qrWrap}>
                   <QRCode
@@ -288,21 +296,30 @@ export function ContributorsModal({ visible, onClose, galleryId, isOwner, ownerI
           ) : members.length === 0 ? (
             <Text style={styles.modalEmpty}>No members yet.</Text>
           ) : (
-            members.map((member) => (
-              <ContributorRow
-                key={member.user_id}
-                member={member}
-                galleryId={galleryId}
-                isOwner={isOwner}
-                currentUserId={session?.user.id}
-                onNavigate={() => {
-                  if (member.user_id === session?.user.id) return;
-                  onClose();
-                  navigation.navigate('FriendProfile', { userId: member.user_id, username: member.username ?? 'unknown' });
-                }}
-                onRefetch={loadMembers}
-              />
-            ))
+            members.map((member) => {
+              const isPending = memberStatusMap.get(member.user_id) === 'pending';
+              return (
+                <View key={member.user_id} style={{ position: 'relative' }}>
+                  <ContributorRow
+                    member={member}
+                    galleryId={galleryId}
+                    isOwner={isOwner}
+                    currentUserId={session?.user.id}
+                    onNavigate={() => {
+                      if (member.user_id === session?.user.id) return;
+                      onClose();
+                      navigation.navigate('FriendProfile', { userId: member.user_id, username: member.username ?? 'unknown' });
+                    }}
+                    onRefetch={loadMembers}
+                  />
+                  {isPending && (
+                    <View style={styles.pendingPill} pointerEvents="none">
+                      <Text style={styles.pendingPillText}>Pending</Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })
           )}
         </ScrollView>
       </SafeAreaView>
@@ -375,4 +392,14 @@ const styles = StyleSheet.create({
   memberAvatarLetter: { color: '#fff', fontSize: 17, fontWeight: '700' },
   qrWrap: { alignItems: 'center', marginTop: 20, paddingVertical: 16 },
   qrCaption: { marginTop: 10, fontSize: 12, color: '#9CA3AF', textAlign: 'center' },
+  pendingPill: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  pendingPillText: { fontSize: 11, fontWeight: '600', color: '#92400E' },
 });

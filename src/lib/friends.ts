@@ -13,16 +13,14 @@ export async function sendFriendRequest(
   if (lookupError) return 'error';
   if (!receiver) return 'not_found';
 
-  const { error: insertError } = await supabase
-    .from('friends')
-    .insert({ sender_id: senderId, receiver_id: receiver.id, status: 'pending' });
+  const { data, error } = await supabase.rpc('send_friend_request', { p_receiver: receiver.id });
+  if (error) return 'error';
 
-  if (insertError) {
-    if (insertError.code === '23505') return 'already_friends';
-    return 'error';
-  }
-
-  return 'sent';
+  const result = data as string;
+  if (result === 'sent' || result === 'auto_accepted') return 'sent';
+  if (result === 'already_friends') return 'already_friends';
+  if (result === 'not_found') return 'not_found';
+  return 'error';
 }
 
 /**
@@ -38,15 +36,13 @@ export async function sendFriendRequestById(
   if (!senderId || !receiverId) return 'error';
   if (senderId === receiverId) return 'error';
 
-  const { error: insertError } = await supabase
-    .from('friends')
-    .insert({ sender_id: senderId, receiver_id: receiverId, status: 'pending' });
+  const { data, error } = await supabase.rpc('send_friend_request', { p_receiver: receiverId });
+  if (error) return 'error';
 
-  if (insertError) {
-    if (insertError.code === '23505') return 'already_friends';
-    return 'error';
-  }
-  return 'sent';
+  const result = data as string;
+  if (result === 'sent' || result === 'auto_accepted') return 'sent';
+  if (result === 'already_friends') return 'already_friends';
+  return 'error';
 }
 
 export async function getFriends(userId: string) {
@@ -115,10 +111,13 @@ export async function removeFriend(friendshipId: string): Promise<boolean> {
   return !error;
 }
 
-export async function createInviteLink(senderId: string): Promise<string | null> {
+export async function createInviteLink(senderId: string, galleryId?: string): Promise<string | null> {
+  const row = galleryId
+    ? { sender_id: senderId, gallery_id: galleryId }
+    : { sender_id: senderId };
   const { data, error } = await supabase
     .from('invites')
-    .insert({ sender_id: senderId })
+    .insert(row)
     .select('code')
     .single();
 

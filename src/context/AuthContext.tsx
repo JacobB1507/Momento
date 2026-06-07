@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import type { Session } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
-import { registerPushNotifications, unregisterPushNotifications } from '../lib/pushNotifications';
+import { unregisterPushNotifications } from '../lib/pushNotifications';
 
 const projectRef = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').replace('https://', '').split('.')[0];
 const AUTH_STORAGE_KEY = `sb-${projectRef}-auth-token`;
@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .from('profiles')
       // .eq() is defense-in-depth: RLS already enforces id = auth.uid(), but
       // explicit scoping ensures we never accidentally fetch another user's row.
-      .select('id, username, display_name, avatar_url, welcome_seen, skipped_avatar_setup, bio, phone_verified_at, phone_verify_dismissed_until, contacts_prompt_shown_at, contacts_skipped_at, contacts_modal_shown_at')
+      .select('id, username, display_name, avatar_url, welcome_seen, skipped_avatar_setup, bio, phone_verified_at, phone_verify_dismissed_until, contacts_prompt_shown_at, contacts_skipped_at, contacts_modal_shown_at, invite_redeemed_at')
       .eq('id', uid)
       .maybeSingle();
     if (error) {
@@ -93,15 +93,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const fetchProfile = async (userId: string) => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, username, display_name, avatar_url, welcome_seen, skipped_avatar_setup, bio, phone_verified_at, phone_verify_dismissed_until, contacts_prompt_shown_at, contacts_skipped_at, contacts_modal_shown_at')
+        .select('id, username, display_name, avatar_url, welcome_seen, skipped_avatar_setup, bio, phone_verified_at, phone_verify_dismissed_until, contacts_prompt_shown_at, contacts_skipped_at, contacts_modal_shown_at, invite_redeemed_at')
         .eq('id', userId)
         .maybeSingle();
       if (!error) {
         setProfile(data);
         setPhoneVerificationRequired(false); // BETA BYPASS — re-enable before public launch
-        if (data?.id) {
-          registerPushNotifications(data.id).catch(err => console.warn('Push registration failed:', err));
-        }
       }
       setProfileReady(true);
       setProfileLoaded(true);

@@ -27,7 +27,6 @@ export type RootStackParamList = {
   Notifications: undefined;
   ChangeEmail: undefined;
   ChangePassword: undefined;
-  GalleryInvite: { galleryId: string; notificationId: string };
   GalleryInvitePrompt: { galleryId: string };
   EditBio: undefined;
   EditDisplayName: undefined;
@@ -51,6 +50,9 @@ export type RootStackParamList = {
   NotificationSettings: undefined;
   TransferOwnership: { galleryId: string; galleryTitle: string };
   ManageTags: undefined;
+  Invites: undefined;
+  // === BETA GATE (disabled for public launch — uncomment to re-enable) ===
+  // AppleInviteCode: undefined;
 };
 
 export type MainTabParamList = {

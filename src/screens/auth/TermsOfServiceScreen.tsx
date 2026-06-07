@@ -36,7 +36,9 @@ export default function TermsOfServiceScreen({ navigation }: Props) {
 
         <Section
           heading="1. Eligibility"
-          body={"• You must be at least 13 years old to use Momento. Users between 13 and 17 require verifiable parental or guardian consent.\n• By using Momento, you represent that you meet the age requirement above and that all information you provide is accurate.\n• Momento is currently available by invitation only during our beta period. Creating an account requires a valid invite code."}
+          // === BETA GATE (disabled for public launch — uncomment to re-enable) ===
+          // body={"• You must be at least 13 years old to use Momento. Users between 13 and 17 require verifiable parental or guardian consent.\n• By using Momento, you represent that you meet the age requirement above and that all information you provide is accurate.\n• Momento is currently available by invitation only during our beta period. Creating an account requires a valid invite code."}
+          body={"• You must be at least 13 years old to use Momento. Users between 13 and 17 require verifiable parental or guardian consent.\n• By using Momento, you represent that you meet the age requirement above and that all information you provide is accurate.\n• Creating a Momento account is free."}
         />
 
         <Section

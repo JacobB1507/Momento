@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, View, ActivityIndicator } from 'react-native';
 import SplashScreen from '../screens/SplashScreen';
 import UsernameSetupScreen from '../screens/UsernameSetupScreen';
@@ -24,7 +24,6 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import ChangeEmailScreen from '../screens/ChangeEmailScreen';
 import ChangePasswordScreen from '../screens/ChangePasswordScreen';
 import ChangePhoneScreen from '../screens/ChangePhoneScreen';
-import GalleryInviteScreen from '../screens/GalleryInviteScreen';
 import EditBioScreen from '../screens/EditBioScreen';
 import EditDisplayNameScreen from '../screens/EditDisplayNameScreen';
 import PhotoViewerScreen from '../screens/PhotoViewerScreen';
@@ -34,6 +33,8 @@ import NewMessageScreen from '../screens/NewMessageScreen';
 import MessageRequestsScreen from '../screens/MessageRequestsScreen';
 import ProfilePhotoSetupScreen from '../screens/ProfilePhotoSetupScreen';
 import ContactSyncPromptScreen from '../screens/ContactSyncPromptScreen';
+// === BETA GATE (disabled for public launch — uncomment to re-enable) ===
+// import AppleInviteCodeScreen from '../screens/AppleInviteCodeScreen';
 import DeleteAccountScreen from '../screens/DeleteAccountScreen';
 import PrivacyPolicyScreen from '../screens/auth/PrivacyPolicyScreen';
 import TermsOfServiceScreen from '../screens/auth/TermsOfServiceScreen';
@@ -47,9 +48,14 @@ import TransferOwnershipScreen from '../screens/TransferOwnershipScreen';
 import ManageTagsScreen from '../screens/ManageTagsScreen';
 import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 import BlockedUsersScreen from '../screens/BlockedUsersScreen';
+import InvitesScreen from '../screens/InvitesScreen';
 import PhoneVerificationScreen from '../screens/auth/PhoneVerificationScreen';
+import { hasUnfinishedQueue, getQueue, resumeQueue, clearQueue } from '../lib/uploadQueue';
+import ResumeUploadPrompt from '../components/ResumeUploadPrompt';
+import OfflineBanner from '../components/OfflineBanner';
 import { supabase } from '../lib/supabase';
 import { resolveInviteCode } from '../lib/friends';
+import { registerPushNotifications } from '../lib/pushNotifications';
 import type { RootStackParamList } from './types';
 import { TutorialProvider } from '../tutorial/TutorialContext';
 import TutorialOverlay from '../tutorial/TutorialOverlay';
@@ -59,6 +65,11 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
   const { session, loading, restoringSession, profile, profileReady, profileLoaded, passwordRecoveryRequested, phoneVerificationRequired } = useAuth();
+  const hasRequestedNotifPermission = useRef(false);
+  const hasCheckedQueue = useRef(false);
+  const [showResume, setShowResume] = useState(false);
+  const [resuming, setResuming] = useState(false);
+  const [queueInfo, setQueueInfo] = useState<{ galleryTitle: string; pendingCount: number } | null>(null);
 
 
   const hasUsername = !!profile?.username;
@@ -66,14 +77,58 @@ export default function RootNavigator() {
   const hasWelcomeSeen = !!profile?.welcome_seen;
   const hasProfilePhoto = !!profile?.avatar_url || !!profile?.skipped_avatar_setup;
   const hasContactsPromptShown = !!profile?.contacts_prompt_shown_at;
+  // === BETA GATE (disabled for public launch — uncomment to re-enable) ===
+  // const isAppleUser = session?.user?.app_metadata?.provider === 'apple';
+  // const hasInviteRedeemed = !!profile?.invite_redeemed_at;
 
   const onboardingStage =
     phoneVerificationRequired ? 'phone-verification' :
+    // === BETA GATE (disabled for public launch — uncomment to re-enable) ===
+    // (!!profile && isAppleUser && !hasInviteRedeemed) ? 'appleInvite' :
     !hasUsername || !hasDisplayName ? 'setup' :
     !hasProfilePhoto ? 'photo' :
     !hasContactsPromptShown ? 'contactsPrompt' :
     !hasWelcomeSeen ? 'welcome' :
     'main';
+
+  useEffect(() => {
+    if (onboardingStage === 'main' && session?.user?.id && !hasRequestedNotifPermission.current) {
+      hasRequestedNotifPermission.current = true;
+      registerPushNotifications(session.user.id).catch(err => console.warn('Push registration failed:', err));
+    }
+  }, [onboardingStage, session]);
+
+  useEffect(() => {
+    if (onboardingStage !== 'main' || !session?.user?.id || hasCheckedQueue.current) return;
+    hasCheckedQueue.current = true;
+    const userId = session.user.id;
+    hasUnfinishedQueue(userId).then(async (has) => {
+      if (!has) return;
+      const queue = await getQueue(userId);
+      if (!queue) return;
+      const pendingCount = queue.photos.filter(p => p.status === 'pending').length;
+      if (pendingCount === 0) return;
+      setQueueInfo({ galleryTitle: queue.galleryTitle, pendingCount });
+      setShowResume(true);
+    });
+  }, [onboardingStage, session?.user?.id]);
+
+  const handleResumeUpload = async () => {
+    if (!session?.user?.id) return;
+    setResuming(true);
+    const result = await resumeQueue(session.user.id);
+    setResuming(false);
+    setShowResume(false);
+    setQueueInfo(null);
+    Alert.alert('Upload complete', `Uploaded ${result.uploaded} of ${result.total} photo${result.total === 1 ? '' : 's'}.`);
+  };
+
+  const handleCancelResume = async () => {
+    if (!session?.user?.id) return;
+    await clearQueue(session.user.id);
+    setShowResume(false);
+    setQueueInfo(null);
+  };
 
   useEffect(() => {
     if (!session) return;
@@ -199,6 +254,9 @@ export default function RootNavigator() {
             {/* Onboarding gate: phone verification → profile setup → profile photo → welcome → main app */}
             {phoneVerificationRequired ? (
               <Stack.Screen name="PhoneVerification" component={PhoneVerificationScreen} options={{ gestureEnabled: false }} />
+            // === BETA GATE (disabled for public launch — uncomment to re-enable) ===
+            // ) : (!!profile && isAppleUser && !hasInviteRedeemed) ? (
+            //   <Stack.Screen name="AppleInviteCode" component={AppleInviteCodeScreen} options={{ gestureEnabled: false }} />
             ) : (!hasUsername || !hasDisplayName) ? (
               <Stack.Screen name="SetupProfile" component={SetupProfileScreen} />
             ) : !hasProfilePhoto ? (
@@ -274,11 +332,6 @@ export default function RootNavigator() {
               options={{ headerShown: false }}
             />
             <Stack.Screen
-              name="GalleryInvite"
-              component={GalleryInviteScreen}
-              options={{ animation: 'slide_from_right' }}
-            />
-            <Stack.Screen
               name="GalleryInvitePrompt"
               component={GalleryInvitePromptScreen}
               options={{ headerShown: false, presentation: 'transparentModal', animation: 'fade' }}
@@ -344,6 +397,7 @@ export default function RootNavigator() {
             />
             <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ animation: 'slide_from_right', gestureEnabled: true }} />
             <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} options={{ animation: 'slide_from_right', gestureEnabled: true }} />
+            <Stack.Screen name="Invites" component={InvitesScreen} options={{ animation: 'slide_from_right' }} />
           </>
         ) : (
           <>
@@ -359,7 +413,16 @@ export default function RootNavigator() {
       )}
       <TutorialBootstrap welcomeSeen={hasWelcomeSeen} />
       <TutorialOverlay />
-      </>
+      <ResumeUploadPrompt
+        visible={showResume}
+        galleryTitle={queueInfo?.galleryTitle ?? ''}
+        pendingCount={queueInfo?.pendingCount ?? 0}
+        resuming={resuming}
+        onResume={handleResumeUpload}
+        onCancel={handleCancelResume}
+      />
+      <OfflineBanner />
+</>
     </NavigationContainer>
     </TutorialProvider>
   );

@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../lib/supabase';
@@ -15,6 +15,8 @@ type Props = {
   user: { id: string; username: string | null; display_name: string | null; avatar_url: string | null; bio: string | null };
   currentUserId: string;
   onPress?: () => void;
+  submitting?: boolean;
+  onAddFriend?: () => Promise<void>;
 };
 
 const AVATAR = 40;
@@ -26,7 +28,7 @@ function avatarColor(id: string): string {
   return COLORS[h % COLORS.length];
 }
 
-export function SearchPersonRow({ user, currentUserId, onPress }: Props) {
+export function SearchPersonRow({ user, currentUserId, onPress, submitting, onAddFriend }: Props) {
   const navigation = useNavigation<NavProp>();
   const [status, setStatus] = useState<FriendStatus>('none');
   const [loading, setLoading] = useState(false);
@@ -103,16 +105,20 @@ export function SearchPersonRow({ user, currentUserId, onPress }: Props) {
           status === 'pending' && styles.addButtonPending,
           pressed && { opacity: 0.7 },
         ]}
-        onPress={handleAddFriend}
-        disabled={status !== 'none' || loading}
+        onPress={onAddFriend ?? handleAddFriend}
+        disabled={status !== 'none' || loading || !!submitting}
       >
-        <Text style={[
-          styles.addButtonText,
-          status === 'friends' && styles.addButtonTextAlt,
-          status === 'pending' && styles.addButtonTextAlt,
-        ]}>
-          {status === 'friends' ? 'Friends' : status === 'pending' ? 'Pending' : loading ? '…' : 'Add Friend'}
-        </Text>
+        {(loading || submitting) && status === 'none' ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Text style={[
+            styles.addButtonText,
+            status === 'friends' && styles.addButtonTextAlt,
+            status === 'pending' && styles.addButtonTextAlt,
+          ]}>
+            {status === 'friends' ? 'Friends' : status === 'pending' ? 'Pending' : 'Add Friend'}
+          </Text>
+        )}
       </Pressable>
     </Pressable>
   );

@@ -6,9 +6,10 @@ import { createInviteLink } from '../lib/friends';
 type Props = {
   senderId: string;
   visible: boolean;
+  galleryId?: string;
 };
 
-export function InviteViaSection({ senderId, visible }: Props) {
+export function InviteViaSection({ senderId, visible, galleryId }: Props) {
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +20,7 @@ export function InviteViaSection({ senderId, visible }: Props) {
     setLoading(true);
     setError(null);
     setInviteLink(null);
-    createInviteLink(senderId).then((link) => {
+    createInviteLink(senderId, galleryId).then((link) => {
       if (cancelled) return;
       if (link) {
         setInviteLink(link);
@@ -31,7 +32,7 @@ export function InviteViaSection({ senderId, visible }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [visible, senderId]);
+  }, [visible, senderId, galleryId]);
 
   const message = inviteLink
     ? `Hey! Join my gallery on Momento — download the app and use my invite link: ${inviteLink}`

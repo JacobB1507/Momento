@@ -15,7 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
-import { fetchGalleryPhotos } from '../lib/galleries';
+import { fetchGalleryPhotos, leaveGallery } from '../lib/galleries';
 import type { GalleryPrivacy, Photo } from '../types/database';
 
 const { width: WINDOW_WIDTH, height: WINDOW_HEIGHT } = Dimensions.get('window');
@@ -29,6 +29,8 @@ const PRIVACY_OPTIONS: { value: GalleryPrivacy; label: string; description: stri
   { value: 'public', label: 'Public', description: 'Anyone on Momento', icon: 'globe-outline' },
 ];
 
+type ViewerRole = 'owner' | 'admin' | 'member' | 'viewer';
+
 type Props = {
   visible: boolean;
   galleryId: string;
@@ -38,6 +40,12 @@ type Props = {
   onGalleryDeleted: () => void;
   onTransferOwnership?: () => void;
   onCoverPhotoUpdated?: () => void;
+  isOwner?: boolean;
+  onLeft?: () => void;
+  viewerRole?: ViewerRole;
+  sortMode?: 'newest' | 'oldest' | 'contributor';
+  onChangeSortMode?: (mode: 'newest' | 'oldest' | 'contributor') => void;
+  onLeaveGallery?: () => void;
 };
 
 export function SettingsModal({
@@ -49,6 +57,12 @@ export function SettingsModal({
   onGalleryDeleted,
   onTransferOwnership,
   onCoverPhotoUpdated,
+  isOwner,
+  onLeft,
+  viewerRole = isOwner ? 'owner' : 'viewer',
+  sortMode = 'newest',
+  onChangeSortMode,
+  onLeaveGallery,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [draftPrivacy, setDraftPrivacy] = useState<GalleryPrivacy>(currentPrivacy);
@@ -61,9 +75,12 @@ export function SettingsModal({
   const [memberCount, setMemberCount] = useState<number>(0);
 
   const isDirty = draftPrivacy !== currentPrivacy;
+  const [tab, setTab] = useState<'filter' | 'settings'>('settings');
+  const hasSettingsTab = viewerRole === 'owner' || viewerRole === 'admin' || viewerRole === 'member';
+  const canEditPrivacy = viewerRole === 'owner' || viewerRole === 'admin';
 
   useEffect(() => {
-    if (visible) { setDraftPrivacy(currentPrivacy); setMode('main'); }
+    if (visible) { setDraftPrivacy(currentPrivacy); setMode('main'); setTab('settings'); }
   }, [visible, currentPrivacy]);
 
   useEffect(() => {
@@ -92,6 +109,26 @@ export function SettingsModal({
     if (error) { Alert.alert('Error', error.message); return; }
     onPrivacySaved(draftPrivacy);
     onClose();
+  };
+
+  const handleLeave = () => {
+    Alert.alert(
+      'Leave this gallery?',
+      "You'll stop seeing its photos and updates.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await leaveGallery(galleryId);
+            if (error) { Alert.alert('Error', error); return; }
+            onClose();
+            onLeft?.();
+          },
+        },
+      ],
+    );
   };
 
   const handleDelete = () => {
@@ -189,107 +226,169 @@ export function SettingsModal({
                 </Pressable>
               </View>
 
-              {/* Scrollable sections */}
-              <ScrollView bounces={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-
-                {/* STAT STRIP */}
-                <View style={styles.statStrip}>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statNumber}>{photoCount}</Text>
-                    <Text style={styles.statLabel}>{photoCount === 1 ? 'photo' : 'photos'}</Text>
-                  </View>
-                  <View style={styles.statDivider} />
-                  <View style={styles.statItem}>
-                    <Text style={styles.statNumber}>{memberCount}</Text>
-                    <Text style={styles.statLabel}>{memberCount === 1 ? 'member' : 'members'}</Text>
-                  </View>
-                </View>
-
-                {/* SECTION 1 — PRIVACY */}
-                <Text style={styles.sectionLabel}>PRIVACY</Text>
-                {PRIVACY_OPTIONS.map((opt, idx) => {
-                  const selected = draftPrivacy === opt.value;
-                  return (
-                    <React.Fragment key={opt.value}>
-                      <Pressable
-                        style={({ pressed }) => [styles.privacyRow, pressed && styles.rowPressed]}
-                        onPress={() => setDraftPrivacy(opt.value)}
-                      >
-                        <Ionicons name={opt.icon} size={22} color="#4B5563" />
-                        <View style={styles.privacyTextCol}>
-                          <Text style={styles.privacyName}>{opt.label}</Text>
-                          <Text style={styles.privacyDesc}>{opt.description}</Text>
-                        </View>
-                        <View style={[styles.radio, selected && styles.radioSelected]}>
-                          {selected && <View style={styles.radioDot} />}
-                        </View>
-                      </Pressable>
-                      {idx < PRIVACY_OPTIONS.length - 1 && <View style={styles.separator} />}
-                    </React.Fragment>
-                  );
-                })}
-
-                {/* SECTION 2 — GALLERY */}
-                <Text style={[styles.sectionLabel, { marginTop: 20 }]}>GALLERY</Text>
-                <Pressable
-                  style={({ pressed }) => [styles.settingsRow, pressed && styles.rowPressed]}
-                  onPress={openCoverPicker}
-                >
-                  <View style={styles.rowLeft}>
-                    <Ionicons name="image-outline" size={22} color="#4B5563" />
-                    <Text style={styles.rowText}>Change cover photo</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
-                </Pressable>
-
-                {/* SECTION 3 — DANGER ZONE */}
-                <View style={styles.dangerContainer}>
-                  <Text style={styles.dangerLabel}>DANGER ZONE</Text>
-                  {onTransferOwnership && (
-                    <Pressable
-                      style={({ pressed }) => [styles.settingsRow, pressed && styles.rowPressed]}
-                      onPress={onTransferOwnership}
-                    >
-                      <View style={styles.rowLeft}>
-                        <Ionicons name="swap-horizontal-outline" size={22} color="#DC2626" />
-                        <Text style={styles.dangerRowText}>Transfer ownership</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={18} color="#DC2626" />
-                    </Pressable>
-                  )}
-                  <Pressable
-                    style={({ pressed }) => [styles.settingsRow, pressed && styles.rowPressed]}
-                    onPress={handleDelete}
-                  >
-                    <View style={styles.rowLeft}>
-                      <Ionicons name="trash-outline" size={22} color="#DC2626" />
-                      <Text style={styles.dangerRowText}>Delete gallery</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color="#DC2626" />
+              {/* Tab bar */}
+              {hasSettingsTab && (
+                <View style={styles.tabBar}>
+                  <Pressable style={[styles.tabBtn, tab === 'settings' && styles.tabBtnActive]} onPress={() => setTab('settings')}>
+                    <Text style={[styles.tabBtnText, tab === 'settings' && styles.tabBtnTextActive]}>Settings</Text>
+                  </Pressable>
+                  <Pressable style={[styles.tabBtn, tab === 'filter' && styles.tabBtnActive]} onPress={() => setTab('filter')}>
+                    <Text style={[styles.tabBtnText, tab === 'filter' && styles.tabBtnTextActive]}>Filter</Text>
                   </Pressable>
                 </View>
+              )}
 
-              </ScrollView>
+              {/* FILTER TAB */}
+              {(!hasSettingsTab || tab === 'filter') && (
+                <View style={styles.filterContent}>
+                  <Text style={styles.sectionLabel}>SORT</Text>
+                  {(['newest', 'oldest', 'contributor'] as const).map((mode, idx, arr) => (
+                    <React.Fragment key={mode}>
+                      <Pressable
+                        style={({ pressed }) => [styles.settingsRow, pressed && styles.rowPressed]}
+                        onPress={() => onChangeSortMode?.(mode)}
+                      >
+                        <Text style={styles.rowText}>
+                          {mode === 'newest' ? 'Newest first' : mode === 'oldest' ? 'Oldest first' : 'By person'}
+                        </Text>
+                        <View style={[styles.radio, sortMode === mode && styles.radioSelected]}>
+                          {sortMode === mode && <View style={styles.radioDot} />}
+                        </View>
+                      </Pressable>
+                      {idx < arr.length - 1 && <View style={styles.separator} />}
+                    </React.Fragment>
+                  ))}
+                </View>
+              )}
 
-              {/* BOTTOM BAR */}
-              <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-                <Pressable
-                  style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.7 }]}
-                  onPress={() => setDraftPrivacy(currentPrivacy)}
-                >
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.saveBtn, isDirty ? styles.saveBtnActive : styles.saveBtnDisabled]}
-                  onPress={handleSave}
-                  disabled={!isDirty || saving}
-                >
-                  {saving
-                    ? <ActivityIndicator color="#fff" size="small" />
-                    : <Text style={[styles.saveBtnText, isDirty ? styles.saveBtnTextActive : styles.saveBtnTextDisabled]}>Save</Text>
-                  }
-                </Pressable>
-              </View>
+              {/* SETTINGS TAB */}
+              {hasSettingsTab && tab === 'settings' && (
+                <>
+                  <ScrollView bounces={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+
+                    {/* STAT STRIP */}
+                    <View style={styles.statStrip}>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statNumber}>{photoCount}</Text>
+                        <Text style={styles.statLabel}>{photoCount === 1 ? 'photo' : 'photos'}</Text>
+                      </View>
+                      <View style={styles.statDivider} />
+                      <View style={styles.statItem}>
+                        <Text style={styles.statNumber}>{memberCount}</Text>
+                        <Text style={styles.statLabel}>{memberCount === 1 ? 'member' : 'members'}</Text>
+                      </View>
+                    </View>
+
+                    {/* PRIVACY — owner/admin only */}
+                    {canEditPrivacy && (
+                      <>
+                        <Text style={styles.sectionLabel}>PRIVACY</Text>
+                        {PRIVACY_OPTIONS.map((opt, idx) => {
+                          const selected = draftPrivacy === opt.value;
+                          return (
+                            <React.Fragment key={opt.value}>
+                              <Pressable
+                                style={({ pressed }) => [styles.privacyRow, pressed && styles.rowPressed]}
+                                onPress={() => setDraftPrivacy(opt.value)}
+                              >
+                                <Ionicons name={opt.icon} size={22} color="#4B5563" />
+                                <View style={styles.privacyTextCol}>
+                                  <Text style={styles.privacyName}>{opt.label}</Text>
+                                  <Text style={styles.privacyDesc}>{opt.description}</Text>
+                                </View>
+                                <View style={[styles.radio, selected && styles.radioSelected]}>
+                                  {selected && <View style={styles.radioDot} />}
+                                </View>
+                              </Pressable>
+                              {idx < PRIVACY_OPTIONS.length - 1 && <View style={styles.separator} />}
+                            </React.Fragment>
+                          );
+                        })}
+                      </>
+                    )}
+
+                    {/* COVER PHOTO — owner/admin only */}
+                    {canEditPrivacy && (
+                      <>
+                        <Text style={[styles.sectionLabel, { marginTop: 20 }]}>GALLERY</Text>
+                        <Pressable
+                          style={({ pressed }) => [styles.settingsRow, pressed && styles.rowPressed]}
+                          onPress={openCoverPicker}
+                        >
+                          <View style={styles.rowLeft}>
+                            <Ionicons name="image-outline" size={22} color="#4B5563" />
+                            <Text style={styles.rowText}>Change cover photo</Text>
+                          </View>
+                          <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+                        </Pressable>
+                      </>
+                    )}
+
+                    {/* DANGER ZONE */}
+                    <View style={styles.dangerContainer}>
+                      {(viewerRole === 'admin' || viewerRole === 'member') && (
+                        <Pressable
+                          style={({ pressed }) => [styles.settingsRow, pressed && styles.rowPressed]}
+                          onPress={onLeaveGallery ?? handleLeave}
+                        >
+                          <View style={styles.rowLeft}>
+                            <Ionicons name="exit-outline" size={22} color="#DC2626" />
+                            <Text style={styles.dangerRowText}>Leave gallery</Text>
+                          </View>
+                          <Ionicons name="chevron-forward" size={18} color="#DC2626" />
+                        </Pressable>
+                      )}
+                      {viewerRole === 'owner' && onTransferOwnership && (
+                        <Pressable
+                          style={({ pressed }) => [styles.settingsRow, pressed && styles.rowPressed]}
+                          onPress={onTransferOwnership}
+                        >
+                          <View style={styles.rowLeft}>
+                            <Ionicons name="swap-horizontal-outline" size={22} color="#DC2626" />
+                            <Text style={styles.dangerRowText}>Transfer ownership</Text>
+                          </View>
+                          <Ionicons name="chevron-forward" size={18} color="#DC2626" />
+                        </Pressable>
+                      )}
+                      {viewerRole === 'owner' && (
+                        <Pressable
+                          style={({ pressed }) => [styles.settingsRow, pressed && styles.rowPressed]}
+                          onPress={handleDelete}
+                        >
+                          <View style={styles.rowLeft}>
+                            <Ionicons name="trash-outline" size={22} color="#DC2626" />
+                            <Text style={styles.dangerRowText}>Delete gallery</Text>
+                          </View>
+                          <Ionicons name="chevron-forward" size={18} color="#DC2626" />
+                        </Pressable>
+                      )}
+                    </View>
+
+                  </ScrollView>
+
+                  {/* BOTTOM BAR — privacy save, owner/admin only */}
+                  {canEditPrivacy && (
+                    <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+                      <Pressable
+                        style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.7 }]}
+                        onPress={() => setDraftPrivacy(currentPrivacy)}
+                      >
+                        <Text style={styles.cancelBtnText}>Cancel</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.saveBtn, isDirty ? styles.saveBtnActive : styles.saveBtnDisabled]}
+                        onPress={handleSave}
+                        disabled={!isDirty || saving}
+                      >
+                        {saving
+                          ? <ActivityIndicator color="#fff" size="small" />
+                          : <Text style={[styles.saveBtnText, isDirty ? styles.saveBtnTextActive : styles.saveBtnTextDisabled]}>Save</Text>
+                        }
+                      </Pressable>
+                    </View>
+                  )}
+                </>
+              )}
             </>
           )}
 
@@ -453,6 +552,28 @@ const styles = StyleSheet.create({
     height: 32,
     backgroundColor: '#E5E7EB',
   },
+
+  // Tab bar
+  tabBar: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    padding: 3,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  tabBtnActive: { backgroundColor: '#fff' },
+  tabBtnText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
+  tabBtnTextActive: { color: '#111827' },
+
+  // Filter tab
+  filterContent: { paddingBottom: 12 },
 
   // Cover picker
   pickerHeader: {
