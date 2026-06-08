@@ -17,6 +17,7 @@ type AuthContextType = {
   refreshProfile: () => Promise<void>;
   passwordRecoveryRequested: boolean;
   phoneVerificationRequired: boolean;
+  clearPasswordRecovery: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -29,6 +30,7 @@ const AuthContext = createContext<AuthContextType>({
   refreshProfile: async () => {},
   passwordRecoveryRequested: false,
   phoneVerificationRequired: false,
+  clearPasswordRecovery: async () => {},
 });
 
 // Returns true if the access token is at or past expiry (30s safety buffer).
@@ -76,6 +78,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setProfileReady(true);
     setProfileLoaded(true);
+  };
+
+  const clearPasswordRecovery = async () => {
+    try {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (!error && data.session) {
+        setSession(data.session);
+        setPasswordRecoveryRequested(false);
+      } else {
+        await supabase.auth.signOut();
+      }
+    } catch {
+      await supabase.auth.signOut();
+    }
   };
 
   useEffect(() => {
@@ -208,7 +224,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, loading, restoringSession, profile, profileReady, profileLoaded, refreshProfile, passwordRecoveryRequested, phoneVerificationRequired }}>
+    <AuthContext.Provider value={{ session, loading, restoringSession, profile, profileReady, profileLoaded, refreshProfile, passwordRecoveryRequested, phoneVerificationRequired, clearPasswordRecovery }}>
       {children}
     </AuthContext.Provider>
   );

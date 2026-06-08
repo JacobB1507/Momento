@@ -207,7 +207,7 @@ export default function ProfileScreen() {
       const prior = pendingRejectRef.current.gallery;
       pendingRejectRef.current = null;
       setPendingRejectGallery(null);
-      supabase.rpc('respond_gallery_invite', { p_gallery_id: prior.id, p_accept: false }).catch(() => {});
+      void Promise.resolve(supabase.rpc('respond_gallery_invite', { p_gallery_id: prior.id, p_accept: false })).catch(() => {});
     }
     setGalleries(prev => prev.filter(g => g.id !== gallery.id));
     setPendingRejectGallery(gallery);
@@ -286,7 +286,7 @@ export default function ProfileScreen() {
       if (pendingRejectRef.current) {
         clearTimeout(pendingRejectRef.current.timer);
         const { gallery } = pendingRejectRef.current;
-        supabase.rpc('respond_gallery_invite', { p_gallery_id: gallery.id, p_accept: false }).catch(() => {});
+        void Promise.resolve(supabase.rpc('respond_gallery_invite', { p_gallery_id: gallery.id, p_accept: false })).catch(() => {});
       }
     };
   }, []);

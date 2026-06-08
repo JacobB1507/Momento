@@ -112,7 +112,7 @@ export async function removeFriend(friendshipId: string): Promise<boolean> {
 }
 
 export async function createInviteLink(senderId: string, galleryId?: string): Promise<string | null> {
-  const row = galleryId
+  const row: { sender_id: string; gallery_id?: string } = galleryId
     ? { sender_id: senderId, gallery_id: galleryId }
     : { sender_id: senderId };
   const { data, error } = await supabase

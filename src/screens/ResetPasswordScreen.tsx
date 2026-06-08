@@ -1,158 +1,170 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
+import { validatePassword, PASSWORD_RULE } from '../lib/validation';
+import PasswordInput from '../components/PasswordInput';
 
 export default function ResetPasswordScreen() {
+  const { session, clearPasswordRecovery } = useAuth();
+  const hadSessionRef = useRef(session !== null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleReset = async () => {
-    setError(null);
-
-    if (newPassword.length < 8 || confirmPassword.length < 8) {
-      setError('Password must be at least 8 characters.');
-      return;
+  const handleCancel = () => {
+    if (hadSessionRef.current) {
+      clearPasswordRecovery();
+    } else {
+      supabase.auth.signOut();
     }
+  };
 
-    if (newPassword !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-
+  const confirmNewPassword = async () => {
+    setPasswordError('');
+    const pwErr = validatePassword(newPassword);
+    if (pwErr) { setPasswordError(pwErr); return; }
+    if (newPassword !== confirmPassword) { setPasswordError("Passwords don't match."); return; }
     setLoading(true);
-    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
     setLoading(false);
-
-    if (updateError) {
-      setError(updateError.message);
+    if (error) {
+      setPasswordError(error.message ?? 'Could not update password. Please try again.');
       return;
     }
-
-    Alert.alert(
-      'Password reset successfully',
-      'Please sign in with your new password.',
-      [
-        {
-          text: 'OK',
-          onPress: async () => {
-            await supabase.auth.signOut();
-          },
-        },
-      ],
-    );
+    Alert.alert('Password updated', 'Your password has been successfully changed.', [
+      { text: 'OK', onPress: () => supabase.auth.signOut() },
+    ]);
   };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <View style={styles.card}>
-        <Text style={styles.title}>Reset Password</Text>
-        <Text style={styles.subtitle}>Enter and confirm your new password below.</Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="New password"
-          placeholderTextColor="#9CA3AF"
-          secureTextEntry
-          autoCapitalize="none"
-          autoCorrect={false}
-          value={newPassword}
-          onChangeText={setNewPassword}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Confirm password"
-          placeholderTextColor="#9CA3AF"
-          secureTextEntry
-          autoCapitalize="none"
-          autoCorrect={false}
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-        />
-
-        {!!error && <Text style={styles.errorText}>{error}</Text>}
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.btn,
-            (loading || !newPassword || !confirmPassword) && styles.btnDisabled,
-            pressed && { opacity: 0.85 },
-          ]}
-          onPress={handleReset}
-          disabled={loading || !newPassword || !confirmPassword}
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.flex}
         >
-          <Text style={styles.btnText}>{loading ? 'Resetting…' : 'Reset password'}</Text>
-        </Pressable>
-      </View>
+          <View style={styles.cancelRow}>
+            <Pressable onPress={handleCancel} style={styles.cancelBtn}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.heading}>Set a new password</Text>
+            <Text style={styles.sub}>{PASSWORD_RULE}</Text>
+
+            <Text style={styles.fieldLabel}>New password</Text>
+            <PasswordInput
+              containerStyle={styles.passwordContainer}
+              style={styles.passwordInput}
+              value={newPassword}
+              onChangeText={v => { setNewPassword(v); setPasswordError(''); }}
+              autoComplete="off"
+              textContentType="oneTimeCode"
+              passwordRules=""
+              returnKeyType="next"
+              placeholder="8+ characters"
+              placeholderTextColor="#9CA3AF"
+            />
+
+            <Text style={styles.fieldLabel}>Confirm new password</Text>
+            <PasswordInput
+              containerStyle={styles.passwordContainer}
+              style={styles.passwordInput}
+              value={confirmPassword}
+              onChangeText={v => { setConfirmPassword(v); setPasswordError(''); }}
+              autoComplete="new-password"
+              returnKeyType="done"
+              onSubmitEditing={confirmNewPassword}
+              placeholder="••••••••"
+              placeholderTextColor="#9CA3AF"
+            />
+
+            {!!passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
+
+            <Pressable
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={confirmNewPassword}
+              disabled={loading}
+            >
+              {loading
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.buttonText}>Confirm new password</Text>}
+            </Pressable>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
+  safe: { flex: 1, backgroundColor: '#fff' },
+  flex: { flex: 1 },
+
+  cancelRow: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 4 },
+  cancelBtn: { alignSelf: 'flex-start', paddingVertical: 4 },
+  cancelText: { fontSize: 16, color: '#FF6B6B', fontWeight: '500' },
+
+  scrollContent: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40 },
+
+  heading: { fontSize: 26, fontWeight: '700', color: '#111827', marginBottom: 8 },
+  sub: { fontSize: 15, color: '#6B7280', marginBottom: 32, lineHeight: 22 },
+
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 14,
+    marginBottom: 6,
   },
-  card: {
-    marginHorizontal: 24,
-    padding: 20,
-    backgroundColor: '#fff',
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#6B7280',
-    marginBottom: 28,
-    lineHeight: 22,
-  },
-  input: {
-    borderWidth: 1,
+
+  errorText: { fontSize: 13, color: '#ef4444', marginTop: -18, marginBottom: 16 },
+
+  passwordContainer: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1.5,
     borderColor: '#E5E7EB',
     borderRadius: 12,
+    marginBottom: 24,
+  },
+  passwordInput: {
+    paddingLeft: 16,
     paddingVertical: 14,
-    paddingHorizontal: 14,
     fontSize: 16,
     color: '#111827',
-    marginBottom: 14,
   },
-  errorText: {
-    color: '#FF3B30',
-    fontSize: 14,
-    marginBottom: 12,
-  },
-  btn: {
+
+  button: {
     backgroundColor: '#FF6B6B',
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 4,
     shadowColor: '#FF6B6B',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
-  btnDisabled: {
-    opacity: 0.55,
-  },
-  btnText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
-  },
+  buttonDisabled: { opacity: 0.55 },
+  buttonText: { color: '#fff', fontSize: 17, fontWeight: '700' },
 });
